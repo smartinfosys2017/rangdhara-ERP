@@ -1,0 +1,1183 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id              String       @id @default(uuid())
+  email           String       @unique
+  password        String?
+  country         String?
+  timezone        String?
+  name            String?
+  roleId          String
+  status          UserStatus   @default(INACTIVE)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  lastSignInAt    DateTime?
+  emailVerifiedAt DateTime?
+  isTrashed       Boolean      @default(false)
+  avatar          String?
+  invitedByUserId String?
+  isProtected     Boolean      @default(false)
+  Account         Account[]
+  Session         Session[]
+  SystemLog       SystemLog[]
+  UserRole        UserRole     @relation(fields: [roleId], references: [id])
+  user_details    UserDetails?
+
+  customer  Customer?
+  staffUser StaffUser?
+  employee  Employee?
+
+  @@index([invitedByUserId])
+  @@index([roleId])
+  @@index([status])
+}
+
+model UserRole {
+  id              String               @id @default(uuid())
+  slug            String               @unique
+  name            String               @unique
+  description     String?
+  isTrashed       Boolean              @default(false)
+  createdByUserId String?
+  createdAt       DateTime             @default(now())
+  isProtected     Boolean              @default(false)
+  isDefault       Boolean              @default(false)
+  User            User[]
+  permissions     UserRolePermission[]
+}
+
+model UserPermission {
+  id              String               @id @default(uuid())
+  slug            String               @unique
+  name            String
+  description     String?
+  createdByUserId String?
+  createdAt       DateTime             @default(now())
+  roles           UserRolePermission[]
+}
+
+model UserRolePermission {
+  id           String         @id @default(uuid())
+  roleId       String
+  permissionId String
+  assignedAt   DateTime       @default(now())
+  permission   UserPermission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  role         UserRole       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  User              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId], name: "provider_providerAccountId")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  User         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model SystemLog {
+  id          String   @id @default(uuid())
+  userId      String
+  createdAt   DateTime @default(now())
+  entityId    String?
+  entityType  String?
+  event       String?
+  description String?
+  ipAddress   String?
+  meta        String?
+  User        User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
+model SystemSetting {
+  id                             String   @id @default(uuid())
+  name                           String   @default("My Company")
+  logo                           String?
+  active                         Boolean  @default(true)
+  address                        String?
+  websiteURL                     String?
+  supportEmail                   String?
+  supportPhone                   String?
+  language                       String   @default("en")
+  timezone                       String   @default("UTC")
+  currency                       String   @default("USD")
+  currencyFormat                 String   @default("$ {value}")
+  socialFacebook                 String?
+  socialTwitter                  String?
+  socialInstagram                String?
+  socialLinkedIn                 String?
+  socialPinterest                String?
+  socialYoutube                  String?
+  notifyStockEmail               Boolean  @default(true)
+  notifyStockWeb                 Boolean  @default(true)
+  notifyStockThreshold           Int      @default(10)
+  notifyStockRoleIds             String[]
+  notifyNewOrderEmail            Boolean  @default(true)
+  notifyNewOrderWeb              Boolean  @default(true)
+  notifyNewOrderRoleIds          String[]
+  notifyOrderStatusUpdateEmail   Boolean  @default(true)
+  notifyOrderStatusUpdateWeb     Boolean  @default(true)
+  notifyOrderStatusUpdateRoleIds String[]
+  notifyPaymentFailureEmail      Boolean  @default(true)
+  notifyPaymentFailureWeb        Boolean  @default(true)
+  notifyPaymentFailureRoleIds    String[]
+  notifySystemErrorFailureEmail  Boolean  @default(true)
+  notifySystemErrorWeb           Boolean  @default(true)
+  notifySystemErrorRoleIds       String[]
+}
+
+model Setting {
+  id        Int      @id @default(autoincrement())
+  group     String
+  key       String   @unique
+  value     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([group])
+}
+
+model EmailQueue {
+  to            String
+  subject       String
+  body          String?
+  status        String    @default("Pending")
+  hasAttachment Boolean   @default(false)
+  sentAt        DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  id            String    @id @default(uuid()) @db.Uuid
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+model CustomField {
+  id                   String             @id
+  fieldto              String
+  name                 String
+  type                 String
+  options              String?
+  defaultValue         String?
+  fieldOrder           Int?               @default(0)
+  bsColumn             Int?               @default(12)
+  disabled             Boolean            @default(false)
+  displayInline        Boolean            @default(false)
+  onlyAdmin            Boolean            @default(false)
+  disallowClientToEdit Boolean            @default(false)
+  required             Boolean            @default(false)
+  showOnTable          Boolean            @default(false)
+  showOnPdf            Boolean            @default(false)
+  showOnClientPortal   Boolean            @default(false)
+  showOnTicketForm     Boolean            @default(false)
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  slug                 String             @unique
+  deletedAt            DateTime?
+  lastSyncedAt         DateTime?
+  customFieldValues    CustomFieldValue[]
+}
+
+model CustomFieldValue {
+  id            Int         @id @default(autoincrement())
+  customFieldId String
+  entityType    String
+  entityId      String
+  value         String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  lastSyncedAt  DateTime?
+  customField   CustomField @relation(fields: [customFieldId], references: [id], onDelete: Cascade)
+
+  @@unique([customFieldId, entityType, entityId])
+  @@index([entityType, entityId])
+}
+
+model Customer {
+  id              Int      @id @default(autoincrement())
+  userId          String?  @unique
+  user            User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  company         String
+  email           String?
+  vatNumber       String?
+  phone           String?
+  website         String?
+  defaultCurrency String?
+  defaultLanguage String?
+  address         String?
+  city            String?
+  state           String?
+  zip             String?
+  country         String?
+  billingStreet   String?
+  billingCity     String?
+  billingState    String?
+  billingZip      String?
+  billingCountry  String?
+  shippingStreet  String?
+  shippingCity    String?
+  shippingState   String?
+  shippingZip     String?
+  shippingCountry String?
+  groups          String[] @default([])
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  customFields    Json?
+
+  @@index([company])
+  @@index([phone])
+  @@index([vatNumber])
+  @@index([city])
+}
+
+model Task {
+  id                Int       @id @default(autoincrement())
+  name              String
+  description       String?
+  isPublic          Boolean   @default(false)
+  billable          Boolean   @default(true)
+  visibleToClient   Boolean   @default(false)
+  hourlyRate        Decimal?  @db.Decimal(12, 2)
+  startDate         DateTime
+  dueDate           DateTime?
+  priority          Int       @default(2)
+  repeatEvery       String?
+  repeatEveryCustom Int?
+  repeatTypeCustom  String?
+  cycles            Int?
+  unlimitedCycles   Boolean   @default(true)
+  relType           String?
+  relId             Int?
+  assignees         Int[]     @default([])
+  followers         Int[]     @default([])
+  tags              String[]  @default([])
+  attachments       String[]  @default([])
+  status            String    @default("not_started")
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  customFields      Json?
+
+  @@index([name])
+  @@index([status])
+  @@index([priority])
+  @@index([startDate])
+  @@index([dueDate])
+  @@index([relType])
+  @@index([relId])
+}
+
+model Ticket {
+  id           Int      @id @default(autoincrement())
+  ticketNumber String   @unique
+  subject      String
+  contactId    Int?
+  userId       Int?
+  name         String?
+  email        String?
+  department   String?
+  cc           String?
+  tags         String?
+  assigned     Int?
+  priority     Int      @default(2)
+  service      String?
+  projectId    Int?
+  message      String
+  status       String   @default("open")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  customFields Json?
+
+  @@index([contactId])
+  @@index([userId])
+  @@index([assigned])
+  @@index([status])
+}
+
+model Department {
+  id        Int      @id @default(autoincrement())
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("Department")
+}
+
+model Service {
+  id        Int      @id @default(autoincrement())
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("Service")
+}
+
+model Project {
+  id        Int      @id @default(autoincrement())
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("Project")
+}
+
+model Contact {
+  id        Int      @id @default(autoincrement())
+  name      String?
+  email     String?
+  phone     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("Contact")
+}
+
+model EstimateRequestForm {
+  id                     Int      @id @default(autoincrement())
+  name                   String
+  slug                   String   @unique
+  publicToken            String   @unique @db.VarChar(64)
+  status                 Int      @default(2)
+  language               String   @default("english")
+  responsible            Int?
+  submitButtonText       String   @default("Submit")
+  submitButtonBgColor    String   @default("#84c529")
+  submitButtonTextColor  String   @default("#ffffff")
+  submitAction           Int      @default(0)
+  successSubmitMessage   String   @default("Thank You")
+  submitRedirectUrl      String?
+  notifyRequestSubmitted Boolean  @default(true)
+  notifyType             String   @default("specific_staff")
+  notifyStaffIds         Json?
+  notifyRoleIds          Json?
+  fields                 Json?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@index([status])
+  @@index([responsible])
+  @@map("EstimateRequestForm")
+}
+
+model EstimateRequest {
+  id          Int      @id @default(autoincrement())
+  formId      Int
+  publicToken String   @db.VarChar(64)
+  data        Json
+  status      Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([formId])
+  @@index([publicToken])
+  @@index([status])
+  @@map("EstimateRequest")
+}
+
+model StaffUser {
+  id               String    @id @default(uuid())
+  userId           String?   @unique
+  user             User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  email            String    @unique
+  password         String
+  isActive         Boolean   @default(true)
+  isAdministrator  Boolean   @default(false)
+  isNotStaff       Boolean   @default(false)
+  profileImage     String?
+  firstName        String
+  lastName         String
+  phone            String?
+  hourlyRate       Decimal?  @default(0) @db.Decimal(12, 2)
+  facebook         String?
+  linkedin         String?
+  skype            String?
+  defaultLanguage  String?
+  direction        String?
+  timezone         String?
+  emailSignature   String?
+  sendWelcomeEmail Boolean   @default(true)
+  emailVerified    Boolean   @default(false)
+  emailVerifiedAt  DateTime?
+  lastLoginAt      DateTime?
+  isTrashed        Boolean   @default(false)
+  createdByUserId  String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([isActive])
+  @@index([isTrashed])
+  @@index([firstName])
+  @@index([lastName])
+}
+
+model StaffUserRole {
+  id          String   @id @default(uuid())
+  staffUserId String
+  roleId      String
+  assignedAt  DateTime @default(now())
+
+  @@unique([staffUserId, roleId])
+  @@index([staffUserId])
+  @@index([roleId])
+}
+
+model CustomerGroup {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([name])
+}
+
+model Sources {
+  id        Int      @id @default(autoincrement())
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("Sources")
+}
+
+model Statuses {
+  id          Int      @id @default(autoincrement())
+  name        String
+  color       String?
+  statusOrder Int      @default(0) @map("statusorder")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("Statuses")
+}
+
+model Tax {
+  id         Int       @id @default(autoincrement())
+  name       String
+  taxrate    Float?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
+  lastSyncAt DateTime?
+}
+
+model Currency {
+  id                 Int      @id @default(autoincrement())
+  name               String
+  symbol             String
+  decimal_separator  String   @default(".")
+  thousand_separator String   @default(",")
+  placement          String   @default("before")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model PaymentMethod {
+  id                  Int      @id @default(autoincrement())
+  name                String
+  description         String?
+  active              Boolean  @default(true)
+  show_on_pdf         Boolean  @default(false)
+  selected_by_default Boolean  @default(false)
+  invoices_only       Boolean  @default(false)
+  expenses_only       Boolean  @default(false)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+model ExpenseCategory {
+  id          Int      @id @default(autoincrement())
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model ContractType {
+  id        Int      @id @default(autoincrement())
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("ContractType")
+}
+
+model customer_sync {
+  id           String    @id
+  name         String
+  email        String    @unique
+  phone        String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  lastSyncedAt DateTime?
+  deletedAt    DateTime?
+
+  @@map("Customer_sync")
+}
+
+model Notification {
+  id           String    @id @default(uuid())
+  userId       String?
+  module       String
+  action       String
+  title        String
+  message      String
+  entityId     String?
+  entityType   String?
+  entityName   String?
+  url          String?
+  isRead       Boolean   @default(false)
+  syncStatus   String    @default("pending")
+  lastSyncedAt DateTime?
+  deletedAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([syncStatus])
+  @@index([lastSyncedAt])
+  @@index([deletedAt])
+  @@index([createdAt])
+}
+
+model NotificationSetting {
+  id              String   @id @default(uuid())
+  userId          String?
+  notificationKey String
+  enabled         Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([userId, notificationKey])
+}
+
+model NotificationSync {
+  id         String   @id @default(uuid())
+  eventId    String   @unique
+  module     String
+  action     String
+  entityId   String?
+  entityType String?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+model ItemGroup {
+  id          String    @id @default(uuid())
+  groupName   String    @db.VarChar(255)
+  description String?
+  status      Boolean   @default(true)
+  isDefault   Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  lastSyncAt  DateTime?
+
+  @@map("item_groups")
+}
+
+model Unit {
+  id           String    @id @default(uuid())
+  unitName     String    @db.VarChar(255)
+  abbreviation String    @db.VarChar(255)
+  status       Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+  lastSyncAt   DateTime?
+
+  @@map("Unit")
+}
+
+model PtoductType {
+  id          String    @id @default(uuid())
+  ProductType String    @db.VarChar(255)
+  Description String    @db.VarChar(255)
+  status      Boolean   @default(true)
+  isDefault   Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  lastSyncAt  DateTime?
+
+  @@map("PtoductType")
+}
+
+model TransactionType {
+  id                  String              @id @default(uuid())
+  TransactionType     String              @db.VarChar(255)
+  Description         String              @db.VarChar(255)
+  EffectOnTransaction EffectOnTransaction
+  status              Boolean             @default(true)
+  isDefault           Boolean             @default(false)
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  deletedAt           DateTime?
+  lastSyncAt          DateTime?
+  customFields        Json?               @default("{}")
+
+  @@map("TransactionType")
+}
+
+model ItemMaster {
+  id                         String    @id @default(uuid())
+  ItemGroupid                String
+  ItemName                   String    @db.VarChar(255)
+  Description                String?   @db.VarChar(255)
+  openingBalance             String?   @db.VarChar(255)
+  Unitid                     String
+  rather                     Int
+  Tax1                       String
+  Tax2                       String
+  ApplicableForRelocateLevel Boolean   @default(false)
+  RelocateLevel              String?   @db.VarChar(255)
+  status                     Boolean   @default(true)
+  isDefault                  Boolean   @default(false)
+  createdAt                  DateTime  @default(now())
+  updatedAt                  DateTime  @updatedAt
+  deletedAt                  DateTime?
+  lastSyncAt                 DateTime?
+
+  @@map("ItemMaster")
+}
+
+model Country {
+  id           String    @id @default(uuid())
+  name         String    @db.VarChar(150)
+  createdAt    DateTime  @default(now())
+  currencyCode String?   @db.Char(3)
+  currencyName String?   @db.VarChar(100)
+  deletedAt    DateTime?
+  isActive     Boolean   @default(true)
+  iso2         String    @unique @db.Char(2)
+  iso3         String    @unique @db.Char(3)
+  lastSyncAt   DateTime?
+  phoneCode    String?   @db.VarChar(10)
+  updatedAt    DateTime  @updatedAt
+
+  @@index([name])
+  @@index([isActive])
+  @@index([updatedAt])
+  @@map("countries")
+}
+
+model IssueReceipt {
+  id                String    @id @default(uuid())
+  ItemGroupid       String    @db.VarChar(36)
+  ItemMasterid      String    @db.VarChar(36)
+  ItemTypeid        String    @db.VarChar(36)
+  TransactionTypeid String    @db.VarChar(36)
+  IssueDate         DateTime  @db.Date
+  Qty               Int
+  PreviousBalance   Int       @default(0)
+  Price             Decimal?  @db.Decimal(12, 2)
+  Particuler        String?
+  Balance           Int       @default(0)
+  Issue_by          String    @db.VarChar(36)
+  GetPassNo         String?   @db.VarChar(100)
+  DateOfRecive      DateTime? @db.Date
+  ReciptChallanNo   String?   @db.VarChar(100)
+  RecivedBy         String    @db.VarChar(36)
+  Comment           String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  deletedAt         DateTime?
+  lastSyncAt        DateTime?
+
+  @@index([ItemGroupid])
+  @@index([ItemMasterid])
+  @@index([ItemTypeid])
+  @@index([TransactionTypeid])
+  @@index([Issue_by])
+  @@index([RecivedBy])
+  @@index([IssueDate])
+  @@map("IssueReceipt")
+}
+
+model ExtensionModule {
+  id          String    @id @default(uuid())
+  alias       String    @unique
+  name        String
+  description String?
+  version     String
+  author      String?
+  status      String    @default("INACTIVE")
+  icon        String    @default("element-11")
+  urlPath     String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+}
+
+model Menu {
+  id         String   @id @default(uuid())
+  title      String   @db.VarChar(150)
+  slug       String?  @db.VarChar(150)
+  path       String?  @db.VarChar(255)
+  icon       String?  @db.VarChar(100)
+  parentId   String?
+  module     String?  @db.VarChar(100)
+  permission String?  @db.VarChar(150)
+  sortOrder  Int      @default(0)
+  status     Boolean  @default(true)
+  menuType   String   @default("item") @db.VarChar(30)
+  target     String   @default("_self") @db.VarChar(20)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  parent     Menu?    @relation("MenuHierarchy", fields: [parentId], references: [id])
+  children   Menu[]   @relation("MenuHierarchy")
+
+  @@index([parentId])
+  @@index([module])
+  @@index([sortOrder])
+  @@index([status])
+  @@map("Menu")
+}
+
+model EmailTemplate {
+  id        String   @id @default(uuid()) @db.Uuid
+  slug      String   @unique
+  name      String
+  subject   String   @default("")
+  fromName  String   @default("")
+  to        String   @default("")
+  cc        String   @default("")
+  bcc       String   @default("")
+  message   String
+  plaintext Boolean  @default(false)
+  disabled  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("EmailTemplate")
+}
+
+model InventoryChangeLog {
+  id             String    @id @default(uuid())
+  IssueReceiptId String?   @db.VarChar(36)
+  UserId         String?   @db.VarChar(36)
+  UserName       String    @db.VarChar(255)
+  Action         String    @db.VarChar(50)
+  ItemMasterid   String?   @db.VarChar(36)
+  ItemName       String?   @db.VarChar(255)
+  ItemTypeid     String?   @db.VarChar(36)
+  ItemType       String?   @db.VarChar(255)
+  Details        String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @default(now()) @updatedAt
+  deletedAt      DateTime?
+  lastSyncAt     DateTime?
+
+  @@index([IssueReceiptId])
+  @@index([UserId])
+  @@index([ItemMasterid])
+  @@index([ItemTypeid])
+  @@index([Action])
+  @@index([createdAt])
+  @@map("InventoryChangeLog")
+}
+
+model UserDetails {
+  id             String    @id @default(cuid())
+  userId         String    @unique
+  name           String?
+  profilePhoto   String?
+  availability   String    @default("available")
+  birthday       DateTime?
+  gender         String?
+  address        String?
+  city           String?
+  state          String?
+  country        String?
+  postalCode     String?
+  publicProfile  Boolean   @default(true)
+  socialLinkedin String?
+  socialTwitch   String?
+  socialX        String?
+  socialDribbble String?
+  referralCode   String?   @unique
+  referralLink   String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  User           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_details")
+}
+
+enum EffectOnTransaction {
+  addition
+  deductions
+}
+
+enum UserStatus {
+  INACTIVE
+  ACTIVE
+  BLOCKED
+}
+
+model RestockAlertState {
+  id              String    @id @default(uuid())
+  itemMasterId    String    @unique
+  isBelowRestock  Boolean   @default(false)
+  lastTriggeredAt DateTime?
+  updatedAt       DateTime  @updatedAt
+
+  @@index([isBelowRestock])
+}
+
+model Holiday {
+  id          String    @id @default(uuid())
+  name        String    @db.VarChar(255)
+  fromDate    DateTime  @db.Date
+  toDate      DateTime  @db.Date
+  description String?   @db.VarChar(1000)
+  status      Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  lastSyncAt  DateTime?
+
+  @@index([name])
+  @@index([fromDate, toDate])
+  @@index([status])
+  @@index([deletedAt])
+  @@index([createdAt])
+}
+
+model BreakTime {
+  id              String    @id @default(uuid())
+  name            String    @db.VarChar(255)
+  fromTime        String    @db.VarChar(5)
+  toTime          String    @db.VarChar(5)
+  durationMinutes Int       @default(0)
+  breakType       String    @default("paid") @db.VarChar(20)
+  isFlexible      Boolean   @default(false)
+  status          Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+  lastSyncAt      DateTime?
+
+  @@index([name])
+  @@index([status])
+  @@index([breakType])
+  @@index([deletedAt])
+  @@index([createdAt])
+}
+
+model Shift {
+  id              String    @id @default(uuid())
+  name            String    @db.VarChar(255)
+  inTime          String    @db.VarChar(5)
+  outTime         String    @db.VarChar(5)
+  graceTime       Int       @default(0)
+  description     String?   @db.VarChar(1000)
+  crossesMidnight Boolean   @default(false)
+  earlyInMinutes  Int       @default(0)
+  lateOutMinutes  Int       @default(0)
+  halfDayMinutes  Int       @default(240)
+  fullDayMinutes  Int       @default(480)
+  status          Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+  lastSyncAt      DateTime?
+
+  @@index([name])
+  @@index([status])
+  @@index([deletedAt])
+  @@index([createdAt])
+}
+
+model Security {
+  id           String    @id @default(uuid())
+  securityName String    @db.VarChar(255)
+  description  String?
+  status       Boolean   @default(true)
+  isDefault    Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+  lastSyncAt   DateTime?
+
+  @@map("security")
+}
+
+model Position {
+  id           String    @id @default(uuid())
+  positionName String    @db.VarChar(255)
+  description  String?
+  status       Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+  lastSyncAt   DateTime?
+
+  @@map("position")
+}
+
+model ChecklistItem {
+  id               String            @id @default(uuid())
+  itemName         String            @db.VarChar(255)
+  description      String?
+  status           Boolean           @default(true)
+  makeGlobal       Boolean           @default(false)
+  checklistDetails ChecklistDetail[]
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  deletedAt        DateTime?
+  lastSyncAt       DateTime?
+
+  @@map("checklistitem")
+}
+
+model Employee {
+  id String @id @default(uuid())
+
+  // User Account Relationship
+  userId        String?   @unique
+  user          User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  empcode       String    @unique
+  // Personal Information
+  firstName     String
+  middleName    String?
+  lastName      String
+  dateOfBirth   DateTime?
+  gender        String?
+  bloodGroup    String?
+  emailId       String?   @unique
+  maritalStatus String?
+  mobile        String?
+
+  // Profile Information
+  profilePic            String?
+  signature             String?
+  qualifiedForInterview Boolean @default(false)
+  status                String  @default("ACTIVE")
+
+  // Correspondence Address
+  correspondenceAddress String?
+  correspondenceCity    String?
+  correspondenceState   String?
+  correspondenceCountry String?
+  correspondencePincode String?
+
+  // Permanent Address
+  permanentAddress String?
+  permanentCity    String?
+  permanentState   String?
+  permanentCountry String?
+  permanentPincode String?
+
+  // Address Copy Option
+  permanentSameAsCorrespondence Boolean @default(false)
+
+  // Employment Information
+  resignationDate DateTime?
+  leavingDate     DateTime?
+  reasonToLeave   String?
+
+  // Education Information
+  educationDetails Json?
+
+  // Timestamps
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+  isTrashed          Boolean               @default(false)
+  customFields       Json?
+  // Employee Detail Relations
+  familyDetail       EmployeeFamilyDetail?
+  professionalDetail ProfessionalDetail?
+  checklistDetails   ChecklistDetail[]
+
+  @@index([firstName])
+  @@index([lastName])
+  @@index([status])
+  @@index([userId])
+  @@index([correspondenceCity])
+  @@index([permanentCity])
+}
+
+model EmployeeCodeSequence {
+  id        Int @id @default(1)
+  lastValue Int @default(0)
+}
+
+model ContactCategory {
+  id           String    @id @default(uuid())
+  CategoryName String    @db.VarChar(255)
+  description  String?
+  status       Boolean   @default(true)
+  isDefault    Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+  lastSyncAt   DateTime?
+
+  @@map("contact_category")
+}
+
+model EmployeeCandidateStatus {
+  id           String    @id @default(uuid())
+  StatusName   String    @db.VarChar(255)
+  CategoryName String    @db.VarChar(255)
+  description  String?
+  mode         String    @db.VarChar(255)
+  isDefault    Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+  lastSyncAt   DateTime?
+
+  @@map("employee_candidate_status")
+}
+
+model EmployeeFamilyDetail {
+  id                String    @id @default(uuid())
+  employeeId        String    @unique
+  // Father Information
+  fatherName        String?
+  fatherDateOfBirth DateTime?
+  fatherOccupation  String?
+
+  // Mother Information
+  motherName        String?
+  motherDateOfBirth DateTime?
+  motherOccupation  String?
+
+  // Spouse Information
+  spouseName        String?
+  spouseDateOfBirth DateTime?
+  spouseOccupation  String?
+
+  // Contact Information
+  mobile String?
+
+  // Children Information
+  childrenDetails Json?
+
+  // Dependents Information
+  noOfDependents Int @default(0)
+
+  // Nominee Information
+  nomineeName         String?
+  nomineeRelationship String?
+
+  // Important Dates
+  importantDates Json?
+
+  // Additional Custom Fields
+  customFields Json?
+
+  // Timestamps
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
+  lastSyncAt DateTime?
+  employee   Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@map("employee_family_detail")
+}
+
+model ProfessionalDetail {
+  id               String    @id @default(uuid())
+  employeeId       String    @unique
+  // Job Information
+  designation      String?
+  department       String?
+  experienceAsOn   DateTime?
+  joinDate         DateTime?
+  jobLocation      String?
+  jobType          String?
+  employmentStatus String?
+  shift            String?
+  breakTime        String?
+
+  // Skills & References
+  skills        Json?
+  referenceName String?
+
+  // Probation & Appraisal
+  probationPeriod     Int?
+  appraisalApplicable Boolean @default(false)
+  noticePeriod        Int?
+
+  // Banking Information
+  bankDetails Json?
+
+  // Additional Information
+  remarks                 String?
+  agreementSigningDate    DateTime?
+  security                String?
+  previousEmployeeDetails Json?
+  documentDetails         Json?
+  customFields            Json?
+
+  // Timestamps
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
+  lastSyncAt DateTime?
+  employee   Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@map("professional_detail")
+}
+
+model ChecklistDetail {
+  id String @id @default(uuid())
+
+  employeeId  String
+  checklistId String
+
+  status  String  @default("PENDING")
+  comment String?
+
+  // Relations
+  employee  Employee      @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  checklist ChecklistItem @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+
+  // Timestamps
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
+  lastSyncAt DateTime?
+
+  @@unique([employeeId, checklistId])
+  @@index([employeeId])
+  @@index([checklistId])
+  @@map("checklist_detail")
+}

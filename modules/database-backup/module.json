@@ -1,0 +1,22 @@
+{
+    "alias": "database_backup",
+    "name": "Database Backup",
+    "description": "Create, download, delete and restore PostgreSQL database backups.",
+    "version": "1.0.0",
+    "author": "Smartinfosys",
+    "icon": "Database",
+    "urlPath": "/database-backup",
+    "moduleFolder": "database-backup",
+    "permissions": [
+        "database_backup.read",
+        "database_backup.create",
+        "database_backup.restore",
+        "database_backup.delete"
+    ],
+    "menu": {
+        "label": "Database Backup",
+        "href": "/database-backup",
+        "icon": "Database",
+        "active": true
+    }
+}

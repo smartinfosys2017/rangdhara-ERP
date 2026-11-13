@@ -1,0 +1,33 @@
+model DatabaseBackup {
+  id        String   @id @default(uuid())
+  fileName  String
+  filePath  String
+  fileSize  BigInt   @default(0)
+  status    String   @default("completed")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  downloads DatabaseBackupDownload[]
+
+  @@index([createdAt])
+  @@index([status])
+}
+
+model DatabaseBackupDownload {
+  id           String   @id @default(uuid())
+  backupId     String
+  fileName     String
+  downloadedBy String?
+  ipAddress    String?
+  userAgent    String?
+  downloadedAt DateTime @default(now())
+
+  backup DatabaseBackup @relation(
+    fields: [backupId],
+    references: [id],
+    onDelete: Cascade
+  )
+
+  @@index([backupId])
+  @@index([downloadedAt])
+}

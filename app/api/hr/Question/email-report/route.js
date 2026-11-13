@@ -1,0 +1,498 @@
+
+import { NextResponse } from "next/server";
+import * as XLSX from "xlsx";
+
+import { prisma } from "@/lib/prisma";
+import { sendEmail } from "@/lib/sendemail";
+import { getAuthenticatedUser } from "@/lib/auth-user";
+
+export const runtime = "nodejs";
+
+// ======================================================
+// HELPERS
+// ======================================================
+
+function escapeHtml(value) {
+    return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+function formatDate(value) {
+    if (!value) return "";
+
+    const date = new Date(value);
+
+    return Number.isNaN(date.getTime())
+        ? ""
+        : date.toLocaleString("en-IN");
+}
+
+function parseDate(value, fieldName) {
+    if (!value) return null;
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+        throw new Error(`Invalid date provided for ${fieldName}.`);
+    }
+
+    return date;
+}
+
+function endOfDateExclusive(value, fieldName) {
+    const date = parseDate(value, fieldName);
+
+    if (!date) return null;
+
+    date.setDate(date.getDate() + 1);
+
+    return date;
+}
+
+function normalizeRecipients(input) {
+    const list = Array.isArray(input)
+        ? input
+        : String(input ?? "").split(",");
+
+    return [
+        ...new Set(
+            list.map((email) => String(email).trim()).filter(Boolean)
+        ),
+    ];
+}
+
+// ======================================================
+// POST EMAIL REPORT
+// ======================================================
+
+export async function POST(request) {
+    try {
+        // 1. Authentication
+
+        const user = await getAuthenticatedUser();
+
+        if (!user) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: "Unauthorized. Please sign in again.",
+                },
+                { status: 401 }
+            );
+        }
+
+        // 2. Request body
+
+        const body = await request.json();
+
+        const {
+            recipients,
+            to,
+            subject,
+            message = "",
+            attachExcel = true,
+            selectedIds = [],
+            filters = {},
+        } = body;
+
+        const safeFilters =
+            filters &&
+            typeof filters === "object" &&
+            !Array.isArray(filters)
+                ? filters
+                : {};
+
+        // Support both recipients and to.
+
+        const recipientEmails = normalizeRecipients(recipients ?? to);
+
+        if (recipientEmails.length === 0) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: "Please provide at least one recipient email address.",
+                },
+                { status: 400 }
+            );
+        }
+
+        const invalidEmails = recipientEmails.filter(
+            (email) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+        );
+
+        if (invalidEmails.length > 0) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: "One or more recipient email addresses are invalid.",
+                    invalidEmails,
+                },
+                { status: 400 }
+            );
+        }
+
+        if (!String(subject ?? "").trim()) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: "Email subject is required.",
+                },
+                { status: 400 }
+            );
+        }
+
+        if (
+            !Array.isArray(selectedIds) ||
+            selectedIds.some(
+                (id) =>
+                    id === null ||
+                    id === undefined ||
+                    !["string", "number"].includes(typeof id)
+            )
+        ) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: "selectedIds must be an array of question IDs.",
+                },
+                { status: 400 }
+            );
+        }
+
+        if (typeof attachExcel !== "boolean") {
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: "attachExcel must be true or false.",
+                },
+                { status: 400 }
+            );
+        }
+
+        // 3. Read filters
+
+        const query = String(safeFilters.query ?? "").trim();
+
+        const status = String(safeFilters.status ?? "all")
+            .trim()
+            .toLowerCase();
+
+        const questionnaireTypeId = String(
+            safeFilters.questionnaireTypeId ?? ""
+        ).trim();
+
+        const createdFrom = parseDate(
+            safeFilters.createdFrom,
+            "createdFrom"
+        );
+
+        const createdTo = endOfDateExclusive(
+            safeFilters.createdTo,
+            "createdTo"
+        );
+
+        const updatedFrom = parseDate(
+            safeFilters.updatedFrom,
+            "updatedFrom"
+        );
+
+        const updatedTo = endOfDateExclusive(
+            safeFilters.updatedTo,
+            "updatedTo"
+        );
+
+        if (createdFrom && createdTo && createdFrom >= createdTo) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: "The creation date range is invalid.",
+                },
+                { status: 400 }
+            );
+        }
+
+        if (updatedFrom && updatedTo && updatedFrom >= updatedTo) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: "The update date range is invalid.",
+                },
+                { status: 400 }
+            );
+        }
+
+        if (!["all", "active", "inactive"].includes(status)) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: "Status must be all, active, or inactive.",
+                },
+                { status: 400 }
+            );
+        }
+
+        // 4. Build Prisma filters
+
+        const where = {
+            deletedAt: null,
+        };
+
+        if (query) {
+            where.OR = [
+                {
+                    questionName: {
+                        contains: query,
+                        mode: "insensitive",
+                    },
+                },
+                {
+                    question: {
+                        contains: query,
+                        mode: "insensitive",
+                    },
+                },
+                {
+                    questionnaireType: {
+                        is: {
+                            typeName: {
+                                contains: query,
+                                mode: "insensitive",
+                            },
+                        },
+                    },
+                },
+            ];
+        }
+
+        if (questionnaireTypeId) {
+            where.questionnaireTypeId = questionnaireTypeId;
+        }
+
+        if (status === "active") {
+            where.status = true;
+        } else if (status === "inactive") {
+            where.status = false;
+        }
+
+        if (selectedIds.length > 0) {
+            where.id = {
+                in: selectedIds.map(String),
+            };
+        }
+
+        if (createdFrom || createdTo) {
+            where.createdAt = {};
+
+            if (createdFrom) {
+                where.createdAt.gte = createdFrom;
+            }
+
+            if (createdTo) {
+                where.createdAt.lt = createdTo;
+            }
+        }
+
+        if (updatedFrom || updatedTo) {
+            where.updatedAt = {};
+
+            if (updatedFrom) {
+                where.updatedAt.gte = updatedFrom;
+            }
+
+            if (updatedTo) {
+                where.updatedAt.lt = updatedTo;
+            }
+        }
+
+        // 5. Fetch questions with questionnaire type details
+
+        const questions = await prisma.question.findMany({
+            where,
+            orderBy: {
+                createdAt: "desc",
+            },
+            select: {
+                id: true,
+                questionName: true,
+                questionnaireTypeId: true,
+                question: true,
+                status: true,
+                createdAt: true,
+                updatedAt: true,
+
+                questionnaireType: {
+                    select: {
+                        id: true,
+                        typeName: true,
+                    },
+                },
+            },
+        });
+
+        if (questions.length === 0) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: "No questions match the selected IDs and filters.",
+                },
+                { status: 404 }
+            );
+        }
+
+        // 6. Generate Excel attachment when requested
+
+        let attachments = [];
+        let fileName = null;
+
+        if (attachExcel) {
+            const rows = questions.map((item) => ({
+                ID: item.id,
+                "Question Name": item.questionName ?? "",
+                "Questionnaire Type":
+                    item.questionnaireType?.typeName ?? "",
+                "Questionnaire Type ID":
+                    item.questionnaireTypeId ?? "",
+                Question: item.question ?? "",
+                Status: item.status ? "Active" : "Inactive",
+                "Created At": formatDate(item.createdAt),
+                "Updated At": formatDate(item.updatedAt),
+            }));
+
+            const worksheet = XLSX.utils.json_to_sheet(rows);
+
+            worksheet["!cols"] = [
+                { wch: 38 },
+                { wch: 30 },
+                { wch: 30 },
+                { wch: 38 },
+                { wch: 50 },
+                { wch: 16 },
+                { wch: 22 },
+                { wch: 22 },
+            ];
+
+            const workbook = XLSX.utils.book_new();
+
+            XLSX.utils.book_append_sheet(
+                workbook,
+                worksheet,
+                "Questions"
+            );
+
+            const excelBuffer = XLSX.write(workbook, {
+                type: "buffer",
+                bookType: "xlsx",
+            });
+
+            fileName = `hr-questions-${new Date()
+                .toISOString()
+                .slice(0, 10)}.xlsx`;
+
+            attachments = [
+                {
+                    filename: fileName,
+                    content: excelBuffer,
+                    contentType:
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                },
+            ];
+        }
+
+        // 7. Build email content
+
+        const plainMessage = String(message || "").trim();
+
+        const emailText = [
+            plainMessage ||
+                "Please find the question report for your review.",
+            "",
+            `Total questions: ${questions.length}`,
+            attachExcel
+                ? `Attachment: ${fileName}`
+                : "No Excel attachment included.",
+            "",
+            "Regards,",
+            "HR Management Team",
+        ].join("\n");
+
+        const safeMessage = escapeHtml(
+            plainMessage ||
+                "Please find the question report for your review."
+        ).replace(/\r\n|\r|\n/g, "<br>");
+
+        const emailHtml = `
+            <div style="font-family:Arial,sans-serif;color:#333;line-height:1.7">
+                <h2 style="margin-bottom:16px">Question Report</h2>
+
+                <p>${safeMessage}</p>
+
+                <p>
+                    <strong>Total questions:</strong>
+                    ${questions.length}
+                </p>
+
+                <p>
+                    ${
+                        attachExcel
+                            ? "The Excel report is attached to this email."
+                            : "No Excel attachment was requested."
+                    }
+                </p>
+
+                <p>Regards,<br>HR Management Team</p>
+            </div>
+        `;
+
+        // 8. Send email
+
+        const result = await sendEmail({
+            to: recipientEmails.join(", "),
+            subject: String(subject).trim(),
+            text: emailText,
+            html: emailHtml,
+            attachments,
+        });
+
+        // 9. Return result
+
+        return NextResponse.json({
+            success: true,
+            message: result.queued
+                ? "Email report added to the queue."
+                : "Email report sent successfully.",
+            status: result.status,
+            queued: result.queued,
+            sent: result.sent,
+            queueId: result.queueId,
+            recipients: recipientEmails,
+            questionCount: questions.length,
+            attachmentIncluded: attachments.length > 0,
+            fileName,
+            filters: {
+                query,
+                status,
+                questionnaireTypeId,
+                createdFrom: safeFilters.createdFrom || "",
+                createdTo: safeFilters.createdTo || "",
+                updatedFrom: safeFilters.updatedFrom || "",
+                updatedTo: safeFilters.updatedTo || "",
+            },
+        });
+    } catch (error) {
+        console.error("[Question_EMAIL_REPORT]", error);
+
+        return NextResponse.json(
+            {
+                success: false,
+                message:
+                    error.message ||
+                    "Failed to generate or send the question report.",
+            },
+            { status: 500 }
+        );
+    }
+}

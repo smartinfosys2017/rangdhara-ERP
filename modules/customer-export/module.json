@@ -1,0 +1,33 @@
+{
+  "name": "customer-export",
+  "alias" : "customer_export",
+  "displayName": "Import / Export",
+  "version": "1.4.0",
+  "minAppVersion": "1.1.0",
+  "description": "Import and export customer data using CSV files.",
+  "active": true,
+  "route": "/customer-export",
+  "update": {
+    "title": "Import / Export 1.4.0",
+    "type": "feature",
+    "remark": "Improved customer Inventroy import and export functionality.",
+    "features": [
+      "Added CSV validation",
+      "Inventroy add import export ",
+      "Improved customer field mapping",
+      "Improved export performance"
+    ],
+    "migration": true,
+    "migrationFrom": "1.0.1"
+  },
+  "permissions": [
+    "customers.read",
+    "customers.create",
+    "customers.update"
+  ],
+  "menu": {
+    "label": "Customer Import / Export",
+    "icon": "ki-duotone ki-user-square",
+    "href": "/customer-export"
+  }
+}
