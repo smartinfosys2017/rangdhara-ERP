@@ -116,9 +116,9 @@ export default function ProductTypeEditDialog({
     const Description = form.Description?.trim() || "";
 
     if (!ProductType) {
-      newErrors.ProductType = "Item Type is required.";
+      newErrors.ProductType = "Item Condition is required.";
     } else if (ProductType.length > 255) {
-      newErrors.ProductType = "Item Type must not exceed 255 characters.";
+      newErrors.ProductType = "Item Condition must not exceed 255 characters.";
     }
 
     if (!Description) {
@@ -175,18 +175,18 @@ export default function ProductTypeEditDialog({
       const result = await response.json();
 
       if (!response.ok || !result.success) {
-        throw new Error(result.message || "Failed to update Item Type.");
+        throw new Error(result.message || "Failed to update Item Condition.");
       }
 
-      toast.success("Item Type updated successfully.");
+      toast.success("Item Condition updated successfully.");
 
       onSuccess?.(result.data);
 
       handleClose();
     } catch (error) {
-      console.error("Item Type UPDATE ERROR:", error);
+      console.error("Item Condition UPDATE ERROR:", error);
 
-      toast.error(error.message || "Unable to update Item Type.");
+      toast.error(error.message || "Unable to update Item Condition.");
     }
   };
 
@@ -214,26 +214,26 @@ export default function ProductTypeEditDialog({
         <div className="flex flex-col h-full max-h-[90vh] overflow-hidden">
           <DialogHeader>
             <DialogTitle>
-              Edit Item Type
+              Edit Item Condition
             </DialogTitle>
 
             <DialogDescription>
-              Update Item Type information.
+              Update Item Condition information.
             </DialogDescription>
           </DialogHeader>
           <ScrollArea className="grow min-h-0 flex flex-col h-full max-h-[90vh] overflow-hidden">
             <DialogBody className="space-y-6 pt-0 px-0 min-h-0">
-              {/* Item TYPE */}
+              {/* Item Condition */}
 
               <div>
                 <label className="mb-2 block text-sm font-medium">
-                  Item Type<span className="text-destructive">*</span>
+                  Item Condition<span className="text-destructive">*</span>
                 </label>
 
                 <Input
                   value={form.ProductType}
 
-                  placeholder="Enter Item type"
+                  placeholder="Enter Item Condition"
 
                   onChange={(e) => handleChange("ProductType", e.target.value)}
                 />
@@ -282,7 +282,7 @@ export default function ProductTypeEditDialog({
               {/* STATUS */}
 
               <div>
-                <label className="mb-2 block text-sm font-medium">Status</label>
+                <label className="mb-2 block text-sm font-medium">Status <span className="text-destructive">*</span></label>
 
                 <Select
                   value={form.status}
@@ -305,7 +305,7 @@ export default function ProductTypeEditDialog({
 
               <div>
                 <label className="mb-2 block text-sm font-medium">
-                  Default Item Type
+                  Default Item Condition <span className="text-destructive">*</span>
                 </label>
 
                 <Select

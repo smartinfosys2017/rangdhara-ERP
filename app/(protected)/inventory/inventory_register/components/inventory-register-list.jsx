@@ -1053,7 +1053,7 @@ const InventoryRegisterList = () => {
 
               <Input
                 type="text"
-                placeholder="Search inventory register..."
+                placeholder="Search inventory register"
                 value={searchInput}
                 onChange={(event) => setSearchInput(event.target.value)}
                 className="w-full pl-9 pr-9"

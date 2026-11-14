@@ -1272,7 +1272,7 @@ const TransactionTypeList = () => {
 
               <Input
                 type="text"
-                placeholder="Search transaction type..."
+                placeholder="Search transaction type"
                 value={searchInput}
                 onChange={(event) => setSearchInput(event.target.value)}
                 className="w-full pl-9 pr-9"

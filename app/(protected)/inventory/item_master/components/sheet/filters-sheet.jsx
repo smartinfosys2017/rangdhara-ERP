@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState } from "react";
@@ -6,6 +7,8 @@ import { CalendarDays, ChevronDown, Info } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Calendar } from "@/components/ui/calendar";
 
@@ -25,13 +28,28 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+import {
+  ToggleGroup,
+  ToggleGroupItem,
+} from "@/components/ui/toggle-group";
 
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+
+// ======================================================
+// DATE HELPERS
+// ======================================================
 
 const toDate = (value) => {
   if (!value) return undefined;
@@ -46,7 +64,12 @@ const toDateRange = (from, to) => ({
   to: toDate(to),
 });
 
-const toDateString = (date) => (date ? format(date, "yyyy-MM-dd") : "");
+const toDateString = (date) =>
+  date ? format(date, "yyyy-MM-dd") : "";
+
+// ======================================================
+// DATE RANGE FILTER
+// ======================================================
 
 function DateRangeFilter({ label, date, setDate }) {
   return (
@@ -91,6 +114,102 @@ function DateRangeFilter({ label, date, setDate }) {
   );
 }
 
+// ======================================================
+// NUMBER RANGE FILTER
+// ======================================================
+
+function NumberRangeFilter({
+  label,
+  fromLabel,
+  toLabel,
+  fromValue,
+  toValue,
+  setFromValue,
+  setToValue,
+}) {
+  return (
+    <div className="space-y-3 px-5">
+      <Label>{label}</Label>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1.5">
+          <Label className="text-xs text-muted-foreground">
+            {fromLabel}
+          </Label>
+
+          <Input
+            type="number"
+            min="0"
+            step="any"
+            placeholder={fromLabel}
+            value={fromValue}
+            onChange={(e) => setFromValue(e.target.value)}
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <Label className="text-xs text-muted-foreground">
+            {toLabel}
+          </Label>
+
+          <Input
+            type="number"
+            min="0"
+            step="any"
+            placeholder={toLabel}
+            value={toValue}
+            onChange={(e) => setToValue(e.target.value)}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ======================================================
+// USER FILTER
+// ======================================================
+
+function UserFilter({
+  id,
+  label,
+  placeholder,
+  value,
+  onChange,
+  users,
+}) {
+  return (
+    <div className="space-y-2 px-5 pb-5">
+      <Label htmlFor={id}>{label}</Label>
+
+      <Select
+        value={value || "all"}
+        onValueChange={(selectedValue) =>
+          onChange(selectedValue === "all" ? "" : selectedValue)
+        }
+      >
+        <SelectTrigger id={id}>
+          <SelectValue placeholder={placeholder} />
+        </SelectTrigger>
+
+        <SelectContent>
+          <SelectItem value="all">All Administrators</SelectItem>
+
+          {users.map((user) => (
+            <SelectItem key={String(user.id)} value={String(user.id)}>
+              {user.name || user.email || `User ${user.id}`}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+// ======================================================
+// MAIN FILTER SHEET
+// ======================================================
+
 export function StoreClientFiltersSheet({
   trigger,
 
@@ -113,34 +232,133 @@ export function StoreClientFiltersSheet({
   restockFilter = "all",
   setRestockFilter,
 
+  createdBy = "",
+  setCreatedBy,
+
+  updatedBy = "",
+  setUpdatedBy,
+
+  restockLevelMin = "",
+  setRestockLevelMin,
+
+  restockLevelMax = "",
+  setRestockLevelMax,
+
+  closingBalanceFrom = "",
+  setClosingBalanceFrom,
+
+  closingBalanceTo = "",
+  setClosingBalanceTo,
+
   setPagination,
 }) {
   const [open, setOpen] = useState(false);
 
-  // Load groups locally.
+  // ======================================================
+  // USERS
+  // ======================================================
+
+  const [users, setUsers] = useState([]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchUsers = async () => {
+      try {
+        const response = await fetch(
+          "/api/inventory/filter-users",
+          {
+            method: "GET",
+            credentials: "same-origin",
+            headers: {
+              Accept: "application/json",
+            },
+          }
+        );
+
+        const result = await response.json();
+
+        if (!response.ok || !result.success) {
+          throw new Error(
+            result.message || "Failed to fetch administrator users"
+          );
+        }
+
+        if (!cancelled) {
+          setUsers(
+            Array.isArray(result.data) ? result.data : []
+          );
+        }
+      } catch (error) {
+        console.error("FETCH FILTER USERS ERROR:", error);
+
+        if (!cancelled) {
+          setUsers([]);
+        }
+      }
+    };
+
+    fetchUsers();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // ======================================================
+  // GROUP DATA
+  // ======================================================
+
   const [groups, setGroups] = useState([]);
   const [groupsLoading, setGroupsLoading] = useState(false);
 
-  // Draft filters: applied when Apply is clicked.
+  // ======================================================
+  // DRAFT FILTER STATES
+  // ======================================================
+
   const [draftStatus, setDraftStatus] = useState(statusFilter);
 
   const [draftCreatedDate, setDraftCreatedDate] = useState(() =>
-    toDateRange(createdFrom, createdTo),
+    toDateRange(createdFrom, createdTo)
   );
 
   const [draftUpdatedDate, setDraftUpdatedDate] = useState(() =>
-    toDateRange(updatedFrom, updatedTo),
+    toDateRange(updatedFrom, updatedTo)
   );
 
-  const [draftGroupIds, setDraftGroupIds] = useState(selectedGroupIds);
+  const [draftGroupIds, setDraftGroupIds] = useState(
+    selectedGroupIds
+  );
 
   const [draftRestockFilter, setDraftRestockFilter] = useState(
-    restockFilter || "all",
+    restockFilter || "all"
+  );
+
+  const [draftCreatedBy, setDraftCreatedBy] = useState(createdBy);
+  const [draftUpdatedBy, setDraftUpdatedBy] = useState(updatedBy);
+
+  const [draftRestockLevelMin, setDraftRestockLevelMin] = useState(
+    restockLevelMin
+  );
+
+  const [draftRestockLevelMax, setDraftRestockLevelMax] = useState(
+    restockLevelMax
+  );
+
+  const [draftClosingBalanceFrom, setDraftClosingBalanceFrom] = useState(
+    closingBalanceFrom
+  );
+
+  const [draftClosingBalanceTo, setDraftClosingBalanceTo] = useState(
+    closingBalanceTo
   );
 
   const [groupDropdownOpen, setGroupDropdownOpen] = useState(false);
 
-  // Fetch group names from the API.
+  // ======================================================
+  // LOAD GROUP NAMES
+  // ======================================================
+
   useEffect(() => {
     let cancelled = false;
 
@@ -148,21 +366,25 @@ export function StoreClientFiltersSheet({
       setGroupsLoading(true);
 
       try {
-        const response = await fetch("/api/inventory/item-groups?limit=10000", {
-          method: "GET",
-          credentials: "same-origin",
-          headers: {
-            Accept: "application/json",
-          },
-        });
+        const response = await fetch(
+          "/api/inventory/item-groups?limit=10000",
+          {
+            method: "GET",
+            credentials: "same-origin",
+            headers: {
+              Accept: "application/json",
+            },
+          }
+        );
 
         const result = await response.json();
 
         if (!response.ok || result.success === false) {
-          throw new Error(result.message || "Failed to load item groups");
+          throw new Error(
+            result.message || "Failed to load item groups"
+          );
         }
 
-        // Support common API response structures.
         const groupList = Array.isArray(result.data)
           ? result.data
           : Array.isArray(result.data?.groups)
@@ -194,9 +416,11 @@ export function StoreClientFiltersSheet({
                     groupName: group.groupName.trim(),
                   },
                 ];
-              }),
+              })
           ).values(),
-        ].sort((a, b) => a.groupName.localeCompare(b.groupName));
+        ].sort((a, b) =>
+          a.groupName.localeCompare(b.groupName)
+        );
 
         if (!cancelled) {
           setGroups(uniqueGroups);
@@ -221,27 +445,46 @@ export function StoreClientFiltersSheet({
     };
   }, []);
 
-  // Refresh draft filters when the sheet opens.
+  // ======================================================
+  // REFRESH DRAFT FILTERS WHEN SHEET OPENS
+  // ======================================================
+
   useEffect(() => {
     if (!open) return;
 
     setDraftStatus(statusFilter || "all");
 
-    setDraftCreatedDate(toDateRange(createdFrom, createdTo));
+    setDraftCreatedDate(
+      toDateRange(createdFrom, createdTo)
+    );
 
-    setDraftUpdatedDate(toDateRange(updatedFrom, updatedTo));
+    setDraftUpdatedDate(
+      toDateRange(updatedFrom, updatedTo)
+    );
 
     setDraftGroupIds(
-      Array.isArray(selectedGroupIds) ? [...selectedGroupIds] : [],
+      Array.isArray(selectedGroupIds)
+        ? [...selectedGroupIds]
+        : []
     );
 
     setDraftRestockFilter(restockFilter || "all");
 
-    setGroupDropdownOpen(false);
+    setDraftCreatedBy(createdBy || "");
+    setDraftUpdatedBy(updatedBy || "");
 
-    // Synchronize draft values only when the sheet opens.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    setDraftRestockLevelMin(restockLevelMin ?? "");
+    setDraftRestockLevelMax(restockLevelMax ?? "");
+
+    setDraftClosingBalanceFrom(closingBalanceFrom ?? "");
+    setDraftClosingBalanceTo(closingBalanceTo ?? "");
+
+    setGroupDropdownOpen(false);
   }, [open]);
+
+  // ======================================================
+  // RESET PAGINATION
+  // ======================================================
 
   const resetPagination = () => {
     setPagination?.((previous) => ({
@@ -250,68 +493,138 @@ export function StoreClientFiltersSheet({
     }));
   };
 
+  // ======================================================
+  // RESET FILTERS
+  // ======================================================
+
   const handleReset = () => {
     setDraftStatus("all");
+    setStatusFilter?.("all");
 
     setDraftCreatedDate({
       from: undefined,
       to: undefined,
     });
 
+    setCreatedFrom?.("");
+    setCreatedTo?.("");
+
     setDraftUpdatedDate({
       from: undefined,
       to: undefined,
     });
 
-    setDraftGroupIds([]);
-    setDraftRestockFilter("all");
-    setGroupDropdownOpen(false);
-
-    setStatusFilter?.("all");
-
-    setCreatedFrom?.("");
-    setCreatedTo?.("");
-
     setUpdatedFrom?.("");
     setUpdatedTo?.("");
 
+    setDraftGroupIds([]);
     setSelectedGroupIds?.([]);
+
+    setDraftRestockFilter("all");
     setRestockFilter?.("all");
+
+    setDraftCreatedBy("");
+    setCreatedBy?.("");
+
+    setDraftUpdatedBy("");
+    setUpdatedBy?.("");
+
+    setDraftRestockLevelMin("");
+    setDraftRestockLevelMax("");
+    setRestockLevelMin?.("");
+    setRestockLevelMax?.("");
+
+    setDraftClosingBalanceFrom("");
+    setDraftClosingBalanceTo("");
+    setClosingBalanceFrom?.("");
+    setClosingBalanceTo?.("");
+
+    setGroupDropdownOpen(false);
 
     resetPagination();
     setOpen(false);
   };
 
+  // ======================================================
+  // APPLY FILTERS
+  // ======================================================
+
   const handleApply = () => {
+    if (
+      draftRestockLevelMin !== "" &&
+      draftRestockLevelMax !== "" &&
+      Number(draftRestockLevelMin) > Number(draftRestockLevelMax)
+    ) {
+      return;
+    }
+
+    if (
+      draftClosingBalanceFrom !== "" &&
+      draftClosingBalanceTo !== "" &&
+      Number(draftClosingBalanceFrom) >
+      Number(draftClosingBalanceTo)
+    ) {
+      return;
+    }
+
     setStatusFilter?.(draftStatus || "all");
 
-    setCreatedFrom?.(toDateString(draftCreatedDate?.from));
+    setCreatedFrom?.(
+      toDateString(draftCreatedDate?.from)
+    );
 
-    setCreatedTo?.(toDateString(draftCreatedDate?.to));
+    setCreatedTo?.(
+      toDateString(draftCreatedDate?.to)
+    );
 
-    setUpdatedFrom?.(toDateString(draftUpdatedDate?.from));
+    setUpdatedFrom?.(
+      toDateString(draftUpdatedDate?.from)
+    );
 
-    setUpdatedTo?.(toDateString(draftUpdatedDate?.to));
+    setUpdatedTo?.(
+      toDateString(draftUpdatedDate?.to)
+    );
 
     setSelectedGroupIds?.(draftGroupIds);
 
     setRestockFilter?.(draftRestockFilter || "all");
 
+    setCreatedBy?.(draftCreatedBy);
+    setUpdatedBy?.(draftUpdatedBy);
+
+    setRestockLevelMin?.(draftRestockLevelMin);
+    setRestockLevelMax?.(draftRestockLevelMax);
+
+    setClosingBalanceFrom?.(draftClosingBalanceFrom);
+    setClosingBalanceTo?.(draftClosingBalanceTo);
+
     resetPagination();
     setOpen(false);
   };
 
+  // ======================================================
+  // GROUP SELECTION
+  // ======================================================
+
   const toggleGroup = (groupId, checked) => {
     setDraftGroupIds((previous) => {
-      const exists = previous.some((id) => String(id) === String(groupId));
+      const exists = previous.some(
+        (id) => String(id) === String(groupId)
+      );
 
       if (checked) {
         return exists ? previous : [...previous, groupId];
       }
 
-      return previous.filter((id) => String(id) !== String(groupId));
+      return previous.filter(
+        (id) => String(id) !== String(groupId)
+      );
     });
   };
+
+  // ======================================================
+  // RENDER
+  // ======================================================
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -356,16 +669,15 @@ export function StoreClientFiltersSheet({
                 className="grid grid-cols-3"
               >
                 <ToggleGroupItem value="all">All</ToggleGroupItem>
-
                 <ToggleGroupItem value="active">Active</ToggleGroupItem>
-
                 <ToggleGroupItem value="inactive">Inactive</ToggleGroupItem>
               </ToggleGroup>
             </div>
 
             <div className="my-5 border-b border-border" />
-            {/* RESTOCK FILTER */}
-            <div className="space-y-3 px-5 pt-5">
+
+            {/* APPLICABLE FOR RESTOCK LEVEL */}
+            <div className="space-y-3 px-5">
               <div className="flex items-center gap-1">
                 <span className="text-sm font-medium">
                   Applicable for Restock Level
@@ -383,7 +695,9 @@ export function StoreClientFiltersSheet({
                   </TooltipTrigger>
 
                   <TooltipContent>
-                    <p>Filter item masters by restock level applicability.</p>
+                    <p>
+                      Filter item masters by restock level applicability.
+                    </p>
                   </TooltipContent>
                 </Tooltip>
               </div>
@@ -398,24 +712,25 @@ export function StoreClientFiltersSheet({
                 className="grid grid-cols-3"
               >
                 <ToggleGroupItem value="all">All</ToggleGroupItem>
-
                 <ToggleGroupItem value="true">Yes</ToggleGroupItem>
-
                 <ToggleGroupItem value="false">No</ToggleGroupItem>
               </ToggleGroup>
             </div>
 
             <div className="my-5 border-b border-border" />
+
             {/* GROUP NAME */}
             <div className="space-y-2 px-5">
-              <label className="text-sm font-medium">Group Name</label>
+              <Label>Group Name</Label>
 
               <div className="relative">
                 <Button
                   type="button"
                   variant="outline"
                   className="w-full justify-between font-normal"
-                  onClick={() => setGroupDropdownOpen((previous) => !previous)}
+                  onClick={() =>
+                    setGroupDropdownOpen((previous) => !previous)
+                  }
                   aria-expanded={groupDropdownOpen}
                 >
                   <span>
@@ -425,9 +740,8 @@ export function StoreClientFiltersSheet({
                   </span>
 
                   <ChevronDown
-                    className={`ml-2 size-4 transition-transform ${
-                      groupDropdownOpen ? "rotate-180" : ""
-                    }`}
+                    className={`ml-2 size-4 transition-transform ${groupDropdownOpen ? "rotate-180" : ""
+                      }`}
                   />
                 </Button>
 
@@ -460,10 +774,14 @@ export function StoreClientFiltersSheet({
                           >
                             <Checkbox
                               checked={draftGroupIds.some(
-                                (id) => String(id) === String(group.id),
+                                (id) =>
+                                  String(id) === String(group.id)
                               )}
                               onCheckedChange={(checked) =>
-                                toggleGroup(group.id, checked === true)
+                                toggleGroup(
+                                  group.id,
+                                  checked === true
+                                )
                               }
                             />
 
@@ -481,6 +799,32 @@ export function StoreClientFiltersSheet({
 
             <div className="my-5 border-b border-border" />
 
+            {/* RESTOCK LEVEL RANGE */}
+            <NumberRangeFilter
+              label="Restock Level Range"
+              fromLabel="Minimum"
+              toLabel="Maximum"
+              fromValue={draftRestockLevelMin}
+              toValue={draftRestockLevelMax}
+              setFromValue={setDraftRestockLevelMin}
+              setToValue={setDraftRestockLevelMax}
+            />
+
+            <div className="my-5 border-b border-border" />
+
+            {/* CLOSING BALANCE RANGE */}
+            <NumberRangeFilter
+              label="Closing Balance"
+              fromLabel="From"
+              toLabel="To"
+              fromValue={draftClosingBalanceFrom}
+              toValue={draftClosingBalanceTo}
+              setFromValue={setDraftClosingBalanceFrom}
+              setToValue={setDraftClosingBalanceTo}
+            />
+
+            <div className="my-5 border-b border-border" />
+
             {/* DATE FILTERS */}
             <div className="space-y-5 pb-5">
               <DateRangeFilter
@@ -495,9 +839,32 @@ export function StoreClientFiltersSheet({
                 setDate={setDraftUpdatedDate}
               />
             </div>
+
+            <div className="my-5 border-b border-border" />
+
+            {/* CREATED BY */}
+            <UserFilter
+              id="createdByFilter"
+              label="Created By"
+              placeholder="Select creator"
+              value={draftCreatedBy}
+              onChange={setDraftCreatedBy}
+              users={users}
+            />
+
+            {/* UPDATED BY */}
+            <UserFilter
+              id="updatedByFilter"
+              label="Updated By"
+              placeholder="Select updater"
+              value={draftUpdatedBy}
+              onChange={setDraftUpdatedBy}
+              users={users}
+            />
           </ScrollArea>
         </SheetBody>
 
+        {/* FOOTER */}
         <SheetFooter className="flex flex-row gap-3 border-t border-border px-5 py-3.5">
           <Button
             type="button"
@@ -508,7 +875,11 @@ export function StoreClientFiltersSheet({
             Reset
           </Button>
 
-          <Button type="button" className="basis-1/2" onClick={handleApply}>
+          <Button
+            type="button"
+            className="basis-1/2"
+            onClick={handleApply}
+          >
             Apply
           </Button>
         </SheetFooter>

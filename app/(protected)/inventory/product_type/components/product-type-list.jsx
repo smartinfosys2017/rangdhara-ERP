@@ -84,7 +84,7 @@ const createProductTypeNotification = async ({
             ? String(ProductTypeId)
             : null,
         entityType: "product_type",
-        entityName: ProductTypeName || "Item Type",
+        entityName: ProductTypeName || "Item Condition",
         url: "/inventory/product_type",
       }),
       cache: "no-store",
@@ -107,7 +107,7 @@ const createProductTypeNotification = async ({
 
     return result;
   } catch (error) {
-    console.error("Item Type NOTIFICATION ERROR", error);
+    console.error("Item Condition NOTIFICATION ERROR", error);
     return null;
   }
 };
@@ -243,7 +243,7 @@ const ProductTypeList = () => {
 
       return result;
     } catch (error) {
-      console.error("Item Type SYNC ERROR", error);
+      console.error("Item Condition SYNC ERROR", error);
       toast.error(error.message || "Inventory sync failed");
       return null;
     } finally {
@@ -495,7 +495,7 @@ const ProductTypeList = () => {
   const buildProductTypeExcel = useCallback((items) => {
     const rows = items.map((item) => ({
       ID: item.id,
-      "Item Type": item.ProductType || "",
+      "Item Condition": item.ProductType || "",
       Description: item.Description || "",
       Status: isActiveStatus(item.status) ? "Active" : "Inactive",
       "Created Date": item.createdAt
@@ -554,11 +554,11 @@ const ProductTypeList = () => {
 
       downloadProductTypeExcel(items);
 
-      toast.success(`${items.length} item type(s) exported`, {
+      toast.success(`${items.length} item condition(s) exported`, {
         id: "product-type-export",
       });
     } catch (error) {
-      console.error("Item Type EXPORT ERROR", error);
+      console.error("Item Condition EXPORT ERROR", error);
 
       toast.error(error.message || "Excel export failed", {
         id: "product-type-export",
@@ -648,7 +648,7 @@ const ProductTypeList = () => {
               <thead>
                 <tr>
                   <th>ID</th>
-                  <th>Item Type</th>
+                  <th>Item Condition</th>
                   <th>Description</th>
                   <th>Status</th>
                   <th>Created Date</th>
@@ -669,7 +669,7 @@ const ProductTypeList = () => {
 
       printWindow.document.close();
     } catch (error) {
-      console.error("Item Type PRINT ERROR", error);
+      console.error("Item Condition PRINT ERROR", error);
       toast.error(error.message || "Unable to prepare print report");
     }
   }, [getProductTypeReportRows]);
@@ -797,7 +797,7 @@ const ProductTypeList = () => {
         "",
         "Please find the Item Types report for your review.",
         "",
-        "The report includes the item type name, description, status, and creation and update dates.",
+        "The report includes the item condition name, description, status, and creation and update dates.",
         "",
         "Please review the information and let us know if any corrections are required.",
         "",
@@ -899,7 +899,7 @@ const ProductTypeList = () => {
 
       setEmailDialogOpen(false);
     } catch (error) {
-      console.error("Item Type EMAIL ERROR", error);
+      console.error("Item Condition EMAIL ERROR", error);
 
       toast.error(error.message || "Unable to send email.");
     } finally {
@@ -936,12 +936,12 @@ const ProductTypeList = () => {
         throw new Error(result.message || "Delete failed");
       }
 
-      toast.success("Item Type deleted successfully");
+      toast.success("Item Condition deleted successfully");
 
       await createProductTypeNotification({
         action: "deleted",
-        title: "Item Type Deleted",
-        message: `${getProductTypeName(selectedProductType)} Item Type has been deleted.`,
+        title: "Item Condition Deleted",
+        message: `${getProductTypeName(selectedProductType)} Item Condition has been deleted.`,
         ProductTypeId: selectedProductType.id,
         ProductTypeName: getProductTypeName(selectedProductType),
       });
@@ -955,7 +955,7 @@ const ProductTypeList = () => {
       await refreshProductTypes();
       await syncInventoryProductType();
     } catch (error) {
-      console.error("Item Type DELETE ERROR", error);
+      console.error("Item Condition  DELETE ERROR", error);
       toast.error(error.message || "Delete failed");
     } finally {
       setDeleteLoading(false);
@@ -995,7 +995,7 @@ const ProductTypeList = () => {
         const originalName = String(item.ProductType || "").trim();
 
         if (!originalName) {
-          toast.error("The original item type name is empty.");
+          toast.error("The original item condition name is empty.");
           return;
         }
 
@@ -1023,14 +1023,14 @@ const ProductTypeList = () => {
 
   const handleConfirmCopyProductType = useCallback(async () => {
     if (!copySourceItem?.id) {
-      toast.error("Please select an item type to copy.");
+      toast.error("Please select an item condition to copy.");
       return;
     }
 
     const finalName = copyProductType.trim();
 
     if (!finalName) {
-      toast.error("Please enter an item type name.");
+      toast.error("Please enter an item condition name.");
       return;
     }
 
@@ -1040,7 +1040,7 @@ const ProductTypeList = () => {
       const existingNames = await getExistingProductTypeNames();
 
       if (existingNames.has(finalName.toLowerCase())) {
-        toast.error("This item type already exists. Please use another name.");
+        toast.error("This item condition already exists. Please use another name.");
         return;
       }
 
@@ -1059,16 +1059,16 @@ const ProductTypeList = () => {
       const result = await response.json();
 
       if (!response.ok || !result.success) {
-        throw new Error(result.message || "Failed to copy item type.");
+        throw new Error(result.message || "Failed to copy item condition.");
       }
 
       const createdItem = result.data || {};
 
-      toast.success("Item Type copied successfully.");
+      toast.success("Item Condition copied successfully.");
 
       await createProductTypeNotification({
         action: "created",
-        title: "Item Type Copied",
+        title: "Item Condition Copied",
         message: `${finalName} was copied from ${getProductTypeName(copySourceItem)}.`,
         ProductTypeId: createdItem.id,
         ProductTypeName: finalName,
@@ -1082,7 +1082,7 @@ const ProductTypeList = () => {
       await refreshProductTypes();
       await syncInventoryProductType();
     } catch (error) {
-      console.error("Item Type COPY ERROR", error);
+      console.error("Item Condition COPY ERROR", error);
       toast.error(error.message || "Copy failed.");
     } finally {
       setCopyLoading(false);
@@ -1123,7 +1123,7 @@ const ProductTypeList = () => {
         await refreshProductTypes();
         await syncInventoryProductType();
       } catch (error) {
-        console.error("Item Type STATUS ERROR", error);
+        console.error("Item Condition STATUS ERROR", error);
         toast.error(error.message || "Status update failed");
       }
     },
@@ -1133,12 +1133,12 @@ const ProductTypeList = () => {
   const handleBulkStatus = useCallback(
     async (status) => {
       if (!selectedIds.length) {
-        toast.error("Select at least one item type");
+        toast.error("Select at least one item condition");
         return;
       }
 
       if (!(canManage || canEdit)) {
-        toast.error("You do not have permission to change item type status");
+        toast.error("You do not have permission to change item condition status");
         return;
       }
 
@@ -1166,7 +1166,7 @@ const ProductTypeList = () => {
         }
 
         toast.success(
-          `${result.count ?? idsToUpdate.length} item type(s) marked ${status ? "active" : "inactive"}`,
+          `${result.count ?? idsToUpdate.length} item condition(s) marked ${status ? "active" : "inactive"}`,
         );
 
         setActiveDialogOpen(false);
@@ -1176,7 +1176,7 @@ const ProductTypeList = () => {
         await refreshProductTypes();
         await syncInventoryProductType();
       } catch (error) {
-        console.error("BULK Item Type STATUS ERROR", error);
+        console.error("BULK Item Condition STATUS ERROR", error);
         toast.error(error.message || "Bulk status update failed");
       } finally {
         setBulkLoading(false);
@@ -1193,7 +1193,7 @@ const ProductTypeList = () => {
 
   const handleBulkDelete = useCallback(() => {
     if (!selectedIds.length) {
-      toast.error("Please select at least one item type to delete.");
+      toast.error("Please select at least one item condition to delete.");
       return;
     }
 
@@ -1235,7 +1235,7 @@ const ProductTypeList = () => {
 
       toast.success(
         result.message ||
-        `${idsToDelete.length} item type(s) deleted successfully.`,
+        `${idsToDelete.length} item condition(s) deleted successfully.`,
       );
 
       setShowDeleteDialog(false);
@@ -1245,7 +1245,7 @@ const ProductTypeList = () => {
       await refreshProductTypes();
       await syncInventoryProductType();
     } catch (error) {
-      console.error("BULK ITEM TYPE DELETE ERROR", error);
+      console.error("BULK Item Condition DELETE ERROR", error);
 
       toast.error(error.message || "Failed to delete selected item types.");
     } finally {
@@ -1346,7 +1346,7 @@ const ProductTypeList = () => {
         accessorKey: "ProductType",
         id: "ProductType",
         header: ({ column }) => (
-          <DataGridColumnHeader title="Item Type" column={column} visibility />
+          <DataGridColumnHeader title="Item Condition" column={column} visibility />
         ),
         cell: ({ row }) => (
           <span className="font-medium">
@@ -1356,7 +1356,7 @@ const ProductTypeList = () => {
         size: 250,
         enableSorting: true,
         meta: {
-          headerTitle: "Item Type",
+          headerTitle: "Item Condition",
           skeleton: <Skeleton className="h-7 w-40" />,
         },
       },
@@ -1600,7 +1600,7 @@ const ProductTypeList = () => {
 
               <Input
                 type="text"
-                placeholder="Search item type..."
+                placeholder="Search item condition"
                 value={searchInput}
                 onChange={(event) => setSearchInput(event.target.value)}
                 className="w-full pl-9 pr-9"
@@ -1707,7 +1707,7 @@ const ProductTypeList = () => {
           {canManage && (
             <Button type="button" onClick={() => setAddDialogOpen(true)}>
               <Plus className="mr-2 size-4" />
-              Add Item Type
+              Add Item Condition
             </Button>
           )}
 
@@ -1753,7 +1753,7 @@ const ProductTypeList = () => {
             <h3 className="text-lg font-semibold">Access Denied</h3>
 
             <p className="mt-1 text-sm text-muted-foreground">
-              You do not have permission to view Item Type.
+              You do not have permission to view Item Condition.
             </p>
           </div>
         </CardHeader>
@@ -1798,7 +1798,7 @@ const ProductTypeList = () => {
         </Card>
       </DataGrid>
 
-      {/* ADD ITEM TYPE */}
+      {/* ADD Item Condition */}
 
       <ProductTypeAddDialog
         open={addDialogOpen}
@@ -1808,8 +1808,8 @@ const ProductTypeList = () => {
 
           await createProductTypeNotification({
             action: "created",
-            title: "New Item Type Created",
-            message: `${getProductTypeName(newProductType) || "Item Type"} has been created.`,
+            title: "New Item Condition Created",
+            message: `${getProductTypeName(newProductType) || "Item Condition"} has been created.`,
             ProductTypeId: newProductType?.id,
             ProductTypeName: getProductTypeName(newProductType),
           });
@@ -1819,7 +1819,7 @@ const ProductTypeList = () => {
         }}
       />
 
-      {/* VIEW ITEM TYPE */}
+      {/* VIEW Item Condition */}
 
       <ProductTypeViewDialog
         open={viewDialogOpen}
@@ -1830,7 +1830,7 @@ const ProductTypeList = () => {
         }}
       />
 
-      {/* EDIT ITEM TYPE */}
+      {/* EDIT Item Condition */}
 
       <ProductTypeEditDialog
         open={editDialogOpen}
@@ -1842,10 +1842,10 @@ const ProductTypeList = () => {
         onSuccess={async (updatedProductType) => {
           await createProductTypeNotification({
             action: "updated",
-            title: "Item Type Updated",
+            title: "Item Condition Updated",
             message: `${getProductTypeName(updatedProductType) ||
               getProductTypeName(selectedProductType) ||
-              "Item Type"
+              "Item Condition"
               } has been updated.`,
             ProductTypeId: updatedProductType?.id || selectedProductType?.id,
             ProductTypeName:
@@ -1858,7 +1858,7 @@ const ProductTypeList = () => {
         }}
       />
 
-      {/* DELETE ITEM TYPE */}
+      {/* DELETE Item Condition */}
 
       <ProductTypeDeleteDialog
         open={deleteDialogOpen}
@@ -2145,7 +2145,7 @@ const ProductTypeList = () => {
         </DialogContent>
       </Dialog>
 
-      {/* COPY ITEM TYPE DIALOG */}
+      {/* COPY Item Condition DIALOG */}
 
       <Dialog
         open={copyDialogOpen}
@@ -2163,10 +2163,10 @@ const ProductTypeList = () => {
       >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Copy Item Type</DialogTitle>
+            <DialogTitle>Copy Item Condition</DialogTitle>
 
             <DialogDescription>
-              Enter a unique name for the copied item type. The suggested name
+              Enter a unique name for the copied Item Condition. The suggested name
               can be changed before saving.
             </DialogDescription>
           </DialogHeader>
@@ -2180,14 +2180,14 @@ const ProductTypeList = () => {
           >
             <div className="space-y-2">
               <label htmlFor="copy-item-type" className="text-sm font-medium">
-                Item Type Name <span className="text-destructive">*</span>
+                Item Condition Name <span className="text-destructive">*</span>
               </label>
 
               <Input
                 id="copy-item-type"
                 value={copyProductType}
                 onChange={(event) => setCopyProductType(event.target.value)}
-                placeholder="Enter item type name"
+                placeholder="Enter item condition name"
                 maxLength={150}
                 required
                 autoFocus
@@ -2235,7 +2235,7 @@ const ProductTypeList = () => {
                 disabled={copyLoading || !copyProductType.trim()}
               >
                 <Copy className="mr-2 size-4" />
-                {copyLoading ? "Copying..." : "Copy Item Type"}
+                {copyLoading ? "Copying..." : "Copy Item Condition"}
               </Button>
             </DialogFooter>
           </form>
@@ -2262,7 +2262,7 @@ const ProductTypeList = () => {
             <DialogDescription>
               Are you sure you want to delete{" "}
               <span className="font-semibold text-foreground">
-                {selectedIds.length} selected item type
+                {selectedIds.length} selected item condition
                 {selectedIds.length !== 1 ? "s" : ""}
               </span>
               ? This action cannot be undone.

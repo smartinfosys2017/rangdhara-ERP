@@ -693,7 +693,7 @@ const UnitList = () => {
             <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
 
             <Input
-              placeholder="Search unit..."
+              placeholder="Search unit"
               value={inputValue}
               className="w-full pl-10 pr-9"
               onChange={(e) => setInputValue(e.target.value)}

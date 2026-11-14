@@ -17,6 +17,7 @@ import {
   RefreshCw,
   Search,
   Trash2,
+  Info,
   X,
   FileSpreadsheet,
   XCircle,
@@ -53,6 +54,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -178,6 +184,14 @@ export default function ItemMasterList() {
   const [updatedFrom, setUpdatedFrom] = useState("");
   const [updatedTo, setUpdatedTo] = useState("");
 
+  const [createdBy, setCreatedBy] = useState("");
+  const [updatedBy, setUpdatedBy] = useState("");
+
+  const [restockLevelMin, setRestockLevelMin] = useState("");
+  const [restockLevelMax, setRestockLevelMax] = useState("");
+
+  const [closingBalanceFrom, setClosingBalanceFrom] = useState("");
+  const [closingBalanceTo, setClosingBalanceTo] = useState("");
   // MULTIPLE SELECTION
   const [selectedIds, setSelectedIds] = useState([]);
   const [bulkLoading, setBulkLoading] = useState(false);
@@ -323,6 +337,33 @@ export default function ItemMasterList() {
         params.set("groupIds", selectedGroupIds.join(","));
       }
 
+      // Created By / Updated By
+      if (createdBy.trim()) {
+        params.set("createdBy", createdBy.trim());
+      }
+
+      if (updatedBy.trim()) {
+        params.set("updatedBy", updatedBy.trim());
+      }
+
+      // Restock Level Range
+      if (restockLevelMin !== "") {
+        params.set("restockLevelMin", restockLevelMin);
+      }
+
+      if (restockLevelMax !== "") {
+        params.set("restockLevelMax", restockLevelMax);
+      }
+
+      // Closing Balance Range
+      if (closingBalanceFrom !== "") {
+        params.set("closingBalanceFrom", closingBalanceFrom);
+      }
+
+      if (closingBalanceTo !== "") {
+        params.set("closingBalanceTo", closingBalanceTo);
+      }
+
       return params;
     },
     [
@@ -335,6 +376,12 @@ export default function ItemMasterList() {
       sorting,
       selectedGroupIds,
       restockFilter,
+      createdBy,
+      updatedBy,
+      restockLevelMin,
+      restockLevelMax,
+      closingBalanceFrom,
+      closingBalanceTo,
     ],
   );
 
@@ -367,8 +414,14 @@ export default function ItemMasterList() {
       createdTo,
       updatedFrom,
       updatedTo,
-      selectedGroupIds, // Changed
+      selectedGroupIds,
       restockFilter,
+      createdBy,
+      updatedBy,
+      restockLevelMin,
+      restockLevelMax,
+      closingBalanceFrom,
+      closingBalanceTo,
     ],
     queryFn: fetchItemMasters,
     staleTime: 0,
@@ -584,6 +637,12 @@ export default function ItemMasterList() {
     updatedTo,
     selectedGroupNames,
     restockFilter,
+    createdBy,
+    updatedBy,
+    restockLevelMin,
+    restockLevelMax,
+    closingBalanceFrom,
+    closingBalanceTo,
   ]);
 
   // Reset results when the search box is emptied (for example, the browser "x").
@@ -615,6 +674,12 @@ export default function ItemMasterList() {
     setRestockFilter("all");
     setGroupFilterOpen(false);
     setSelectedIds([]);
+    setCreatedBy("");
+    setUpdatedBy("");
+    setRestockLevelMin("");
+    setRestockLevelMax("");
+    setClosingBalanceFrom("");
+    setClosingBalanceTo("");
     setPagination((prev) => ({ ...prev, pageIndex: 0 }));
   }, []);
 
@@ -1288,6 +1353,101 @@ export default function ItemMasterList() {
         },
       },
       {
+        accessorKey: "Unitid",
+        id: "Unitid",
+        header: ({ column }) => (
+          <DataGridColumnHeader title="Unit Measure" column={column} visibility />
+        ),
+        cell: ({ row }) => (
+          <span>{row.original?.UnitName || row.original?.unitName || "-"}</span>
+        ),
+        size: 150,
+        enableSorting: true,
+        enableHiding: true,
+        meta: {
+          headerTitle: "Unit Measure",
+          skeleton: <Skeleton className="h-7 w-24" />,
+        },
+      },
+      {
+        accessorKey: "groupName",
+        id: "groupName",
+        header: ({ column }) => (
+          <DataGridColumnHeader title="Group Name" column={column} visibility />
+        ),
+        cell: ({ row }) => (
+          <span>{row.original.GroupName || row.original?.GroupName || "-"}</span>
+        ),
+        size: 160,
+        enableSorting: true,
+        enableHiding: true,
+        meta: {
+          headerTitle: "Group Name",
+          skeleton: <Skeleton className="h-7 w-28" />,
+        },
+      },
+      {
+        accessorKey: "openingBalance",
+        id: "openingBalance",
+        header: ({ column }) => (
+          <DataGridColumnHeader title="Opening Balance" column={column} visibility />
+        ),
+        cell: ({ row }) => (
+          <span>{row.original.openingBalance ?? 0}</span>
+        ),
+        size: 150,
+        enableSorting: true,
+        enableHiding: true,
+        meta: {
+          headerTitle: "Opening Balance",
+          skeleton: <Skeleton className="h-7 w-24" />,
+        },
+      },
+      {
+        accessorKey: "ApplicableForRelocateLevel",
+        id: "ApplicableForRelocateLevel",
+        header: ({ column }) => (
+          <DataGridColumnHeader
+            title="Applicable for Restock"
+            column={column}
+            visibility
+          />
+        ),
+        cell: ({ row }) => (
+          <span>
+            {row.original.ApplicableForRelocateLevel ? "Yes" : "No"}
+          </span>
+        ),
+        size: 180,
+        enableSorting: true,
+        enableHiding: true,
+        meta: {
+          headerTitle: "Applicable for Restock",
+          skeleton: <Skeleton className="h-7 w-20" />,
+        },
+      },
+      {
+        accessorKey: "RelocateLevel",
+        id: "RelocateLevel",
+        header: ({ column }) => (
+          <DataGridColumnHeader title="Restock Level" column={column} visibility />
+        ),
+        cell: ({ row }) => (
+          <span>
+            {row.original.ApplicableForRelocateLevel
+              ? row.original.RelocateLevel ?? "-"
+              : "-"}
+          </span>
+        ),
+        size: 140,
+        enableSorting: true,
+        enableHiding: true,
+        meta: {
+          headerTitle: "Restock Level",
+          skeleton: <Skeleton className="h-7 w-20" />,
+        },
+      },
+      {
         accessorKey: "description",
         id: "description",
         header: ({ column }) => (
@@ -1323,7 +1483,22 @@ export default function ItemMasterList() {
         enableSorting: true,
         enableHiding: true,
         meta: {
-          headerTitle: "Rate",
+          headerTitle: "Rate (₹)",
+          skeleton: <Skeleton className="h-7 w-16" />,
+        },
+      },
+      {
+        accessorKey: "isDefault",
+        id: "isDefault",
+        header: ({ column }) => (
+          <DataGridColumnHeader title="Default" column={column} visibility />
+        ),
+        cell: ({ row }) => <span>{row.original.isDefault ? "Yes" : "No"}</span>,
+        size: 100,
+        enableSorting: true,
+        enableHiding: true,
+        meta: {
+          headerTitle: "Default",
           skeleton: <Skeleton className="h-7 w-16" />,
         },
       },
@@ -1350,21 +1525,6 @@ export default function ItemMasterList() {
         meta: {
           headerTitle: "Status",
           skeleton: <Skeleton className="h-7 w-20" />,
-        },
-      },
-      {
-        accessorKey: "isDefault",
-        id: "isDefault",
-        header: ({ column }) => (
-          <DataGridColumnHeader title="Default" column={column} visibility />
-        ),
-        cell: ({ row }) => <span>{row.original.isDefault ? "Yes" : "No"}</span>,
-        size: 100,
-        enableSorting: true,
-        enableHiding: true,
-        meta: {
-          headerTitle: "Default",
-          skeleton: <Skeleton className="h-7 w-16" />,
         },
       },
       {
@@ -1412,6 +1572,40 @@ export default function ItemMasterList() {
         enableHiding: true,
         meta: {
           headerTitle: "Updated Date",
+          skeleton: <Skeleton className="h-7 w-24" />,
+        },
+      },
+      {
+        accessorKey: "createdBy",
+        id: "createdBy",
+        header: ({ column }) => (
+          <DataGridColumnHeader title="Created By" column={column} visibility />
+        ),
+        cell: ({ row }) => (
+          <span>{row.original.CreatedByName || row.original.createdBy?.username || row.original.createdBy || "-"}</span>
+        ),
+        size: 160,
+        enableSorting: true,
+        enableHiding: true,
+        meta: {
+          headerTitle: "Created By",
+          skeleton: <Skeleton className="h-7 w-24" />,
+        },
+      },
+      {
+        accessorKey: "updatedBy",
+        id: "updatedBy",
+        header: ({ column }) => (
+          <DataGridColumnHeader title="Updated By" column={column} visibility />
+        ),
+        cell: ({ row }) => (
+          <span>{row.original.UpdatedByName || row.original.updatedBy?.username || row.original.updatedBy || "-"}</span>
+        ),
+        size: 160,
+        enableSorting: true,
+        enableHiding: true,
+        meta: {
+          headerTitle: "Updated By",
           skeleton: <Skeleton className="h-7 w-24" />,
         },
       },
@@ -1545,22 +1739,29 @@ export default function ItemMasterList() {
       !!createdTo ||
       !!updatedFrom ||
       !!updatedTo ||
-      selectedGroupIds.length > 0 ||
+      !!createdBy ||
+      !!updatedBy ||
+      restockLevelMin !== "" ||
+      restockLevelMax !== "" ||
+      closingBalanceFrom !== "" ||
+      closingBalanceTo !== ""
+    selectedGroupIds.length > 0 ||
       restockFilter !== "all";
 
     return (
       <CardHeader className="flex-col flex-wrap items-stretch gap-3 py-5 sm:flex-row sm:items-center">
         <div className="flex min-w-0 flex-col gap-2.5 sm:flex-row sm:items-center">
-          <div className="relative">
-            <form
+          <div className="flex w-full items-center gap-2 sm:w-auto">
+            <div className="relative flex-1 sm:w-[250px] sm:flex-none">
+              <form
               onSubmit={handleSearch}
               className="flex w-full flex-col gap-2 sm:flex-row xl:max-w-2xl"
             >
-              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
 
               <Input
                 type="text"
-                placeholder="Search item master..."
+                placeholder="Search item master"
                 value={searchInput}
                 onChange={(event) => setSearchInput(event.target.value)}
                 className="w-full pl-9 pr-9"
@@ -1581,7 +1782,23 @@ export default function ItemMasterList() {
                   <X className="size-4" />
                 </button>
               )}
-            </form>
+              </form>
+            </div>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  className="flex size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                >
+                  <Info className="size-4" />
+                </button>
+              </TooltipTrigger>
+
+              <TooltipContent>
+                <p>Search by item name, group name, description, unit of measure.</p>
+              </TooltipContent>
+            </Tooltip>
           </div>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
@@ -1689,6 +1906,22 @@ export default function ItemMasterList() {
             setUpdatedFrom={setUpdatedFrom}
             updatedTo={updatedTo}
             setUpdatedTo={setUpdatedTo}
+            createdBy={createdBy}
+            setCreatedBy={setCreatedBy}
+            updatedBy={updatedBy}
+            setUpdatedBy={setUpdatedBy}
+
+            restockLevelMin={restockLevelMin}
+            setRestockLevelMin={setRestockLevelMin}
+            restockLevelMax={restockLevelMax}
+            setRestockLevelMax={setRestockLevelMax}
+
+            closingBalanceFrom={closingBalanceFrom}
+            setClosingBalanceFrom={setClosingBalanceFrom}
+            closingBalanceTo={closingBalanceTo}
+            setClosingBalanceTo={setClosingBalanceTo}
+
+            setPagination={setPagination}
           />
         </div>
       </CardHeader >

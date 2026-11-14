@@ -992,7 +992,7 @@ export default function InventoryChangeLogList() {
 
                 <Input
                   type="text"
-                  placeholder="Search inventory change log..."
+                  placeholder="Search inventory change log"
                   value={searchInput}
                   onChange={(event) => setSearchInput(event.target.value)}
                   className="w-full pl-9 pr-9"

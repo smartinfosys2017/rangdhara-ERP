@@ -44,9 +44,9 @@ export default function ItemMasterAddDialog({ open, closeDialog, onSuccess }) {
     ItemGroupid: "",
     ItemName: "",
     Description: "",
-    openingBalance: "",
+    openingBalance: "0",
     Unitid: "",
-    rather: "",
+    rather: "0",
     Tax1: "",
     Tax2: "",
     ApplicableForRelocateLevel: false,
@@ -189,9 +189,9 @@ export default function ItemMasterAddDialog({ open, closeDialog, onSuccess }) {
       ItemGroupid: "",
       ItemName: "",
       Description: "",
-      openingBalance: "",
+      openingBalance: 0,
       Unitid: "",
-      rather: "",
+      rather: 0,
       Tax1: "",
       Tax2: "",
       ApplicableForRelocateLevel: false,
@@ -220,7 +220,9 @@ export default function ItemMasterAddDialog({ open, closeDialog, onSuccess }) {
     if (!form.Unitid) {
       newErrors.Unitid = "Unit is required.";
     }
-
+    if (form.ApplicableForRelocateLevel && !form.RelocateLevel?.trim()) {
+      newErrors.RelocateLevel = "Restock Level is required.";
+    }
     if (Description.length > 255) {
       newErrors.Description = "Description must not exceed 255 characters.";
     }
@@ -316,268 +318,274 @@ export default function ItemMasterAddDialog({ open, closeDialog, onSuccess }) {
     >
       <DialogContent>
         <div className="flex flex-col h-full max-h-[90vh] overflow-hidden">
-        <DialogHeader>
-          <DialogTitle>Add Item</DialogTitle>
+          <DialogHeader>
+            <DialogTitle>Add Item</DialogTitle>
 
-          <DialogDescription>Create new inventory item.</DialogDescription>
-        </DialogHeader>
-        <ScrollArea className="grow min-h-0 flex flex-col h-full max-h-[90vh] overflow-hidden">
-         <DialogBody className="space-y-6 pt-0 px-0 min-h-0">
-          {/* ITEM GROUP */}
+            <DialogDescription>Create new inventory item.</DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="grow min-h-0 flex flex-col h-full max-h-[90vh] overflow-hidden">
+            <DialogBody className="space-y-6 pt-0 px-0 min-h-0">
+              {/* ITEM GROUP */}
 
-          <div>
-            <label className="text-sm font-medium">Item Group</label>
+              <div>
+                <label className="text-sm font-medium">Item Group <span className="text-destructive">*</span></label>
 
-            <Select
-              value={form.ItemGroupid}
-              onValueChange={(value) => updateField("ItemGroupid", value)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select Item Group" />
-              </SelectTrigger>
+                <Select
+                  value={form.ItemGroupid}
+                  onValueChange={(value) => updateField("ItemGroupid", value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select Item Group" />
+                  </SelectTrigger>
 
-              <SelectContent>
-                {itemGroups.map((item) => (
-                  <SelectItem key={item.id} value={String(item.id)}>
-                    {item.groupName}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {errors.ItemGroupid && (
-              <p className="mt-1 text-sm text-destructive">
-                {errors.ItemGroupid}
-              </p>
-            )}
-          </div>
+                  <SelectContent>
+                    {itemGroups.map((item) => (
+                      <SelectItem key={item.id} value={String(item.id)}>
+                        {item.groupName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {errors.ItemGroupid && (
+                  <p className="mt-1 text-sm text-destructive">
+                    {errors.ItemGroupid}
+                  </p>
+                )}
+              </div>
 
-          {/* ITEM NAME */}
+              {/* ITEM NAME */}
 
-          <div>
-            <label>Item Name <span className="text-destructive">*</span></label>
+              <div>
+                <label>Item Name <span className="text-destructive">*</span></label>
 
-            <Input
-              value={form.ItemName}
-              onChange={(e) => updateField("ItemName", e.target.value)}
-            />
-            {errors.ItemName && (
-              <p className="mt-1 text-sm text-destructive">
-                {errors.ItemName}
-              </p>
-            )}
+                <Input
+                  value={form.ItemName}
+                  onChange={(e) => updateField("ItemName", e.target.value)}
+                />
+                {errors.ItemName && (
+                  <p className="mt-1 text-sm text-destructive">
+                    {errors.ItemName}
+                  </p>
+                )}
 
-            <p className="mt-1 text-xs text-muted-foreground">
-              {form.ItemName.length}/255 characters
-            </p>
-          </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {form.ItemName.length}/255 characters
+                </p>
+              </div>
 
-          {/* UNIT */}
+              {/* UNIT */}
 
-          <div>
-            <label>Unit <span className="text-destructive">*</span></label>
+              <div>
+                <label>Unit <span className="text-destructive">*</span></label>
 
-            <Select
-              value={form.Unitid}
-              onValueChange={(value) => updateField("Unitid", value)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select Unit" />
-              </SelectTrigger>
+                <Select
+                  value={form.Unitid}
+                  onValueChange={(value) => updateField("Unitid", value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select Unit" />
+                  </SelectTrigger>
 
-              <SelectContent>
-                {units.map((unit) => (
-                  <SelectItem key={unit.id} value={String(unit.id)}>
-                    {unit.unitName}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {errors.Unitid && (
-              <p className="mt-1 text-sm text-destructive">
-                {errors.Unitid}
-              </p>
-            )}
-          </div>
+                  <SelectContent>
+                    {units.map((unit) => (
+                      <SelectItem key={unit.id} value={String(unit.id)}>
+                        {unit.unitName} ({unit.abbreviation})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {errors.Unitid && (
+                  <p className="mt-1 text-sm text-destructive">
+                    {errors.Unitid}
+                  </p>
+                )}
+              </div>
 
-          {/* OPENING BALANCE */}
+              {/* OPENING BALANCE */}
+              <div>
+                <label>Opening Balance</label>
 
-          <div>
-            <label>Opening Balance</label>
+                <Input
+                  type="number"
+                  value={form.openingBalance ?? "0"}
+                  onChange={(e) => updateField("openingBalance", e.target.value)}
+                />
+              </div>
 
-            <Input
-              value={form.openingBalance}
-              onChange={(e) => updateField("openingBalance", e.target.value)}
-            />
-          </div>
+              {/* RATE */}
+              <div>
+                <label>Rate (₹)</label>
 
-          {/* RATE */}
+                <Input
+                  type="number"
+                  min="0.01"
+                  step="any"
+                  value={form.rather ?? "0"}
+                  onChange={(e) => updateField("rather", e.target.value)}
+                />
+              </div>
 
-          <div>
-            <label>Rate</label>
+              {/* TAX 1 */}
 
-            <Input
-              type="number"
-              value={form.rather}
-              onChange={(e) => updateField("rather", e.target.value)}
-            />
-          </div>
+              <div>
+                <label>Tax 1</label>
 
-          {/* TAX 1 */}
+                <Select
+                  value={form.Tax1}
+                  onValueChange={(value) => updateField("Tax1", value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select Tax 1" />
+                  </SelectTrigger>
 
-          <div>
-            <label>Tax 1</label>
+                  <SelectContent>
+                    {taxes
+                      .filter((tax) => String(tax.id) !== String(form.Tax2))
+                      .map((tax) => (
+                        <SelectItem key={tax.id} value={String(tax.id)}>
+                          {tax.name || tax.taxName} ({tax.taxrate} %)
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-            <Select
-              value={form.Tax1}
-              onValueChange={(value) => updateField("Tax1", value)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select Tax 1" />
-              </SelectTrigger>
+              {/* TAX 2 */}
 
-              <SelectContent>
-                {taxes
-                  .filter((tax) => String(tax.id) !== String(form.Tax2))
-                  .map((tax) => (
-                    <SelectItem key={tax.id} value={String(tax.id)}>
-                      {tax.name || tax.taxName}
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
-          </div>
+              <div>
+                <label>Tax 2</label>
 
-          {/* TAX 2 */}
+                <Select
+                  value={form.Tax2}
+                  onValueChange={(value) => updateField("Tax2", value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select Tax 2" />
+                  </SelectTrigger>
 
-          <div>
-            <label>Tax 2</label>
+                  <SelectContent>
+                    {taxes
+                      .filter((tax) => String(tax.id) !== String(form.Tax1))
+                      .map((tax) => (
+                        <SelectItem key={tax.id} value={String(tax.id)}>
+                          {tax.name || tax.taxName} ({tax.taxrate} %)
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-            <Select
-              value={form.Tax2}
-              onValueChange={(value) => updateField("Tax2", value)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select Tax 2" />
-              </SelectTrigger>
-
-              <SelectContent>
-                {taxes
-                  .filter((tax) => String(tax.id) !== String(form.Tax1))
-                  .map((tax) => (
-                    <SelectItem key={tax.id} value={String(tax.id)}>
-                      {tax.name || tax.taxName}
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* DESCRIPTION */}
-
-
-          <div>
-            <label className="text-sm font-medium">Description </label>
-
-            <Textarea
-              value={form.Description}
-              maxLength={255}
-              onChange={(e) => updateField("Description", e.target.value)}
-              placeholder="Enter description"
-              rows={4}
-              aria-invalid={!!errors.Description}
-              className={errors.Description ? "border-destructive" : ""}
-            />
-
-            {errors.Description && (
-              <p className="mt-1 text-sm text-destructive">
-                {errors.Description}
-              </p>
-            )}
-
-            <p className="mt-1 text-xs text-muted-foreground">
-              {form.Description.length}/255 characters
-            </p>
-          </div>
+              {/* DESCRIPTION */}
 
 
-          {/* RELOCATE */}
+              <div>
+                <label className="text-sm font-medium">Description </label>
 
-          <div className="flex items-center gap-2">
-            <Checkbox
-              checked={form.ApplicableForRelocateLevel}
-              onCheckedChange={(value) =>
-                updateField("ApplicableForRelocateLevel", value)
-              }
-            />
+                <Textarea
+                  value={form.Description}
+                  maxLength={255}
+                  onChange={(e) => updateField("Description", e.target.value)}
+                  placeholder="Enter description"
+                  rows={4}
+                  aria-invalid={!!errors.Description}
+                  className={errors.Description ? "border-destructive" : ""}
+                />
 
-            <span>Applicable For Restock Level</span>
-          </div>
+                {errors.Description && (
+                  <p className="mt-1 text-sm text-destructive">
+                    {errors.Description}
+                  </p>
+                )}
 
-          {form.ApplicableForRelocateLevel && (
-            <div>
-              <label>Restock Level</label>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {form.Description.length}/255 characters
+                </p>
+              </div>
 
-              <Input
-                value={form.RelocateLevel}
-                onChange={(e) => updateField("RelocateLevel", e.target.value)}
-              />
-            </div>
-          )}
 
-          {/* STATUS */}
+              {/* RELOCATE */}
 
-          <div>
-            <label>Status</label>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  checked={form.ApplicableForRelocateLevel}
+                  onCheckedChange={(value) =>
+                    updateField("ApplicableForRelocateLevel", value)
+                  }
+                />
 
-            <Select
-              value={String(form.status)}
-              onValueChange={(value) => updateField("status", value === "true")}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
+                <span>Applicable For Restock Level</span>
+              </div>
 
-              <SelectContent>
-                <SelectItem value="true">Active</SelectItem>
+              {form.ApplicableForRelocateLevel && (
+                <div>
+                  <label>Restock Level <span className="text-destructive">*</span></label>
 
-                <SelectItem value="false">Inactive</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+                  <Input
+                    value={form.RelocateLevel}
+                    onChange={(e) => updateField("RelocateLevel", e.target.value)}
+                  />
+                  {errors.RelocateLevel && (
+                    <p className="text-sm text-destructive">
+                      {errors.RelocateLevel}
+                    </p>
+                  )}
+                </div>
+              )}
 
-          {/* DEFAULT */}
+              {/* STATUS */}
 
-          <div>
-            <label>Default</label>
+              <div>
+                <label>Status <span className="text-destructive">*</span></label>
 
-            <Select
-              value={String(form.isDefault)}
-              onValueChange={(value) =>
-                updateField("isDefault", value === "true")
-              }
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
+                <Select
+                  value={String(form.status)}
+                  onValueChange={(value) => updateField("status", value === "true")}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
 
-              <SelectContent>
-                <SelectItem value="true">Yes</SelectItem>
+                  <SelectContent>
+                    <SelectItem value="true">Active</SelectItem>
 
-                <SelectItem value="false">No</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </DialogBody>
-        </ScrollArea>
-        <DialogFooter className="gap-2">
-          <Button  variant="outline" onClick={() => { resetForm();  closeDialog?.();  }}  disabled={loading} >
-            Cancel
-          </Button>
+                    <SelectItem value="false">Inactive</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
-          <Button disabled={loading} onClick={handleSubmit}>
-            {loading ? "Saving..." : "Save"}
-          </Button>
-        </DialogFooter>
+              {/* DEFAULT */}
+
+              <div>
+                <label>Default <span className="text-destructive">*</span></label>
+
+                <Select
+                  value={String(form.isDefault)}
+                  onValueChange={(value) =>
+                    updateField("isDefault", value === "true")
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+
+                  <SelectContent>
+                    <SelectItem value="true">Yes</SelectItem>
+
+                    <SelectItem value="false">No</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </DialogBody>
+          </ScrollArea>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => { resetForm(); closeDialog?.(); }} disabled={loading} >
+              Cancel
+            </Button>
+
+            <Button disabled={loading} onClick={handleSubmit}>
+              {loading ? "Saving..." : "Save"}
+            </Button>
+          </DialogFooter>
         </div>
       </DialogContent>
     </Dialog>

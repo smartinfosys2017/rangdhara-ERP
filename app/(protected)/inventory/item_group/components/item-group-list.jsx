@@ -1741,7 +1741,7 @@ const ItemGroupList = () => {
 
                         <Input
                             type="text"
-                            placeholder="Search item group..."
+                            placeholder="Search item group"
                             value={searchInput}
                             onChange={(event) => setSearchInput(event.target.value)}
                             className="w-full pl-9 pr-9"

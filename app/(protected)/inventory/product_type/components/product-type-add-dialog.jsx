@@ -107,9 +107,9 @@ export default function ProductTypeAddDialog({
     const Description = form.Description?.trim() || "";
 
     if (!ProductType) {
-      newErrors.ProductType = "item type is required.";
+      newErrors.ProductType = "item condition is required.";
     } else if (ProductType.length > 255) {
-      newErrors.ProductType = "Item Type must not exceed 255 characters.";
+      newErrors.ProductType = "Item Condition must not exceed 255 characters.";
     }
 
     if (!Description) {
@@ -162,20 +162,20 @@ export default function ProductTypeAddDialog({
       const result = await response.json();
 
       if (!response.ok || !result.success) {
-        throw new Error(result.message || "Item Type save failed.");
+        throw new Error(result.message || "Item Condition save failed.");
       }
 
       toast.success(
         item
-          ? "Item Type updated successfully."
-          : "Item Type added successfully.",
+          ? "Item Condition updated successfully."
+          : "Item Condition added successfully.",
       );
 
       onSuccess?.(result.data);
 
       handleClose();
     } catch (error) {
-      console.error("Item TYPE ERROR:", error);
+      console.error("Item Condition ERROR:", error);
 
       toast.error(error.message || "Something went wrong.");
     }
@@ -207,28 +207,28 @@ export default function ProductTypeAddDialog({
         <div className="flex flex-col h-full max-h-[90vh] overflow-hidden">
           <DialogHeader>
             <DialogTitle>
-              {item ? "Edit Item Type" : "Add Item Type"}
+              {item ? "Edit Item Condition" : "Add Item Condition"}
             </DialogTitle>
 
             <DialogDescription>
               {item
-                ? "Update item type information."
-                : "Create a new item type."}
+                ? "Update item condition information."
+                : "Create a new item condition."}
             </DialogDescription>
           </DialogHeader>
           <ScrollArea className="grow min-h-0 flex flex-col h-full max-h-[90vh] overflow-hidden">
             <DialogBody className="space-y-6 pt-0 px-0 min-h-0">
-              {/* Item TYPE */}
+              {/* Item Condition */}
 
               <div>
                 <label className="mb-2 block text-sm font-medium">
-                  Item Type<span className="text-destructive">*</span>
+                  Item Condition<span className="text-destructive">*</span>
                 </label>
 
                 <Input
                   value={form.ProductType}
 
-                  placeholder="Enter item type"
+                  placeholder="Enter item condition"
 
                   onChange={(e) => updateField("ProductType", e.target.value)}
                 />
@@ -277,7 +277,7 @@ export default function ProductTypeAddDialog({
               {/* STATUS */}
 
               <div>
-                <label className="mb-2 block text-sm font-medium">Status</label>
+                <label className="mb-2 block text-sm font-medium">Status <span className="text-destructive">*</span></label>
 
                 <Select
                   value={form.status}
@@ -300,7 +300,7 @@ export default function ProductTypeAddDialog({
 
               <div>
                 <label className="mb-2 block text-sm font-medium">
-                  Default Item Type
+                  Default Item Condition <span className="text-destructive">*</span>
                 </label>
 
                 <Select
