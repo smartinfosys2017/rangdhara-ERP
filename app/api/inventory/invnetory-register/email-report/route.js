@@ -292,7 +292,7 @@ export async function POST(request) {
       return badRequest(rangeError);
     }
 
-    // 4. BUILD ITEM MASTER DATABASE FILTERS
+    // 4. BUILD ITEM DATABASE FILTERS
 
     const itemWhere = {
       deletedAt: null,

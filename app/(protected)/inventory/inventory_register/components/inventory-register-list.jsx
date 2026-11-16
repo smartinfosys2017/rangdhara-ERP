@@ -15,6 +15,7 @@ import {
   Funnel,
   FileSpreadsheet,
   Mail,
+  Info,
   Plus,
   RefreshCw,
   Search,
@@ -44,16 +45,54 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DataGrid } from "@/components/ui/data-grid";
 import { DataGridColumnHeader } from "@/components/ui/data-grid-column-header";
 import { DataGridPagination } from "@/components/ui/data-grid-pagination";
 import { DataGridTable } from "@/components/ui/data-grid-table";
-
+import { Alert, AlertIcon, AlertTitle } from "@/components/ui/alert";
+import { RiCheckboxCircleFill, RiErrorWarningFill } from "@remixicon/react";
 import InventoryRregisterAddDialog from "./inventory-register-add-dialog";
 import { StoreClientFiltersSheet } from "./sheet/filters-sheet";
 
+const showSuccessToast = (message) => {
+  toast.custom(
+    () => (
+      <Alert variant="mono" icon="success">
+        <AlertIcon>
+          <RiCheckboxCircleFill />
+        </AlertIcon>
+        <AlertTitle>{message}</AlertTitle>
+      </Alert>
+    ),
+    { position: "top-center" },
+  );
+};
+
+const showErrorToast = (message) => {
+  toast.custom(
+    (t) => (
+      <Alert
+        variant="mono"
+        icon="destructive"
+        close={true}
+        onClose={() => toast.dismiss(t)}
+      >
+        <AlertIcon>
+          <RiErrorWarningFill />
+        </AlertIcon>
+        <AlertTitle>{message}</AlertTitle>
+      </Alert>
+    ),
+    { position: "top-center" },
+  );
+};
 const REGISTER_API = "/api/inventory/invnetory-register";
 
 const getDisplayValue = (value) => {
@@ -297,7 +336,7 @@ const InventoryRegisterList = () => {
       if (types.status === "fulfilled") setItemTypeOptions(types.value);
 
       if ([groups, items, types].some((r) => r.status === "rejected")) {
-        toast.error("Some filter options could not be loaded");
+        showErrorToast("Some filter options could not be loaded");
       }
     };
 
@@ -424,7 +463,7 @@ const InventoryRegisterList = () => {
       const items = await getReportRows();
 
       if (!items.length) {
-        toast.error("No register records to export", {
+        showErrorToast("No register records to export", {
           id: "inventory-register-export",
         });
         return;
@@ -443,12 +482,12 @@ const InventoryRegisterList = () => {
       XLSX.utils.book_append_sheet(workbook, worksheet, "Inventory Register");
       XLSX.writeFile(workbook, "inventory-register.xlsx");
 
-      toast.success(`${items.length} register record(s) exported`, {
+      showSuccessToast(`${items.length} register record(s) exported`, {
         id: "inventory-register-export",
       });
     } catch (error) {
       console.error("INVENTORY REGISTER EXPORT ERROR", error);
-      toast.error(error.message || "Excel export failed", {
+      showErrorToast(error.message || "Excel export failed", {
         id: "inventory-register-export",
       });
     }
@@ -459,7 +498,7 @@ const InventoryRegisterList = () => {
     const printWindow = window.open("", "_blank", "width=1200,height=800");
 
     if (!printWindow) {
-      toast.error("Please allow pop-ups to print the report");
+      showErrorToast("Please allow pop-ups to print the report");
       return;
     }
 
@@ -472,7 +511,7 @@ const InventoryRegisterList = () => {
 
       if (!items.length) {
         printWindow.close();
-        toast.error("No register records to print");
+        showErrorToast("No register records to print");
         return;
       }
 
@@ -542,7 +581,7 @@ const InventoryRegisterList = () => {
     } catch (error) {
       printWindow.close();
       console.error("INVENTORY REGISTER PRINT ERROR", error);
-      toast.error(error.message || "Unable to prepare print report");
+      showErrorToast(error.message || "Unable to prepare print report");
     }
   }, [getReportRows]);
 
@@ -618,12 +657,12 @@ const InventoryRegisterList = () => {
 
   const handleBulkDelete = useCallback(() => {
     if (!selectedIds.length) {
-      toast.error("Select at least one register record");
+      showErrorToast("Select at least one register record");
       return;
     }
 
     if (!canDelete) {
-      toast.error("You do not have permission to delete register records");
+      showErrorToast("You do not have permission to delete register records");
       return;
     }
 
@@ -653,7 +692,7 @@ const InventoryRegisterList = () => {
         );
       }
 
-      toast.success(
+      showSuccessToast(
         `${result.count ?? idsToDelete.length} register record(s) deleted`,
       );
 
@@ -663,7 +702,7 @@ const InventoryRegisterList = () => {
       await refreshRegister();
     } catch (error) {
       console.error("BULK DELETE ERROR", error);
-      toast.error(error.message || "Bulk delete failed");
+      showErrorToast(error.message || "Bulk delete failed");
     } finally {
       setBulkLoading(false);
     }
@@ -717,7 +756,7 @@ const InventoryRegisterList = () => {
 
         if (!cancelled) {
           setStaffList([]);
-          toast.error(error.message || "Unable to load staff recipients");
+          showErrorToast(error.message || "Unable to load staff recipients");
         }
       } finally {
         if (!cancelled) setStaffLoading(false);
@@ -793,12 +832,12 @@ const InventoryRegisterList = () => {
 
   const handleSendEmail = async () => {
     if (selectedRecipientEmails.length === 0) {
-      toast.error("Please select at least one recipient.");
+      showErrorToast("Please select at least one recipient.");
       return;
     }
 
     if (!emailSubject.trim() || !emailMessage.trim()) {
-      toast.error("Please enter the email subject and message.");
+      showErrorToast("Please enter the email subject and message.");
       return;
     }
 
@@ -836,7 +875,7 @@ const InventoryRegisterList = () => {
         );
       }
 
-      toast.success(
+      showSuccessToast(
         attachExcel
           ? "Email sent successfully with the Excel attachment."
           : "Email sent successfully.",
@@ -845,7 +884,7 @@ const InventoryRegisterList = () => {
       setEmailDialogOpen(false);
     } catch (error) {
       console.error("Email report error:", error);
-      toast.error(
+      showErrorToast(
         error instanceof Error ? error.message : "Unable to send email.",
       );
     } finally {
@@ -1045,37 +1084,57 @@ const InventoryRegisterList = () => {
 
     return (
       <CardHeader className="flex-col flex-wrap items-stretch gap-3 py-5 sm:flex-row sm:items-center">
-        <div className="flex min-w-0 flex-col gap-2.5 sm:flex-row sm:items-center">
+        <div className="flex w-full items-center gap-2 sm:w-auto">
+          <div className="relative flex-1 sm:w-[250px] sm:flex-none">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
 
-          <div className="relative">
-            <form onSubmit={handleSearch} className="relative w-full sm:w-64">
-              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              type="text"
+              placeholder="Search inventory register"
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  handleSearch(event);
+                }
+              }}
+              className="w-full pl-9 pr-9"
+              autoComplete="off"
+            />
 
-              <Input
-                type="text"
-                placeholder="Search inventory register"
-                value={searchInput}
-                onChange={(event) => setSearchInput(event.target.value)}
-                className="w-full pl-9 pr-9"
-                autoComplete="off"
-              />
-
-              {searchInput.length > 0 && (
-                <button
-                  type="button"
-                  aria-label="Clear search input"
-                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:text-foreground"
-                  onClick={() => {
-                    setSearchInput("");
-                    setSearchQuery("");
-                    setPagination((prev) => ({ ...prev, pageIndex: 0 }));
-                  }}
-                >
-                  <X className="size-4" />
-                </button>
-              )}
-            </form>
+            {searchInput.length > 0 && (
+              <button
+                type="button"
+                aria-label="Clear search input"
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:text-foreground"
+                onClick={() => {
+                  setSearchInput("");
+                  setSearchQuery("");
+                  setPagination((prev) => ({
+                    ...prev,
+                    pageIndex: 0,
+                  }));
+                }}
+              >
+                <X className="size-4" />
+              </button>
+            )}
           </div>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className="flex size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                <Info className="size-4" />
+              </button>
+            </TooltipTrigger>
+
+            <TooltipContent>
+              <p>Search by item name, item code or inventory details.</p>
+            </TooltipContent>
+          </Tooltip>
         </div>
 
         <div className="flex flex-wrap items-center justify-end gap-2">
@@ -1114,7 +1173,9 @@ const InventoryRegisterList = () => {
               {dbStatus.loading
                 ? "Checking..."
                 : dbStatus.online && isOnline
-                  ? `${String(dbStatus.env || "Database").toUpperCase()}`
+                  ? String(dbStatus.env || "Database")
+                    .toLowerCase()
+                    .replace(/\b\w/g, (char) => char.toUpperCase())
                   : "Offline"}
             </span>
 
@@ -1234,7 +1295,7 @@ const InventoryRegisterList = () => {
         onSuccess={async () => {
           setAddDialogOpen(false);
 
-          toast.success("Entry added successfully");
+          showSuccessToast("Entry added successfully");
 
           await refreshRegister();
           await queryClient.invalidateQueries({ queryKey: ["issue-receipt"] });

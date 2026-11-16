@@ -157,12 +157,12 @@ export async function GET(request) {
     const id = searchParams.get("id");
 
     // =================================================
-    // GET SINGLE ITEM MASTER
+    // GET SINGLE ITEM
     // =================================================
 
     if (id) {
       // -------------------------------------------------
-      // 1. GET ONE ITEM MASTER
+      // 1. GET ONE ITEM
       // -------------------------------------------------
 
       const itemMaster = await prisma.itemMaster.findFirst({
@@ -663,7 +663,7 @@ export async function POST(request) {
       return NextResponse.json(
         {
           success: false,
-          message: "Item Master is required",
+          message: "Item is required",
         },
         { status: 400 },
       );
@@ -1056,7 +1056,7 @@ export async function DELETE(request) {
           },
         });
 
-      // Update the Inventory Register / Item Master entries.
+      // Update the Inventory Register / Item entries.
       // const itemResult = await tx.itemMaster.updateMany({
       //   where: {
       //     id: { in: existingIds },

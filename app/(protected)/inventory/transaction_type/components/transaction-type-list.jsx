@@ -15,6 +15,7 @@ import {
   Plus,
   RefreshCw,
   Search,
+  Info,
   Trash2,
   X,
   FileSpreadsheet,
@@ -34,6 +35,8 @@ import { DataGrid } from "@/components/ui/data-grid";
 import { DataGridColumnHeader } from "@/components/ui/data-grid-column-header";
 import { DataGridPagination } from "@/components/ui/data-grid-pagination";
 import { DataGridTable } from "@/components/ui/data-grid-table";
+import { Alert, AlertIcon, AlertTitle } from "@/components/ui/alert";
+import { RiCheckboxCircleFill, RiErrorWarningFill } from "@remixicon/react";
 import {
   Dialog,
   DialogContent,
@@ -50,6 +53,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -61,7 +69,38 @@ import { StoreClientFiltersSheet } from "./sheet/filters-sheet";
 import TransactionTypesActiveDialog from "./transaction-types-active-dialog";
 import TransactionTypesInactiveDialog from "./transaction-types-inactive-dialog";
 import TransactionTypesDeleteDialog from "./transaction-types-delete-dialog";
+const showSuccessToast = (message) => {
+  toast.custom(
+    () => (
+      <Alert variant="mono" icon="success">
+        <AlertIcon>
+          <RiCheckboxCircleFill />
+        </AlertIcon>
+        <AlertTitle>{message}</AlertTitle>
+      </Alert>
+    ),
+    { position: "top-center" },
+  );
+};
 
+const showErrorToast = (message) => {
+  toast.custom(
+    (t) => (
+      <Alert
+        variant="mono"
+        icon="destructive"
+        close={true}
+        onClose={() => toast.dismiss(t)}
+      >
+        <AlertIcon>
+          <RiErrorWarningFill />
+        </AlertIcon>
+        <AlertTitle>{message}</AlertTitle>
+      </Alert>
+    ),
+    { position: "top-center" },
+  );
+};
 const createTransactionTypeNotification = async ({
   action,
   title,
@@ -72,7 +111,7 @@ const createTransactionTypeNotification = async ({
   try {
     const response = await fetch("/api/notifications", {
       method: "POST",
-      headers: { "Content-Type": "application/json", },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         module: "inventory",
         action,
@@ -136,12 +175,16 @@ const TransactionTypeList = () => {
   const [createdTo, setCreatedTo] = useState("");
   const [updatedFrom, setUpdatedFrom] = useState("");
   const [updatedTo, setUpdatedTo] = useState("");
+  const [createdByFilter, setCreatedByFilter] = useState("");
+  const [updatedByFilter, setUpdatedByFilter] = useState("");
   const [selectedIds, setSelectedIds] = useState([]);
   const [bulkLoading, setBulkLoading] = useState(false);
   const [emailDialogOpen, setEmailDialogOpen] = useState(false);
   const [emailRecipient, setEmailRecipient] = useState("");
   const [emailSubject, setEmailSubject] = useState("Transaction Types");
-  const [emailMessage, setEmailMessage] = useState("Please find the transaction type details below.");
+  const [emailMessage, setEmailMessage] = useState(
+    "Please find the transaction type details below.",
+  );
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -205,7 +248,7 @@ const TransactionTypeList = () => {
 
       const response = await fetch("/api/sync/inventory-local", {
         method: "POST",
-        headers: { "Content-Type": "application/json", },
+        headers: { "Content-Type": "application/json" },
         cache: "no-store",
       });
 
@@ -221,7 +264,7 @@ const TransactionTypeList = () => {
     } catch (error) {
       console.error("TRANSACTION TYPE SYNC ERROR", error);
 
-      toast.error(error.message || "Transaction Type sync failed");
+      showErrorToast(error.message || "Transaction Type sync failed");
 
       return null;
     } finally {
@@ -281,6 +324,8 @@ const TransactionTypeList = () => {
       createdTo: createdTo || "",
       updatedFrom: updatedFrom || "",
       updatedTo: updatedTo || "",
+      createdBy: createdByFilter || "",
+      updatedBy: updatedByFilter || "",
       sort: sorting?.[0]?.id || "createdAt",
       dir: sorting?.[0]?.desc ? "desc" : "asc",
     });
@@ -296,12 +341,35 @@ const TransactionTypeList = () => {
     }
 
     return result;
-  }, [pagination.pageIndex,
-  pagination.pageSize, searchQuery, sorting, statusFilter, createdFrom, createdTo, updatedFrom, updatedTo]);
+  }, [
+    pagination.pageIndex,
+    pagination.pageSize,
+    searchQuery,
+    sorting,
+    statusFilter,
+    createdFrom,
+    createdTo,
+    updatedFrom,
+    updatedTo,
+    createdByFilter,
+    updatedByFilter,
+  ]);
 
   const { data, isLoading, isFetching } = useQuery({
-    queryKey: ["transaction-type", pagination.pageIndex,
-      pagination.pageSize, sorting, searchQuery, statusFilter, createdFrom, createdTo, updatedFrom, updatedTo],
+    queryKey: [
+      "transaction-type",
+      pagination.pageIndex,
+      pagination.pageSize,
+      sorting,
+      searchQuery,
+      statusFilter,
+      createdFrom,
+      createdTo,
+      updatedFrom,
+      updatedTo,
+      createdByFilter,
+      updatedByFilter,
+    ],
     queryFn: fetchTransactionTypes,
     staleTime: 0,
   });
@@ -366,7 +434,9 @@ const TransactionTypeList = () => {
                 name:
                   person.name ||
                   person.fullName ||
-                  [person.firstName, person.lastName].filter(Boolean).join(" ") ||
+                  [person.firstName, person.lastName]
+                    .filter(Boolean)
+                    .join(" ") ||
                   person.username ||
                   person.email ||
                   "Staff member",
@@ -380,7 +450,7 @@ const TransactionTypeList = () => {
 
         if (!cancelled) {
           setStaffList([]);
-          toast.error(error.message || "Unable to load staff recipients");
+          showErrorToast(error.message || "Unable to load staff recipients");
         }
       } finally {
         if (!cancelled) setStaffLoading(false);
@@ -426,46 +496,70 @@ const TransactionTypeList = () => {
     setCreatedTo("");
     setUpdatedFrom("");
     setUpdatedTo("");
+    setCreatedByFilter("");
+    setUpdatedByFilter("");
+
+    setSelectedIds([]);
+
     setPagination((prev) => ({ ...prev, pageIndex: 0 }));
   }, []);
 
   const toggleSelected = useCallback((id, checked) => {
-    setSelectedIds((current) => checked
-      ? (current.includes(String(id)) ? current : [...current, String(id)])
-      : current.filter((value) => value !== String(id)));
+    setSelectedIds((current) =>
+      checked
+        ? current.includes(String(id))
+          ? current
+          : [...current, String(id)]
+        : current.filter((value) => value !== String(id)),
+    );
   }, []);
 
-  const togglePageSelection = useCallback((checked) => {
-    const pageIds = transactionTypes.map((item) => String(item.id));
-    setSelectedIds((current) => checked
-      ? [...new Set([...current, ...pageIds])]
-      : current.filter((id) => !pageIds.includes(id)));
-  }, [transactionTypes]);
+  const togglePageSelection = useCallback(
+    (checked) => {
+      const pageIds = transactionTypes.map((item) => String(item.id));
+      setSelectedIds((current) =>
+        checked
+          ? [...new Set([...current, ...pageIds])]
+          : current.filter((id) => !pageIds.includes(id)),
+      );
+    },
+    [transactionTypes],
+  );
 
-  const updateSelectedStatus = useCallback(async (status) => {
-    if (!selectedIds.length) return;
-    try {
-      setBulkLoading(true);
-      const response = await apiFetch("/api/inventory/transaction-type", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids: selectedIds, status }),
-      });
-      const result = await response.json();
-      if (!response.ok || !result.success) throw new Error(result.message || "Status update failed");
-      toast.success(result.message || "Status updated successfully");
-      setSelectedIds([]);
-      await refreshTransactionTypes();
-      await syncInventoryTransactionType();
-    } catch (error) {
-      toast.error(error.message || "Status update failed");
-    } finally {
-      setBulkLoading(false);
-    }
-  }, [selectedIds, refreshTransactionTypes, syncInventoryTransactionType]);
+  const updateSelectedStatus = useCallback(
+    async (status) => {
+      if (!selectedIds.length) return;
+      try {
+        setBulkLoading(true);
+        const response = await apiFetch("/api/inventory/transaction-type", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ids: selectedIds, status }),
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success)
+          throw new Error(result.message || "Status update failed");
+        showSuccessToast(result.message || "Status updated successfully");
+        setSelectedIds([]);
+        await refreshTransactionTypes();
+        await syncInventoryTransactionType();
+      } catch (error) {
+        showErrorToast(error.message || "Status update failed");
+      } finally {
+        setBulkLoading(false);
+      }
+    },
+    [selectedIds, refreshTransactionTypes, syncInventoryTransactionType],
+  );
 
   const deleteSelected = useCallback(async () => {
-    if (!selectedIds.length || !window.confirm(`Delete ${selectedIds.length} selected transaction type(s)?`)) return;
+    if (
+      !selectedIds.length ||
+      !window.confirm(
+        `Delete ${selectedIds.length} selected transaction type(s)?`,
+      )
+    )
+      return;
     try {
       setBulkLoading(true);
       const response = await apiFetch("/api/inventory/transaction-type", {
@@ -474,18 +568,18 @@ const TransactionTypeList = () => {
         body: JSON.stringify({ ids: selectedIds }),
       });
       const result = await response.json();
-      if (!response.ok || !result.success) throw new Error(result.message || "Bulk delete failed");
-      toast.success(result.message || "Selected transaction types deleted");
+      if (!response.ok || !result.success)
+        throw new Error(result.message || "Bulk delete failed");
+      showSuccessToast(result.message || "Selected transaction types deleted");
       setSelectedIds([]);
       await refreshTransactionTypes();
       await syncInventoryTransactionType();
     } catch (error) {
-      toast.error(error.message || "Bulk delete failed");
+      showErrorToast(error.message || "Bulk delete failed");
     } finally {
       setBulkLoading(false);
     }
   }, [selectedIds, refreshTransactionTypes, syncInventoryTransactionType]);
-
 
   const openCopyDialog = useCallback((item) => {
     setCopySourceItem(item);
@@ -496,7 +590,7 @@ const TransactionTypeList = () => {
 
   const handleConfirmCopy = useCallback(async () => {
     if (!copySourceItem || !copyProductType.trim()) {
-      toast.error("Please enter a transaction type name.");
+      showErrorToast("Please enter a transaction type name.");
       return;
     }
 
@@ -509,8 +603,7 @@ const TransactionTypeList = () => {
         body: JSON.stringify({
           TransactionType: copyProductType.trim(),
           Description: copyDescription.trim(),
-          EffectOnTransaction:
-            copySourceItem.EffectOnTransaction || "addition",
+          EffectOnTransaction: copySourceItem.EffectOnTransaction || "addition",
           status: copySourceItem.status ?? true,
           isDefault: false,
           customFields: copySourceItem.customFields || {},
@@ -523,7 +616,7 @@ const TransactionTypeList = () => {
         throw new Error(result.message || "Failed to copy transaction type");
       }
 
-      toast.success("Transaction Type copied successfully");
+      showSuccessToast("Transaction Type copied successfully");
       setCopyDialogOpen(false);
       setCopySourceItem(null);
 
@@ -531,7 +624,7 @@ const TransactionTypeList = () => {
       await syncInventoryTransactionType();
     } catch (error) {
       console.error("COPY TRANSACTION TYPE ERROR", error);
-      toast.error(error.message || "Copy failed");
+      showErrorToast(error.message || "Copy failed");
     } finally {
       setCopyLoading(false);
     }
@@ -546,30 +639,93 @@ const TransactionTypeList = () => {
   const exportToExcel = useCallback(async () => {
     try {
       const params = new URLSearchParams({
-        query: searchQuery, status: statusFilter, createdFrom, createdTo, updatedFrom, updatedTo,
-        sort: sorting?.[0]?.id || "createdAt", dir: sorting?.[0]?.desc ? "desc" : "asc", export: "1",
+        query: searchQuery,
+        status: statusFilter,
+        createdFrom,
+        createdTo,
+        updatedFrom,
+        updatedTo,
+        createdBy: createdByFilter,
+        updatedBy: updatedByFilter,
+        sort: sorting?.[0]?.id || "createdAt",
+        dir: sorting?.[0]?.desc ? "desc" : "asc",
+        export: "1",
       });
-      const response = await apiFetch(`/api/inventory/transaction-type?${params.toString()}`);
+
+      const response = await apiFetch(
+        `/api/inventory/transaction-type?${params.toString()}`,
+      );
+
       const result = await response.json();
-      if (!response.ok || !result.success) throw new Error(result.message || "Export failed");
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || "Export failed");
+      }
+
       const rows = result.data || [];
-      const headers = ["ID", "Transaction Type", "Description", "Effect", "Status", "Default", "Added Date", "Updated Date"];
-      const escapeCsv = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
-      const csv = [headers, ...rows.map((item) => [item.id, item.TransactionType, item.Description, item.EffectOnTransaction, item.status ? "Active" : "Inactive", item.isDefault ? "Yes" : "No", item.createdAt, item.updatedAt])].map((row) => row.map(escapeCsv).join(",")).join("\r\n");
-      const blob = new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8;" });
+
+      const headers = [
+        "ID",
+        "Transaction Type",
+        "Description",
+        "Effect",
+        "Status",
+        "Default",
+        "Created By",
+        "Updated By",
+        "Added Date",
+        "Updated Date",
+      ];
+
+      const escapeCsv = (value) =>
+        `"${String(value ?? "").replace(/"/g, '""')}"`;
+
+      const csv = [
+        headers,
+        ...rows.map((item) => [
+          item.id,
+          item.TransactionType,
+          item.Description,
+          item.EffectOnTransaction,
+          item.status ? "Active" : "Inactive",
+          item.isDefault ? "Yes" : "No",
+          item.createdByName || "-",
+          item.updatedByName || "-",
+          item.createdAt,
+          item.updatedAt,
+        ]),
+      ]
+        .map((row) => row.map(escapeCsv).join(","))
+        .join("\r\n");
+
+      const blob = new Blob(["\uFEFF", csv], {
+        type: "text/csv;charset=utf-8;",
+      });
+
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
+
       anchor.href = url;
       anchor.download = "transaction-types.csv";
       anchor.click();
+
       URL.revokeObjectURL(url);
-      toast.success(`Exported ${rows.length} transaction type(s)`);
+
+      showSuccessToast(`Exported ${rows.length} transaction type(s)`);
     } catch (error) {
-      toast.error(error.message || "Export failed");
+      showErrorToast(error.message || "Export failed");
     }
-  }, [searchQuery, statusFilter, createdFrom, createdTo, updatedFrom, updatedTo, sorting]);
-
-
+  }, [
+    searchQuery,
+    statusFilter,
+    createdFrom,
+    createdTo,
+    updatedFrom,
+    updatedTo,
+    createdByFilter,
+    updatedByFilter,
+    sorting,
+  ]);
   const clearFilters = useCallback(() => {
     setSearchInput("");
     setSearchQuery("");
@@ -578,6 +734,8 @@ const TransactionTypeList = () => {
     setCreatedTo("");
     setUpdatedFrom("");
     setUpdatedTo("");
+    setCreatedByFilter("");
+    setUpdatedByFilter("");
     setSelectedIds([]);
 
     setPagination((prev) => ({
@@ -615,7 +773,7 @@ const TransactionTypeList = () => {
         throw new Error(result.message || "Delete failed");
       }
 
-      toast.success("Transaction Type deleted successfully");
+      showSuccessToast("Transaction Type deleted successfully");
 
       await createTransactionTypeNotification({
         action: "deleted",
@@ -633,7 +791,7 @@ const TransactionTypeList = () => {
     } catch (error) {
       console.error("TRANSACTION TYPE DELETE ERROR", error);
 
-      toast.error(error.message || "Delete failed");
+      showErrorToast(error.message || "Delete failed");
     } finally {
       setDeleteLoading(false);
     }
@@ -645,12 +803,14 @@ const TransactionTypeList = () => {
   const handleBulkStatus = useCallback(
     async (status) => {
       if (!selectedIds.length) {
-        toast.error("Select at least one transaction type");
+        showErrorToast("Select at least one transaction type");
         return;
       }
 
       if (!(canManage || canEdit)) {
-        toast.error("You do not have permission to change transaction type status");
+        showErrorToast(
+          "You do not have permission to change transaction type status",
+        );
         return;
       }
 
@@ -673,12 +833,13 @@ const TransactionTypeList = () => {
         if (!response.ok || !result.success) {
           throw new Error(
             result.message ||
-            "Bulk status update failed. Your API route must support ids.",
+              "Bulk status update failed. Your API route must support ids.",
           );
         }
 
-        toast.success(
-          `${result.count ?? idsToUpdate.length} transaction type(s) marked ${status ? "active" : "inactive"
+        showSuccessToast(
+          `${result.count ?? idsToUpdate.length} transaction type(s) marked ${
+            status ? "active" : "inactive"
           }`,
         );
 
@@ -689,7 +850,7 @@ const TransactionTypeList = () => {
         await syncInventoryTransactionType();
       } catch (error) {
         console.error("BULK STATUS ERROR", error);
-        toast.error(error.message || "Bulk status update failed");
+        showErrorToast(error.message || "Bulk status update failed");
       } finally {
         setBulkLoading(false);
       }
@@ -704,12 +865,12 @@ const TransactionTypeList = () => {
   );
   const handleBulkDelete = useCallback(() => {
     if (!selectedIds.length) {
-      toast.error("Select at least one transaction types");
+      showErrorToast("Select at least one transaction types");
       return;
     }
 
     if (!canDelete) {
-      toast.error("You do not have permission to delete transaction types");
+      showErrorToast("You do not have permission to delete transaction types");
       return;
     }
 
@@ -738,12 +899,12 @@ const TransactionTypeList = () => {
       if (!response.ok || !result.success) {
         throw new Error(
           result.message ||
-          "Bulk delete failed. Your API route must support ids."
+            "Bulk delete failed. Your API route must support ids.",
         );
       }
 
-      toast.success(
-        `${result.count ?? idsToDelete.length} transaction type(s) deleted`
+      showSuccessToast(
+        `${result.count ?? idsToDelete.length} transaction type(s) deleted`,
       );
 
       setShowDeleteDialog(false);
@@ -753,7 +914,7 @@ const TransactionTypeList = () => {
       await syncInventoryTransactionType();
     } catch (error) {
       console.error("BULK DELETE ERROR", error);
-      toast.error(error.message || "Bulk delete failed");
+      showErrorToast(error.message || "Bulk delete failed");
     } finally {
       setBulkLoading(false);
     }
@@ -763,7 +924,6 @@ const TransactionTypeList = () => {
     refreshTransactionTypes,
     syncInventoryTransactionType,
   ]);
-
 
   const handleOpenEmailDialog = useCallback(() => {
     setSelectedRecipientEmails([]);
@@ -819,39 +979,44 @@ const TransactionTypeList = () => {
   }, [exportToExcel, handleOpenEmailDialog]);
   const handleSendEmail = async () => {
     if (selectedRecipientEmails.length === 0) {
-      toast.error("Please select at least one recipient.");
+      showErrorToast("Please select at least one recipient.");
       return;
     }
 
     if (!emailSubject.trim() || !emailMessage.trim()) {
-      toast.error("Please enter the email subject and message.");
+      showErrorToast("Please enter the email subject and message.");
       return;
     }
 
     try {
       setEmailSending(true);
 
-      const response = await fetch("/api/inventory/transaction-type/email-report", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          recipients: selectedRecipientEmails,
-          subject: emailSubject.trim(),
-          message: emailMessage.trim(),
-          attachExcel,
-          selectedIds,
-          filters: {
-            query: searchQuery,
-            status: statusFilter,
-            createdFrom,
-            createdTo,
-            updatedFrom,
-            updatedTo,
+      const response = await fetch(
+        "/api/inventory/transaction-type/email-report",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
           },
-        }),
-      });
+          body: JSON.stringify({
+            recipients: selectedRecipientEmails,
+            subject: emailSubject.trim(),
+            message: emailMessage.trim(),
+            attachExcel,
+            selectedIds,
+            filters: {
+              query: searchQuery,
+              status: statusFilter,
+              createdFrom,
+              createdTo,
+              updatedFrom,
+              updatedTo,
+              createdBy: createdByFilter,
+              updatedBy: updatedByFilter,
+            },
+          }),
+        },
+      );
 
       const result = await response.json();
 
@@ -859,7 +1024,7 @@ const TransactionTypeList = () => {
         throw new Error(result.error || "Failed to send email.");
       }
 
-      toast.success(
+      showSuccessToast(
         attachExcel
           ? "Email sent successfully with the Excel attachment."
           : "Email sent successfully.",
@@ -869,7 +1034,7 @@ const TransactionTypeList = () => {
     } catch (error) {
       console.error("Email report error:", error);
 
-      toast.error(
+      showErrorToast(
         error instanceof Error ? error.message : "Unable to send email.",
       );
     } finally {
@@ -913,22 +1078,26 @@ const TransactionTypeList = () => {
     return () => clearInterval(interval);
   }, [checkDbStatus]);
 
-  const updateSingleStatus = useCallback(async (item, status) => {
-    try {
-      const response = await apiFetch("/api/inventory/transaction-type", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: item.id, status }),
-      });
-      const result = await response.json();
-      if (!response.ok || !result.success) throw new Error(result.message || "Status update failed");
-      toast.success(result.message || "Status updated successfully");
-      await refreshTransactionTypes();
-      await syncInventoryTransactionType();
-    } catch (error) {
-      toast.error(error.message || "Status update failed");
-    }
-  }, [refreshTransactionTypes, syncInventoryTransactionType]);
+  const updateSingleStatus = useCallback(
+    async (item, status) => {
+      try {
+        const response = await apiFetch("/api/inventory/transaction-type", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: item.id, status }),
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success)
+          throw new Error(result.message || "Status update failed");
+        showSuccessToast(result.message || "Status updated successfully");
+        await refreshTransactionTypes();
+        await syncInventoryTransactionType();
+      } catch (error) {
+        showErrorToast(error.message || "Status update failed");
+      }
+    },
+    [refreshTransactionTypes, syncInventoryTransactionType],
+  );
 
   const columns = useMemo(
     () => [
@@ -1010,12 +1179,25 @@ const TransactionTypeList = () => {
       {
         accessorKey: "Description",
         id: "Description",
-        header: ({ column }) => <DataGridColumnHeader title="Description" column={column} visibility />,
-        cell: ({ row }) => <span className="max-w-[280px] truncate block">{row.original.Description || "-"}</span>,
+        header: ({ column }) => (
+          <DataGridColumnHeader
+            title="Description"
+            column={column}
+            visibility
+          />
+        ),
+        cell: ({ row }) => (
+          <span className="max-w-[280px] truncate block">
+            {row.original.Description || "-"}
+          </span>
+        ),
         size: 260,
         enableSorting: true,
         enableHiding: true,
-        meta: { headerTitle: "Description", skeleton: <Skeleton className="h-7 w-40" /> },
+        meta: {
+          headerTitle: "Description",
+          skeleton: <Skeleton className="h-7 w-40" />,
+        },
       },
       {
         accessorKey: "EffectOnTransaction",
@@ -1139,6 +1321,43 @@ const TransactionTypeList = () => {
         },
       },
       {
+        accessorKey: "createdByName",
+        id: "createdByName",
+
+        header: ({ column }) => (
+          <DataGridColumnHeader title="Created By" column={column} visibility />
+        ),
+
+        cell: ({ row }) => <span>{row.original.createdByName || "-"}</span>,
+
+        size: 180,
+        enableSorting: false,
+
+        meta: {
+          headerTitle: "Created By",
+          skeleton: <Skeleton className="h-7 w-24" />,
+        },
+      },
+
+      {
+        accessorKey: "updatedByName",
+        id: "updatedByName",
+
+        header: ({ column }) => (
+          <DataGridColumnHeader title="Updated By" column={column} visibility />
+        ),
+
+        cell: ({ row }) => <span>{row.original.updatedByName || "-"}</span>,
+
+        size: 180,
+        enableSorting: false,
+
+        meta: {
+          headerTitle: "Updated By",
+          skeleton: <Skeleton className="h-7 w-24" />,
+        },
+      },
+      {
         id: "actions",
         header: "Actions",
         cell: ({ row }) => {
@@ -1188,8 +1407,26 @@ const TransactionTypeList = () => {
                       <Copy className="mr-2 size-4" />
                       Copy
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => updateSingleStatus(item, !(item.status === true || item.status === 1 || item.status === "1" || item.status === "true"))}>
-                      <CheckCircle className="mr-2 size-4" /> Mark {item.status === true || item.status === 1 || item.status === "1" || item.status === "true" ? "Inactive" : "Active"}
+                    <DropdownMenuItem
+                      onClick={() =>
+                        updateSingleStatus(
+                          item,
+                          !(
+                            item.status === true ||
+                            item.status === 1 ||
+                            item.status === "1" ||
+                            item.status === "true"
+                          ),
+                        )
+                      }
+                    >
+                      <CheckCircle className="mr-2 size-4" /> Mark{" "}
+                      {item.status === true ||
+                      item.status === 1 ||
+                      item.status === "1" ||
+                      item.status === "true"
+                        ? "Inactive"
+                        : "Active"}
                     </DropdownMenuItem>
                   </>
                 )}
@@ -1229,7 +1466,7 @@ const TransactionTypeList = () => {
       setSelectedTransactionType,
       setViewDialogOpen,
       setEditDialogOpen,
-    ]
+    ],
   );
 
   const table = useReactTable({
@@ -1257,7 +1494,9 @@ const TransactionTypeList = () => {
       !!createdFrom ||
       !!createdTo ||
       !!updatedFrom ||
-      !!updatedTo;
+      !!updatedTo ||
+      !!createdByFilter ||
+      !!updatedByFilter;
 
     const resetPage = () => {
       setPagination((prev) => ({ ...prev, pageIndex: 0 }));
@@ -1266,7 +1505,7 @@ const TransactionTypeList = () => {
     return (
       <CardHeader className="flex-col flex-wrap items-stretch gap-3 py-5 sm:flex-row sm:items-center">
         <div className="flex min-w-0 flex-col gap-2.5 sm:flex-row sm:items-center">
-          <div className="relative">
+          <div className="flex w-full items-center gap-2 sm:w-auto">
             <form onSubmit={handleSearch} className="relative w-full sm:w-64">
               <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
 
@@ -1293,6 +1532,20 @@ const TransactionTypeList = () => {
                 </button>
               )}
             </form>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  className="flex size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                >
+                  <Info className="size-4" />
+                </button>
+              </TooltipTrigger>
+
+              <TooltipContent>
+                <p>Search by transaction type, description.</p>
+              </TooltipContent>
+            </Tooltip>
           </div>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
@@ -1343,19 +1596,22 @@ const TransactionTypeList = () => {
             aria-live="polite"
           >
             <span
-              className={`size-2.5 shrink-0 rounded-full ${dbStatus.loading
-                ? "animate-pulse bg-yellow-500"
-                : dbStatus.online && isOnline
-                  ? "bg-green-500"
-                  : "bg-red-500"
-                }`}
+              className={`size-2.5 shrink-0 rounded-full ${
+                dbStatus.loading
+                  ? "animate-pulse bg-yellow-500"
+                  : dbStatus.online && isOnline
+                    ? "bg-green-500"
+                    : "bg-red-500"
+              }`}
             />
 
             <span className="text-xs font-medium">
               {dbStatus.loading
                 ? "Checking..."
                 : dbStatus.online && isOnline
-                  ? `${String(dbStatus.env || "Database").toUpperCase()}`
+                  ? String(dbStatus.env || "Database")
+                      .toLowerCase()
+                      .replace(/\b\w/g, (char) => char.toUpperCase())
                   : "Offline"}
             </span>
 
@@ -1376,7 +1632,11 @@ const TransactionTypeList = () => {
           </div>
 
           {canManage && (
-            <Button type="button" onClick={() => setAddDialogOpen(true)} className="w-full shrink-0 sm:w-auto" >
+            <Button
+              type="button"
+              onClick={() => setAddDialogOpen(true)}
+              className="w-full shrink-0 sm:w-auto"
+            >
               <Plus className="mr-2 size-4" />
               Add Transaction Type
             </Button>
@@ -1399,6 +1659,10 @@ const TransactionTypeList = () => {
             setUpdatedFrom={setUpdatedFrom}
             updatedTo={updatedTo}
             setUpdatedTo={setUpdatedTo}
+            createdBy={createdByFilter}
+            setCreatedBy={setCreatedByFilter}
+            updatedBy={updatedByFilter}
+            setUpdatedBy={setUpdatedByFilter}
           />
 
           {/* {hasActiveFilters && (
@@ -1506,9 +1770,10 @@ const TransactionTypeList = () => {
           await createTransactionTypeNotification({
             action: "updated",
             title: "Transaction Type Updated",
-            message: `${updatedData?.TransactionType ||
+            message: `${
+              updatedData?.TransactionType ||
               selectedTransactionType?.TransactionType
-              } has been updated.`,
+            } has been updated.`,
             transactionTypeId: updatedData?.id || selectedTransactionType?.id,
             transactionTypeName:
               updatedData?.TransactionType ||
@@ -1550,17 +1815,15 @@ const TransactionTypeList = () => {
               </DialogDescription>
             </DialogHeader>
 
-
             <ScrollArea className="grow min-h-0 flex flex-col h-full max-h-[90vh] overflow-hidden">
               {/* Recipient Selection */}
               <DialogBody className="space-y-6 px-6 min-h-0">
                 <div className="flex items-center justify-between gap-3">
-                  <label className="text-sm font-medium">
-                    Recipient Email
-                  </label>
+                  <label className="text-sm font-medium">Recipient Email</label>
 
                   <span className="text-xs text-muted-foreground">
-                    {selectedRecipientEmails.length} of {staffList.length} selected
+                    {selectedRecipientEmails.length} of {staffList.length}{" "}
+                    selected
                   </span>
                 </div>
 
@@ -1584,7 +1847,7 @@ const TransactionTypeList = () => {
                     <div className="flex flex-wrap gap-2">
                       {selectedRecipientEmails.map((email) => {
                         const person = staffList.find(
-                          (staff) => staff.email === email
+                          (staff) => staff.email === email,
                         );
 
                         return (
@@ -1602,7 +1865,7 @@ const TransactionTypeList = () => {
                               className="rounded-full text-muted-foreground hover:text-destructive"
                               onClick={() =>
                                 setSelectedRecipientEmails((previous) =>
-                                  previous.filter((item) => item !== email)
+                                  previous.filter((item) => item !== email),
                                 )
                               }
                             >
@@ -1623,7 +1886,7 @@ const TransactionTypeList = () => {
                         checked={
                           staffList.length > 0 &&
                           staffList.every((person) =>
-                            selectedRecipientEmails.includes(person.email)
+                            selectedRecipientEmails.includes(person.email),
                           )
                         }
                         disabled={staffLoading || staffList.length === 0}
@@ -1631,17 +1894,17 @@ const TransactionTypeList = () => {
                           setSelectedRecipientEmails((previous) =>
                             checked === true
                               ? [
-                                ...new Set([
-                                  ...previous,
-                                  ...staffList.map((person) => person.email),
-                                ]),
-                              ]
+                                  ...new Set([
+                                    ...previous,
+                                    ...staffList.map((person) => person.email),
+                                  ]),
+                                ]
                               : previous.filter(
-                                (email) =>
-                                  !staffList.some(
-                                    (person) => person.email === email
-                                  )
-                              )
+                                  (email) =>
+                                    !staffList.some(
+                                      (person) => person.email === email,
+                                    ),
+                                ),
                           );
                         }}
                       />
@@ -1665,8 +1928,9 @@ const TransactionTypeList = () => {
                       ) : (
                         <div className="space-y-1">
                           {staffList.map((person) => {
-                            const isSelected =
-                              selectedRecipientEmails.includes(person.email);
+                            const isSelected = selectedRecipientEmails.includes(
+                              person.email,
+                            );
 
                             return (
                               <label
@@ -1680,15 +1944,14 @@ const TransactionTypeList = () => {
                                     setSelectedRecipientEmails((previous) =>
                                       checked === true
                                         ? [
-                                          ...new Set([
-                                            ...previous,
-                                            person.email,
-                                          ]),
-                                        ]
+                                            ...new Set([
+                                              ...previous,
+                                              person.email,
+                                            ]),
+                                          ]
                                         : previous.filter(
-                                          (email) =>
-                                            email !== person.email
-                                        )
+                                            (email) => email !== person.email,
+                                          ),
                                     );
                                   }}
                                 />
@@ -1750,8 +2013,8 @@ const TransactionTypeList = () => {
                         Add Excel attachment
                       </span>
                       <span className="mt-1 block text-xs text-muted-foreground">
-                        Attach the item group report as an Excel file (.xlsx)
-                        to the email.
+                        Attach the item group report as an Excel file (.xlsx) to
+                        the email.
                       </span>
                     </span>
                     <FileSpreadsheet className="size-5 shrink-0 text-muted-foreground" />
@@ -1776,7 +2039,8 @@ const TransactionTypeList = () => {
                   />
 
                   <p className="text-xs text-muted-foreground">
-                    Enter the message to include in the email sent to the selected staff.
+                    Enter the message to include in the email sent to the
+                    selected staff.
                   </p>
                 </div>
               </DialogBody>
@@ -1806,7 +2070,7 @@ const TransactionTypeList = () => {
             </ScrollArea>
           </form>
         </DialogContent>
-      </Dialog >
+      </Dialog>
 
       {/* BULK DELETE CONFIRMATION DIALOG */}
 
@@ -1875,7 +2139,8 @@ const TransactionTypeList = () => {
           <DialogHeader>
             <DialogTitle>Copy Transaction Type</DialogTitle>
             <DialogDescription>
-              Create a new transaction type using the selected item as a starting point.
+              Create a new transaction type using the selected item as a
+              starting point.
             </DialogDescription>
           </DialogHeader>
 

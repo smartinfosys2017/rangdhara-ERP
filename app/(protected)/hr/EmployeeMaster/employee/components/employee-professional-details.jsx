@@ -214,7 +214,7 @@ const extractArray = (result) => {
     return [];
 };
 
-// Converts master records into select options.
+// Converts records into select options.
 // The option value uses the record name because the professional
 // details form currently saves shift, breakTime and security as strings.
 const makeOptions = (records, possibleNames) => {
@@ -246,7 +246,7 @@ const makeOptions = (records, possibleNames) => {
 };
 
 // Make sure an existing saved value remains selectable even if
-// it is no longer present in the active master list.
+// it is no longer present in the active list.
 const includeCurrentOption = (options, currentValue) => {
     const value = String(currentValue ?? "").trim();
 
@@ -347,7 +347,7 @@ export default function ProfessionalDetails({
     const [loadingDetails, setLoadingDetails] = useState(false);
     const [hasExistingRecord, setHasExistingRecord] = useState(false);
 
-    // Master dropdown states
+    //Dropdown states
     const [shiftOptions, setShiftOptions] = useState([]);
     const [breakTimeOptions, setBreakTimeOptions] = useState([]);
     const [securityOptions, setSecurityOptions] = useState([]);
@@ -379,7 +379,7 @@ export default function ProfessionalDetails({
     }, []);
 
     // =================================================
-    // LOAD MASTER DROPDOWNS
+    // LOAD DROPDOWNS
     // =================================================
 
     const loadMasterDropdowns = useCallback(async () => {
@@ -464,14 +464,14 @@ export default function ProfessionalDetails({
                 ])
             );
         } catch (error) {
-            console.error("LOAD MASTER DROPDOWNS ERROR:", error);
-            toast.error(error?.message || "Unable to load master dropdowns.");
+            console.error("LOAD DROPDOWNS ERROR:", error);
+            toast.error(error?.message || "Unable to load dropdowns.");
         } finally {
             setLoadingMasters(false);
         }
     }, []);
 
-    // IMPORTANT: Load all master dropdowns when this component mounts.
+    // IMPORTANT: Load all dropdowns when this component mounts.
     useEffect(() => {
         loadMasterDropdowns();
     }, [loadMasterDropdowns]);

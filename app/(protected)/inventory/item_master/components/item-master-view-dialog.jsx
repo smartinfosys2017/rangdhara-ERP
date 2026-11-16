@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState } from "react";
@@ -11,6 +12,8 @@ import {
   Percent,
   Ruler,
   XCircle,
+  MapPin,
+  Cog,
 } from "lucide-react";
 
 import {
@@ -26,7 +29,8 @@ import {
 import { Button } from "@/components/ui/button";
 
 import { apiFetch } from "@/lib/api";
-import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+import { ScrollArea } from "@/components/ui/scroll-area";
+
 // =======================================================
 // DATE FORMAT
 // =======================================================
@@ -51,10 +55,10 @@ export default function ItemMasterViewDialog({
   ItemMaster,
 }) {
   const [itemGroups, setItemGroups] = useState([]);
-
   const [units, setUnits] = useState([]);
-
   const [taxes, setTaxes] = useState([]);
+  const [locations, setLocations] = useState([]);
+  const [machines, setMachines] = useState([]);
 
   // =======================================================
   // LOAD DROPDOWN DATA
@@ -68,25 +72,43 @@ export default function ItemMasterViewDialog({
 
   const loadDropdownData = async () => {
     try {
-      const [groupResponse, unitResponse, taxResponse] = await Promise.all([
+      const [
+        groupResponse,
+        unitResponse,
+        taxResponse,
+        locationResponse,
+        machineResponse,
+      ] = await Promise.all([
         apiFetch("/api/inventory/item-groups?limit=100"),
 
         apiFetch("/api/inventory/unit?limit=100"),
 
         apiFetch("/api/finance/tax_rates?limit=100"),
+
+        apiFetch("/api/inventory/location?limit=100"),
+
+        apiFetch("/api/inventory/machine-master?limit=100"),
       ]);
 
-      const groupJson = await groupResponse.json();
-
-      const unitJson = await unitResponse.json();
-
-      const taxJson = await taxResponse.json();
+      const [
+        groupJson,
+        unitJson,
+        taxJson,
+        locationJson,
+        machineJson,
+      ] = await Promise.all([
+        groupResponse.json(),
+        unitResponse.json(),
+        taxResponse.json(),
+        locationResponse.json(),
+        machineResponse.json(),
+      ]);
 
       setItemGroups(groupJson.data || []);
-
       setUnits(unitJson.data || []);
-
       setTaxes(taxJson.data || []);
+      setLocations(locationJson.data || []);
+      setMachines(machineJson.data || []);
     } catch (error) {
       console.error("Dropdown loading error", error);
     }
@@ -97,21 +119,69 @@ export default function ItemMasterViewDialog({
   // =======================================================
 
   const getItemGroupName = (id) => {
-    const data = itemGroups.find((item) => item.id === id);
+    const data = itemGroups.find(
+      (item) => String(item.id) === String(id),
+    );
 
     return data?.groupName || id || "-";
   };
 
   const getUnitName = (id) => {
-    const data = units.find((item) => item.id === id);
+    const data = units.find(
+      (item) => String(item.id) === String(id),
+    );
 
-    return data?.unitName || id || "-";
+    if (!data) return id || "-";
+
+    return data.abbreviation
+      ? `${data.unitName} (${data.abbreviation})`
+      : data.unitName || "-";
   };
 
   const getTaxName = (id) => {
-    const data = taxes.find((item) => String(item.id) === String(id));
+    if (!id) return "-";
+
+    const data = taxes.find(
+      (item) => String(item.id) === String(id),
+    );
 
     return data?.name || data?.taxName || id || "-";
+  };
+
+  // =======================================================
+  // GET LOCATION NAME
+  // =======================================================
+
+  const getLocationName = (id) => {
+    if (!id) return "-";
+
+    const data = locations.find(
+      (item) => String(item.id) === String(id),
+    );
+
+    if (!data) return id;
+
+    return data.locationCode
+      ? `${data.locationName} (${data.locationCode})`
+      : data.locationName || "-";
+  };
+
+  // =======================================================
+  // GET MACHINE NAME
+  // =======================================================
+
+  const getMachineName = (id) => {
+    if (!id) return "-";
+
+    const data = machines.find(
+      (item) => String(item.id) === String(id),
+    );
+
+    if (!data) return id;
+
+    return data.machineCode
+      ? `${data.machineName} (${data.machineCode})`
+      : data.machineName || "-";
   };
 
   if (!ItemMaster) {
@@ -129,168 +199,257 @@ export default function ItemMasterViewDialog({
     >
       <DialogContent>
         <div className="flex flex-col h-full max-h-[90vh] overflow-hidden">
-        <DialogHeader>
-          <DialogTitle>Item Details</DialogTitle>
 
-          <DialogDescription>View complete item information.</DialogDescription>
-        </DialogHeader>
-        <ScrollArea className="grow min-h-0 flex flex-col h-full max-h-[90vh] overflow-hidden">
-        <DialogBody className="space-y-6 pt-0 px-0 min-h-0">
-          {/* ITEM NAME */}
+          {/* HEADER */}
 
-          <div className="rounded-lg border p-4">
-            <div className="mb-2 flex items-center gap-2 font-semibold">
-              <Package className="h-4 w-4" />
-              Item Name
-            </div>
+          <DialogHeader>
+            <DialogTitle>Item Details</DialogTitle>
 
-            <p className="text-sm">{ItemMaster.ItemName || "-"}</p>
-          </div>
+            <DialogDescription>
+              View complete item information.
+            </DialogDescription>
+          </DialogHeader>
 
-          {/* GROUP + UNIT */}
+          <ScrollArea className="grow min-h-0 flex flex-col h-full max-h-[90vh] overflow-hidden">
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="rounded-lg border p-4">
-              <div className="mb-2 flex gap-2 font-semibold">
-                <Layers className="h-4 w-4" />
-                Item Group
+            <DialogBody className="space-y-6 pt-0 px-0 min-h-0">
+
+              {/* ITEM NAME */}
+
+              <div className="rounded-lg border p-4">
+                <div className="mb-2 flex items-center gap-2 font-semibold">
+                  <Package className="h-4 w-4" />
+                  Item Name
+                </div>
+
+                <p className="text-sm">
+                  {ItemMaster.ItemName || "-"}
+                </p>
               </div>
 
-              <p>{getItemGroupName(ItemMaster.ItemGroupid)}</p>
-            </div>
+              {/* GROUP + UNIT */}
 
-            <div className="rounded-lg border p-4">
-              <div className="mb-2 flex gap-2 font-semibold">
-                <Ruler className="h-4 w-4" />
-                Unit
+              <div className="grid grid-cols-2 gap-4">
+
+                <div className="rounded-lg border p-4">
+                  <div className="mb-2 flex gap-2 font-semibold">
+                    <Layers className="h-4 w-4" />
+                    Item Group
+                  </div>
+
+                  <p className="text-sm">
+                    {getItemGroupName(ItemMaster.ItemGroupid)}
+                  </p>
+                </div>
+
+                <div className="rounded-lg border p-4">
+                  <div className="mb-2 flex gap-2 font-semibold">
+                    <Ruler className="h-4 w-4" />
+                    Unit
+                  </div>
+
+                  <p className="text-sm">
+                    {getUnitName(ItemMaster.Unitid)}
+                  </p>
+                </div>
+
               </div>
 
-              <p>{getUnitName(ItemMaster.Unitid)}</p>
-            </div>
-          </div>
+              {/* LOCATION + MACHINE */}
 
-          {/* DESCRIPTION */}
+              <div className="grid grid-cols-2 gap-4">
 
-          <div className="rounded-lg border p-4">
-            <div className="mb-2 flex gap-2 font-semibold">
-              <FileText className="h-4 w-4" />
-              Description
-            </div>
+                {/* LOCATION */}
 
-            <p className="whitespace-pre-wrap text-sm">
-              {ItemMaster.Description || "-"}
-            </p>
-          </div>
+                <div className="rounded-lg border p-4">
+                  <div className="mb-2 flex gap-2 font-semibold">
+                    <MapPin className="h-4 w-4" />
+                    Location
+                  </div>
 
-          {/* BALANCE + RATE */}
+                  <p className="text-sm break-words">
+                    {getLocationName(ItemMaster.Locationid)}
+                  </p>
+                </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="rounded-lg border p-4">
-              <b>Opening Balance</b>
+                {/* MACHINE */}
 
-              <p>{ItemMaster.openingBalance || "-"}</p>
-            </div>
+                <div className="rounded-lg border p-4">
+                  <div className="mb-2 flex gap-2 font-semibold">
+                    <Cog className="h-4 w-4" />
+                    Machine
+                  </div>
 
-            <div className="rounded-lg border p-4">
-              <b>Rate</b>
+                  <p className="text-sm break-words">
+                    {getMachineName(ItemMaster.Machineid)}
+                  </p>
+                </div>
 
-              <p>{ItemMaster.rather || "-"}</p>
-            </div>
-          </div>
-
-          {/* TAX */}
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="rounded-lg border p-4">
-              <div className="flex gap-2 font-semibold">
-                <Percent className="h-4 w-4" />
-                Tax 1
               </div>
 
-              <p>{getTaxName(ItemMaster.Tax1)}</p>
-            </div>
+              {/* DESCRIPTION */}
 
-            <div className="rounded-lg border p-4">
-              <div className="flex gap-2 font-semibold">
-                <Percent className="h-4 w-4" />
-                Tax 2
+              <div className="rounded-lg border p-4">
+                <div className="mb-2 flex gap-2 font-semibold">
+                  <FileText className="h-4 w-4" />
+                  Description
+                </div>
+
+                <p className="whitespace-pre-wrap text-sm">
+                  {ItemMaster.Description || "-"}
+                </p>
               </div>
 
-              <p>{getTaxName(ItemMaster.Tax2)}</p>
-            </div>
-          </div>
+              {/* BALANCE + RATE */}
 
-          {/* RELOCATE */}
+              <div className="grid grid-cols-2 gap-4">
 
-          <div className="rounded-lg border p-4">
-            <b>Applicable For Restock Level</b>
+                <div className="rounded-lg border p-4">
+                  <b>Opening Balance</b>
 
-            <p>{ItemMaster.ApplicableForRelocateLevel ? "Yes" : "No"}</p>
+                  <p className="text-sm">
+                    {ItemMaster.openingBalance || "-"}
+                  </p>
+                </div>
 
-            {ItemMaster.ApplicableForRelocateLevel && (
-              <p>Level :{ItemMaster.RelocateLevel || "-"}</p>
-            )}
-          </div>
+                <div className="rounded-lg border p-4">
+                  <b>Rate</b>
 
-          {/* STATUS DEFAULT */}
+                  <p className="text-sm">
+                    {ItemMaster.rather ?? "-"}
+                  </p>
+                </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="rounded-lg border p-4">
-              <div className="flex gap-2 font-semibold">
-                {ItemMaster.status ? (
-                  <CheckCircle className="h-4 w-4 text-green-600" />
-                ) : (
-                  <XCircle className="h-4 w-4 text-red-600" />
+              </div>
+
+              {/* TAX */}
+
+              <div className="grid grid-cols-2 gap-4">
+
+                <div className="rounded-lg border p-4">
+                  <div className="mb-2 flex gap-2 font-semibold">
+                    <Percent className="h-4 w-4" />
+                    Tax 1
+                  </div>
+
+                  <p className="text-sm">
+                    {getTaxName(ItemMaster.Tax1)}
+                  </p>
+                </div>
+
+                <div className="rounded-lg border p-4">
+                  <div className="mb-2 flex gap-2 font-semibold">
+                    <Percent className="h-4 w-4" />
+                    Tax 2
+                  </div>
+
+                  <p className="text-sm">
+                    {getTaxName(ItemMaster.Tax2)}
+                  </p>
+                </div>
+
+              </div>
+
+              {/* RELOCATE */}
+
+              <div className="rounded-lg border p-4">
+                <b>Applicable For Restock Level</b>
+
+                <p className="text-sm">
+                  {ItemMaster.ApplicableForRelocateLevel
+                    ? "Yes"
+                    : "No"}
+                </p>
+
+                {ItemMaster.ApplicableForRelocateLevel && (
+                  <p className="mt-1 text-sm">
+                    Level: {ItemMaster.RelocateLevel || "-"}
+                  </p>
                 )}
-                Status
               </div>
 
-              <p>{ItemMaster.status ? "Active" : "Inactive"}</p>
-            </div>
+              {/* STATUS + DEFAULT */}
 
-            <div className="rounded-lg border p-4">
-              <b>Default Item</b>
+              <div className="grid grid-cols-2 gap-4">
 
-              <p>{ItemMaster.isDefault ? "Yes" : "No"}</p>
-            </div>
-          </div>
+                <div className="rounded-lg border p-4">
+                  <div className="mb-2 flex gap-2 font-semibold">
+                    {ItemMaster.status ? (
+                      <CheckCircle className="h-4 w-4 text-green-600" />
+                    ) : (
+                      <XCircle className="h-4 w-4 text-red-600" />
+                    )}
 
-          {/* DATE */}
+                    Status
+                  </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="rounded-lg border p-4">
-              <div className="flex gap-2 font-semibold">
-                <Calendar className="h-4 w-4" />
-                Created
+                  <p className="text-sm">
+                    {ItemMaster.status ? "Active" : "Inactive"}
+                  </p>
+                </div>
+
+                <div className="rounded-lg border p-4">
+                  <b>Default Item</b>
+
+                  <p className="mt-2 text-sm">
+                    {ItemMaster.isDefault ? "Yes" : "No"}
+                  </p>
+                </div>
+
               </div>
 
-              <p>{formatDate(ItemMaster.createdAt)}</p>
-            </div>
+              {/* DATE */}
 
-            <div className="rounded-lg border p-4">
-              <div className="flex gap-2 font-semibold">
-                <Calendar className="h-4 w-4" />
-                Updated
+              <div className="grid grid-cols-2 gap-4">
+
+                <div className="rounded-lg border p-4">
+                  <div className="mb-2 flex gap-2 font-semibold">
+                    <Calendar className="h-4 w-4" />
+                    Created
+                  </div>
+
+                  <p className="text-sm">
+                    {formatDate(ItemMaster.createdAt)}
+                  </p>
+                </div>
+
+                <div className="rounded-lg border p-4">
+                  <div className="mb-2 flex gap-2 font-semibold">
+                    <Calendar className="h-4 w-4" />
+                    Updated
+                  </div>
+
+                  <p className="text-sm">
+                    {formatDate(ItemMaster.updatedAt)}
+                  </p>
+                </div>
+
               </div>
 
-              <p>{formatDate(ItemMaster.updatedAt)}</p>
-            </div>
-          </div>
+              {/* ID */}
 
-          {/* ID */}
+              <div className="rounded-lg border p-4">
+                <b>ID</b>
 
-          <div className="rounded-lg border p-4">
-            <b>ID</b>
+                <p className="break-all text-sm mt-2">
+                  {ItemMaster.id || "-"}
+                </p>
+              </div>
 
-            <p className="break-all text-sm">{ItemMaster.id || "-"}</p>
-          </div>
-        </DialogBody>
-        </ScrollArea>
-        <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={closeDialog}>
-            Close
-          </Button>
-        </DialogFooter>
+            </DialogBody>
+          </ScrollArea>
+
+          {/* FOOTER */}
+
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={closeDialog}
+            >
+              Close
+            </Button>
+          </DialogFooter>
+
         </div>
       </DialogContent>
     </Dialog>

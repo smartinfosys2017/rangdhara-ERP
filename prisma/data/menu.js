@@ -218,13 +218,13 @@ const menus = [
                         menuType: "item",
                     },
                     {
-                        title: "Item Condition Master",
+                        title: "Item Condition",
                         path: "/inventory/product_type",
                         permission: "product_type.list",
                         menuType: "item",
                     },
                     {
-                        title: "Transaction Type Master",
+                        title: "Transaction Type",
                         path: "/inventory/transaction_type",
                         permission: "transaction_type.list",
                         menuType: "item",
@@ -325,7 +325,7 @@ const menus = [
         menuType: "group",
         children: [
             {
-                title: "Item Master",
+                title: "Item",
                 path: "/inventory/item_master",
                 permission: "item_master.list",
                 menuType: "item",

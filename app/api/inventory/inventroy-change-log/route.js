@@ -120,7 +120,7 @@ export async function GET(request) {
       ];
     }
 
-    // Item Name dropdown (selected item master IDs)
+    // Item Name dropdown (selected item IDs)
     if (itemIds.length > 0) {
       where.ItemMasterid = {
         in: itemIds,

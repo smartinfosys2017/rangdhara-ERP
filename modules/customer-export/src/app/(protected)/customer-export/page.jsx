@@ -95,7 +95,7 @@ export default function Page() {
               <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
                 <div>
                   <h4 className="mb-2 text-sm font-semibold text-foreground">
-                    Inventory Item Master CSV Management
+                    Inventory Item CSV Management
                   </h4>
 
                   <p className="text-sm text-muted-foreground">
@@ -112,7 +112,7 @@ export default function Page() {
                     variant="outline"
                     onClick={() => openImport("inventory")}
                   >
-                    Import Item Master CSV
+                    Import Item CSV
                   </Button>
                 </div>
               </div>
@@ -228,7 +228,7 @@ export default function Page() {
         }}
       />
 
-      {/* Inventory Item Master */}
+      {/* Inventory Item */}
       <InventoryImport
         open={activeImport === "inventory"}
         closeDialog={closeImport}

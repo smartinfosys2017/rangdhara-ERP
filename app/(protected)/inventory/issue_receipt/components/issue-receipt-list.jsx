@@ -15,6 +15,7 @@ import {
   Plus,
   Printer,
   RefreshCw,
+  Info,
   Search,
   Trash2,
   ChevronDown,
@@ -57,7 +58,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
-
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 import IssueReceiptAddDialog from "./issue-receipt-add-dialog";
 import IssueReceiptEditDialog from "./issue-receipt-edit-dialog";
@@ -65,7 +70,38 @@ import IssueReceiptViewDialog from "./issue-receipt-view-dialog";
 import IssueReceiptDeleteDialog from "./issue-receipt-delete-dialog";
 import { StoreClientFiltersSheet } from "./sheet/filters-sheet";
 import IssueReceiptsDeleteDialog from "./issue-receipts-delete-dialog";
+const showSuccessToast = (message) => {
+  toast.custom(
+    () => (
+      <Alert variant="mono" icon="success">
+        <AlertIcon>
+          <RiCheckboxCircleFill />
+        </AlertIcon>
+        <AlertTitle>{message}</AlertTitle>
+      </Alert>
+    ),
+    { position: "top-center" },
+  );
+};
 
+const showErrorToast = (message) => {
+  toast.custom(
+    (t) => (
+      <Alert
+        variant="mono"
+        icon="destructive"
+        close={true}
+        onClose={() => toast.dismiss(t)}
+      >
+        <AlertIcon>
+          <RiErrorWarningFill />
+        </AlertIcon>
+        <AlertTitle>{message}</AlertTitle>
+      </Alert>
+    ),
+    { position: "top-center" },
+  );
+};
 const createIssueReceiptNotification = async ({
   action,
   title,
@@ -168,7 +204,7 @@ const REPORT_COLUMNS = [
   { label: "ID", width: 14, get: (r) => r.id },
   { label: "Challan No", width: 20, get: (r) => r.ReciptChallanNo },
   { label: "Item Group", width: 22, get: (r) => r.ItemGroupName },
-  { label: "Item Master", width: 28, get: (r) => r.ItemMasterName },
+  { label: "Item", width: 28, get: (r) => r.ItemMasterName },
   { label: "Item Type", width: 18, get: (r) => r.ItemTypeName },
   { label: "Transaction Type", width: 20, get: (r) => r.TransactionTypeName },
   { label: "Issue Date", width: 14, get: (r) => reportDate(r.IssueDate) },
@@ -351,7 +387,7 @@ const IssueReceiptList = () => {
       return result;
     } catch (error) {
       console.error("Issue/Receipt SYNC ERROR", error);
-      toast.error(error.message || "Inventory sync failed");
+      showErrorToast(error.message || "Inventory sync failed");
       return null;
     } finally {
       syncingRef.current = false;
@@ -554,7 +590,7 @@ const IssueReceiptList = () => {
       const items = await getIssueReceiptReportRows();
 
       if (!items.length) {
-        toast.error("No Issue/Receipts to export", {
+        showErrorToast("No Issue/Receipts to export", {
           id: "issue-receipt-export",
         });
         return;
@@ -573,12 +609,12 @@ const IssueReceiptList = () => {
       XLSX.utils.book_append_sheet(workbook, worksheet, "Issue-Receipt");
       XLSX.writeFile(workbook, "issue-receipts.xlsx");
 
-      toast.success(`${items.length} Issue/Receipt(s) exported`, {
+      showSuccessToast(`${items.length} Issue/Receipt(s) exported`, {
         id: "issue-receipt-export",
       });
     } catch (error) {
       console.error("Issue/Receipt EXPORT ERROR", error);
-      toast.error(error.message || "Excel export failed", {
+      showErrorToast(error.message || "Excel export failed", {
         id: "issue-receipt-export",
       });
     }
@@ -589,7 +625,7 @@ const IssueReceiptList = () => {
     const printWindow = window.open("", "_blank", "width=1200,height=800");
 
     if (!printWindow) {
-      toast.error("Please allow pop-ups to print the report");
+      showErrorToast("Please allow pop-ups to print the report");
       return;
     }
 
@@ -602,7 +638,7 @@ const IssueReceiptList = () => {
 
       if (!items.length) {
         printWindow.close();
-        toast.error("No Issue/Receipts to print");
+        showErrorToast("No Issue/Receipts to print");
         return;
       }
 
@@ -672,7 +708,7 @@ const IssueReceiptList = () => {
     } catch (error) {
       printWindow.close();
       console.error("Issue/Receipt PRINT ERROR", error);
-      toast.error(error.message || "Unable to prepare print report");
+      showErrorToast(error.message || "Unable to prepare print report");
     }
   }, [getIssueReceiptReportRows]);
 
@@ -753,7 +789,7 @@ const IssueReceiptList = () => {
       } catch (error) {
         if (!cancelled) {
           console.error("Failed to load filter options:", error);
-          toast.error(error.message || "Failed to load filter options");
+          showErrorToast(error.message || "Failed to load filter options");
         }
       }
     };
@@ -831,7 +867,7 @@ const IssueReceiptList = () => {
         throw new Error(result.message || "Delete failed");
       }
 
-      toast.success("Issue/Receipt deleted successfully");
+      showSuccessToast("Issue/Receipt deleted successfully");
 
       await createIssueReceiptNotification({
         action: "deleted",
@@ -851,7 +887,7 @@ const IssueReceiptList = () => {
       await syncInventoryIssueReceipts();
     } catch (error) {
       console.error("Issue/Receipt DELETE ERROR", error);
-      toast.error(error.message || "Unable to delete Issue/Receipt");
+      showErrorToast(error.message || "Unable to delete Issue/Receipt");
     } finally {
       setDeleteLoading(false);
     }
@@ -879,12 +915,12 @@ const IssueReceiptList = () => {
 
   const handleBulkDelete = useCallback(() => {
     if (!selectedIds.length) {
-      toast.error("Select at least one Issue/Receipt");
+      showErrorToast("Select at least one Issue/Receipt");
       return;
     }
 
     if (!canDelete) {
-      toast.error("You do not have permission to delete Issue/Receipts");
+      showErrorToast("You do not have permission to delete Issue/Receipts");
       return;
     }
 
@@ -914,7 +950,7 @@ const IssueReceiptList = () => {
         );
       }
 
-      toast.success(
+      showSuccessToast(
         `${result.count ?? idsToDelete.length} Issue/Receipt(s) deleted`,
       );
 
@@ -926,7 +962,7 @@ const IssueReceiptList = () => {
       await syncInventoryIssueReceipts();
     } catch (error) {
       console.error("BULK DELETE ERROR", error);
-      toast.error(error.message || "Bulk delete failed");
+      showErrorToast(error.message || "Bulk delete failed");
     } finally {
       setBulkLoading(false);
     }
@@ -980,7 +1016,7 @@ const IssueReceiptList = () => {
 
         if (!cancelled) {
           setStaffList([]);
-          toast.error(error.message || "Unable to load staff recipients");
+          showErrorToast(error.message || "Unable to load staff recipients");
         }
       } finally {
         if (!cancelled) setStaffLoading(false);
@@ -1051,12 +1087,12 @@ const IssueReceiptList = () => {
   }, [handlePrintIssueReceipts, handleOpenEmailDialog, handleExportExcel,]);
   const handleSendEmail = async () => {
     if (selectedRecipientEmails.length === 0) {
-      toast.error("Please select at least one recipient.");
+      showErrorToast("Please select at least one recipient.");
       return;
     }
 
     if (!emailSubject.trim() || !emailMessage.trim()) {
-      toast.error("Please enter the email subject and message.");
+      showErrorToast("Please enter the email subject and message.");
       return;
     }
 
@@ -1090,7 +1126,7 @@ const IssueReceiptList = () => {
         throw new Error(result.message || result.error || "Failed to send email.");
       }
 
-      toast.success(
+      showSuccessToast(
         attachExcel
           ? "Email sent successfully with the Excel attachment."
           : "Email sent successfully.",
@@ -1099,7 +1135,7 @@ const IssueReceiptList = () => {
       setEmailDialogOpen(false);
     } catch (error) {
       console.error("Email report error:", error);
-      toast.error(
+      showErrorToast(
         error instanceof Error ? error.message : "Unable to send email.",
       );
     } finally {
@@ -1197,7 +1233,7 @@ const IssueReceiptList = () => {
       }),
       makeColumn({
         id: "ItemMasterid",
-        title: "Item Master",
+        title: "Item",
         size: 300,
         skeleton: "w-40",
         render: (r) => (
@@ -1429,39 +1465,57 @@ const IssueReceiptList = () => {
   const renderToolbar = () => {
     return (
       <CardHeader className="flex-col flex-wrap items-stretch gap-3 py-5 sm:flex-row sm:items-center">
-        <div className="flex min-w-0 flex-col gap-2.5 sm:flex-row sm:items-center">
-          <div className="relative">
-            <form
-              onSubmit={handleSearch}
-              className="flex w-full flex-col gap-2 sm:flex-row xl:max-w-2xl"
-            >
-              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+        <div className="flex w-full items-center gap-2 sm:w-auto">
+          <div className="relative flex-1 sm:w-[250px] sm:flex-none">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
 
-              <Input
-                type="text"
-                placeholder="Search issue/receipts fields..."
-                value={searchInput}
-                onChange={(event) => setSearchInput(event.target.value)}
-                className="w-full pl-9 pr-9"
-                autoComplete="off"
-              />
+            <Input
+              type="text"
+              placeholder="Search issue/receipts"
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  handleSearch(event);
+                }
+              }}
+              className="w-full pl-9 pr-9"
+              autoComplete="off"
+            />
 
-              {searchInput.length > 0 && (
-                <button
-                  type="button"
-                  aria-label="Clear search input"
-                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:text-foreground"
-                  onClick={() => {
-                    setSearchInput("");
-                    setSearchQuery("");
-                    setPagination((prev) => ({ ...prev, pageIndex: 0 }));
-                  }}
-                >
-                  <X className="size-4" />
-                </button>
-              )}
-            </form>
+            {searchInput.length > 0 && (
+              <button
+                type="button"
+                aria-label="Clear search input"
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:text-foreground"
+                onClick={() => {
+                  setSearchInput("");
+                  setSearchQuery("");
+                  setPagination((prev) => ({
+                    ...prev,
+                    pageIndex: 0,
+                  }));
+                }}
+              >
+                <X className="size-4" />
+              </button>
+            )}
           </div>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className="flex size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                <Info className="size-4" />
+              </button>
+            </TooltipTrigger>
+
+            <TooltipContent>
+              <p>Search by item, item group, item type,transaction type, recive by,comment .</p>
+            </TooltipContent>
+          </Tooltip>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
           {selectedIds.length > 0 && (
@@ -1499,7 +1553,9 @@ const IssueReceiptList = () => {
               {dbStatus.loading
                 ? "Checking..."
                 : dbStatus.online && isOnline
-                  ? `${String(dbStatus.env || "Database").toUpperCase()}`
+                  ? String(dbStatus.env || "Database")
+                    .toLowerCase()
+                    .replace(/\b\w/g, (char) => char.toUpperCase())
                   : "Offline"}
             </span>
 

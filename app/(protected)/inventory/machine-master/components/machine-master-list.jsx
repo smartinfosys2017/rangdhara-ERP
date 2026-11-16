@@ -105,7 +105,7 @@ const createMachineMasterNotification = async ({
                         ? String(machineMasterId)
                         : null,
                 entityType: "machine_master",
-                entityName: machineMasterName || "Machine Master",
+                entityName: machineMasterName || "Machine",
                 url: "/inventory/machine-master",
             }),
             cache: "no-store",
@@ -133,7 +133,7 @@ const createMachineMasterNotification = async ({
 
         return result;
     } catch (error) {
-        console.error("MACHINE MASTER NOTIFICATION ERROR", error);
+        console.error("MACHINE NOTIFICATION ERROR", error);
         return null;
     }
 };
@@ -391,7 +391,7 @@ const MachineMasterList = () => {
 
             return result;
         } catch (error) {
-            console.error("MACHINE MASTER SYNC ERROR", error);
+            console.error("MACHINE SYNC ERROR", error);
 
             toast.custom(
                 () => (
@@ -467,7 +467,7 @@ const MachineMasterList = () => {
     }, []);
 
     // ==================================================
-    // FETCH MACHINE MASTERS
+    // FETCH MACHINE
     // ==================================================
 
     const fetchMachineMasters = useCallback(async () => {
@@ -499,7 +499,7 @@ const MachineMasterList = () => {
 
         if (!response.ok || !result.success) {
             throw new Error(
-                result.message || "Failed to load machine masters",
+                result.message || "Failed to load machine",
             );
         }
 
@@ -687,7 +687,7 @@ const MachineMasterList = () => {
 
         if (!response.ok || !result.success) {
             throw new Error(
-                result.message || "Failed to load machine masters",
+                result.message || "Failed to load machine",
             );
         }
 
@@ -711,7 +711,6 @@ const MachineMasterList = () => {
             "Machine Number": item.machineNumber || "",
             "Machine Name": item.machineName || "",
             "Machine Code": item.machineCode || "",
-            "IP Address": item.ipAddress || "",
             Comment: item.comment || "",
             Specifications: getItemDetailsSummary(item),
             Operational: item.status ? "Yes" : "No",
@@ -727,7 +726,6 @@ const MachineMasterList = () => {
             { wch: 20 },
             { wch: 25 },
             { wch: 18 },
-            { wch: 20 },
             { wch: 22 },
             { wch: 22 },
             { wch: 30 },
@@ -744,14 +742,14 @@ const MachineMasterList = () => {
         XLSX.utils.book_append_sheet(
             workbook,
             worksheet,
-            "Machine Master",
+            "Machine",
         );
 
         return workbook;
     }, []);
 
     const downloadMachineMasterExcel = useCallback(
-        (items, filename = "machine-master.xlsx") => {
+        (items, filename = "machine.xlsx") => {
             if (!items.length) {
                 toast.custom(
                     () => (
@@ -759,7 +757,7 @@ const MachineMasterList = () => {
                             <AlertIcon>
                                 <RiCheckboxCircleFill />
                             </AlertIcon>
-                            <AlertTitle>No machine masters to export</AlertTitle>
+                            <AlertTitle>No machine to export</AlertTitle>
                         </Alert>
                     ),
                     {
@@ -782,7 +780,7 @@ const MachineMasterList = () => {
     const handleExportExcel = useCallback(async () => {
         try {
             toast.loading("Preparing Excel export", {
-                id: "machine-master-export",
+                id: "machine-export",
             });
 
             const items = await getMachineMasterReportRows();
@@ -794,11 +792,11 @@ const MachineMasterList = () => {
                             <AlertIcon>
                                 <RiCheckboxCircleFill />
                             </AlertIcon>
-                            <AlertTitle>No machine masters to export</AlertTitle>
+                            <AlertTitle>No machine to export</AlertTitle>
                         </Alert>
                     ),
                     {
-                        id: "machine-master-export",
+                        id: "machine-export",
                         position: "top-center",
                     },
                 );
@@ -815,17 +813,17 @@ const MachineMasterList = () => {
                             <RiCheckboxCircleFill />
                         </AlertIcon>
                         <AlertTitle>
-                            {items.length} machine master(s) exported.
+                            {items.length} machine exported.
                         </AlertTitle>
                     </Alert>
                 ),
                 {
-                    id: "machine-master-export",
+                    id: "machine-export",
                     position: "top-center",
                 },
             );
         } catch (error) {
-            console.error("MACHINE MASTER EXPORT ERROR", error);
+            console.error("MACHINE EXPORT ERROR", error);
 
             toast.custom(
                 () => (
@@ -839,7 +837,7 @@ const MachineMasterList = () => {
                     </Alert>
                 ),
                 {
-                    id: "machine-master-export",
+                    id: "machine-export",
                     position: "top-center",
                 },
             );
@@ -864,7 +862,7 @@ const MachineMasterList = () => {
                             <AlertIcon>
                                 <RiCheckboxCircleFill />
                             </AlertIcon>
-                            <AlertTitle>No machine masters to print</AlertTitle>
+                            <AlertTitle>No machine to print</AlertTitle>
                         </Alert>
                     ),
                     {
@@ -879,7 +877,6 @@ const MachineMasterList = () => {
                     <td>${escapeHtml(item.machineNumber)}</td>
                     <td>${escapeHtml(item.machineName)}</td>
                     <td>${escapeHtml(item.machineCode)}</td>
-                    <td>${escapeHtml(item.ipAddress || "-")}</td>
                     <td>${escapeHtml(item.comment || "-")}</td>
                     <td>${item.status ? "Yes" : "No"}</td>
                     <td>${escapeHtml(formatDate(item.createdAt))}</td>
@@ -919,7 +916,7 @@ const MachineMasterList = () => {
                 <!doctype html>
                 <html>
                     <head>
-                        <title>Machine Master Report</title>
+                        <title>Machine Report</title>
                         <meta charset="utf-8">
                         <style>
                             body {
@@ -969,7 +966,7 @@ const MachineMasterList = () => {
                     </head>
 
                     <body>
-                        <h1>Machine Master Report</h1>
+                        <h1>Machine Report</h1>
 
                         <p>
                             Generated: ${escapeHtml(
@@ -984,8 +981,7 @@ const MachineMasterList = () => {
                                 <tr>
                                     <th>Machine Number</th>
                                     <th>Machine Name</th>
-                                    <th>Machine Code</th>
-                                    <th>IP Address</th>
+                                    <th>Machine Code</th>                                
                                     <th>Comment</th>
                                     <th>Operational</th>
                                     <th>Added Date</th>
@@ -1011,7 +1007,7 @@ const MachineMasterList = () => {
 
             printWindow.document.close();
         } catch (error) {
-            console.error("MACHINE MASTER PRINT ERROR", error);
+            console.error("MACHINE PRINT ERROR", error);
             toast.custom(
                 () => (
                     <Alert variant="mono" icon="error" close={false}>
@@ -1059,7 +1055,7 @@ const MachineMasterList = () => {
 
             if (!response.ok || !result.success) {
                 throw new Error(
-                    result.message || "Machine Master delete failed",
+                    result.message || "Machine delete failed",
                 );
             }
 
@@ -1069,7 +1065,7 @@ const MachineMasterList = () => {
                         <AlertIcon>
                             <RiCheckboxCircleFill />
                         </AlertIcon>
-                        <AlertTitle>Machine Master deleted successfully</AlertTitle>
+                        <AlertTitle>Machine deleted successfully</AlertTitle>
                     </Alert>
                 ),
                 {
@@ -1079,7 +1075,7 @@ const MachineMasterList = () => {
 
             await createMachineMasterNotification({
                 action: "deleted",
-                title: "Machine Master Deleted",
+                title: "Machine Deleted",
                 message: `${selectedMachineMaster.machineNumber} - ${selectedMachineMaster.machineName} has been deleted.`,
                 machineMasterId: selectedMachineMaster.id,
                 machineMasterName: selectedMachineMaster.machineName,
@@ -1098,7 +1094,7 @@ const MachineMasterList = () => {
             await refreshMachineMasters();
             await syncInventoryMachineMasters();
         } catch (error) {
-            console.error("MACHINE MASTER DELETE ERROR", error);
+            console.error("MACHINE DELETE ERROR", error);
             toast.custom(
                 () => (
                     <Alert variant="mono" icon="error" close={false}>
@@ -1170,7 +1166,7 @@ const MachineMasterList = () => {
                 await refreshMachineMasters();
                 await syncInventoryMachineMasters();
             } catch (error) {
-                console.error("MACHINE MASTER Operational ERROR", error);
+                console.error("MACHINE Operational ERROR", error);
                 toast.custom(
                     () => (
                         <Alert variant="mono" icon="error" close={false}>
@@ -1207,7 +1203,7 @@ const MachineMasterList = () => {
                             <AlertIcon>
                                 <RiCheckboxCircleFill />
                             </AlertIcon>
-                            <AlertTitle>Select at least one machine master</AlertTitle>
+                            <AlertTitle>Select at least one machine</AlertTitle>
                         </Alert>
                     ),
                     {
@@ -1225,7 +1221,7 @@ const MachineMasterList = () => {
                                 <RiCheckboxCircleFill />
                             </AlertIcon>
                             <AlertTitle>
-                                You do not have permission to change machine master status
+                                You do not have permission to change machine status
                             </AlertTitle>
                         </Alert>
                     ),
@@ -1267,7 +1263,7 @@ const MachineMasterList = () => {
                                 <RiCheckboxCircleFill />
                             </AlertIcon>
                             <AlertTitle>
-                                {`${result.count ?? idsToUpdate.length} machine master(s) marked ${status ? "yes" : "no"}`}
+                                {`${result.count ?? idsToUpdate.length} machine marked ${status ? "yes" : "no"}`}
                             </AlertTitle>
                         </Alert>
                     ),
@@ -1283,7 +1279,7 @@ const MachineMasterList = () => {
                 await refreshMachineMasters();
                 await syncInventoryMachineMasters();
             } catch (error) {
-                console.error("MACHINE MASTER BULK Operational ERROR", error);
+                console.error("MACHINE BULK Operational ERROR", error);
                 toast.custom(
                     () => (
                         <Alert variant="mono" icon="error" close={false}>
@@ -1324,7 +1320,7 @@ const MachineMasterList = () => {
                         <AlertIcon>
                             <RiCheckboxCircleFill />
                         </AlertIcon>
-                        <AlertTitle>Select at least one machine master</AlertTitle>
+                        <AlertTitle>Select at least one machine</AlertTitle>
                     </Alert>
                 ),
                 {
@@ -1342,7 +1338,7 @@ const MachineMasterList = () => {
                             <RiCheckboxCircleFill />
                         </AlertIcon>
                         <AlertTitle>
-                            You do not have permission to delete machine masters
+                            You do not have permission to delete machine
                         </AlertTitle>
                     </Alert>
                 ),
@@ -1389,7 +1385,7 @@ const MachineMasterList = () => {
                             <RiCheckboxCircleFill />
                         </AlertIcon>
                         <AlertTitle>
-                            {`${result.count ?? idsToDelete.length} machine master(s) deleted`}
+                            {`${result.count ?? idsToDelete.length} machine deleted`}
                         </AlertTitle>
                     </Alert>
                 ),
@@ -1404,7 +1400,7 @@ const MachineMasterList = () => {
             await refreshMachineMasters();
             await syncInventoryMachineMasters();
         } catch (error) {
-            console.error("MACHINE MASTER BULK DELETE ERROR", error);
+            console.error("MACHINE BULK DELETE ERROR", error);
             toast.custom(
                 () => (
                     <Alert variant="mono" icon="error" close={false}>
@@ -1630,25 +1626,6 @@ const MachineMasterList = () => {
                 ),
 
                 size: 140,
-            },
-
-            {
-                accessorKey: "ipAddress",
-                id: "ipAddress",
-
-                header: ({ column }) => (
-                    <DataGridColumnHeader
-                        title="IP Address"
-                        column={column}
-                        visibility
-                    />
-                ),
-
-                cell: ({ row }) => (
-                    <span>{row.original.ipAddress || "-"}</span>
-                ),
-
-                size: 150,
             },
 
             {
@@ -1979,7 +1956,7 @@ const MachineMasterList = () => {
 
                     <Input
                         type="text"
-                        placeholder="Search machine master"
+                        placeholder="Search machine"
                         value={searchInput}
                         onChange={(event) =>
                             setSearchInput(event.target.value)
@@ -2116,7 +2093,7 @@ const MachineMasterList = () => {
                         onClick={() => setAddDialogOpen(true)}
                     >
                         <Plus className="mr-2 size-4" />
-                        Add Machine Master
+                        Add Machine
                     </Button>
                 )}
 
@@ -2163,7 +2140,7 @@ const MachineMasterList = () => {
                         </h3>
 
                         <p className="mt-1 text-sm text-muted-foreground">
-                            You do not have permission to view Machine Master.
+                            You do not have permission to view Machine.
                         </p>
                     </div>
                 </CardHeader>
@@ -2219,7 +2196,7 @@ const MachineMasterList = () => {
 
                     await createMachineMasterNotification({
                         action: "created",
-                        title: "New Machine Master Created",
+                        title: "New Machine Created",
                         message: `${newMachineMaster?.machineNumber || ""
                             } - ${newMachineMaster?.machineName || ""
                             } has been created.`,
@@ -2262,7 +2239,7 @@ const MachineMasterList = () => {
 
                     await createMachineMasterNotification({
                         action: "updated",
-                        title: "Machine Master Updated",
+                        title: "Machine Updated",
                         message: `${updatedMachineMaster?.machineNumber ||
                             selectedMachineMaster?.machineNumber ||
                             ""

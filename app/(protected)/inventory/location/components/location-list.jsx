@@ -630,7 +630,7 @@ const LocationList = () => {
     const downloadLocationExcel = useCallback(
         (items, filename = "locations.xlsx") => {
             if (!items.length) {
-                toast.error("No locations to export");
+                showError("No locations to export");
                 return false;
             }
 
@@ -650,7 +650,7 @@ const LocationList = () => {
             const items = await getLocationReportRows();
 
             if (!items.length) {
-                toast.error("No locations to export", {
+                showError("No locations to export", {
                     id: "location-export",
                 });
 
@@ -675,7 +675,7 @@ const LocationList = () => {
             const items = await getLocationReportRows();
 
             if (!items.length) {
-                toast.error("No locations to print");
+                showError("No locations to print");
                 return;
             }
 
@@ -699,7 +699,7 @@ const LocationList = () => {
             const printWindow = window.open("", "_blank", "width=1200,height=800");
 
             if (!printWindow) {
-                toast.error("Please allow pop-ups to print the report");
+                showError("Please allow pop-ups to print the report");
 
                 return;
             }
@@ -925,7 +925,7 @@ const LocationList = () => {
                 const originalName = String(item.locationName || "").trim();
 
                 if (!originalName) {
-                    toast.error("Location name is missing.");
+                    showError("Location name is missing.");
                     return;
                 }
 
@@ -977,7 +977,7 @@ const LocationList = () => {
 
     const handleConfirmCopyLocation = useCallback(async () => {
         if (!copySourceItem?.id) {
-            toast.error("Please select a location to copy.");
+            showError("Please select a location to copy.");
             return;
         }
 
@@ -985,13 +985,13 @@ const LocationList = () => {
         const finalCode = copyLocationCode.trim();
 
         if (!finalName || !finalCode) {
-            toast.error("Location name and location code are required.");
+            showError("Location name and location code are required.");
 
             return;
         }
 
         if (finalName.length > 255 || finalCode.length > 25) {
-            toast.error("Location name or code exceeds the allowed character limit.");
+            showError("Location name or code exceeds the allowed character limit.");
 
             return;
         }
@@ -1121,12 +1121,12 @@ const LocationList = () => {
     const handleBulkStatus = useCallback(
         async (status) => {
             if (!selectedIds.length) {
-                toast.error("Select at least one location");
+                showError("Select at least one location");
                 return;
             }
 
             if (!(canManage || canEdit)) {
-                toast.error("You do not have permission to change location status");
+                showError("You do not have permission to change location status");
 
                 return;
             }
@@ -1180,12 +1180,12 @@ const LocationList = () => {
 
     const handleBulkDelete = useCallback(() => {
         if (!selectedIds.length) {
-            toast.error("Select at least one location");
+            showError("Select at least one location");
             return;
         }
 
         if (!canDelete) {
-            toast.error("You do not have permission to delete locations");
+            showError("You do not have permission to delete locations");
 
             return;
         }
@@ -1313,12 +1313,12 @@ const LocationList = () => {
 
     const handleSendEmail = useCallback(async () => {
         if (!selectedRecipientEmails.length) {
-            toast.error("Please select at least one recipient.");
+            showError("Please select at least one recipient.");
             return;
         }
 
         if (!emailSubject.trim() || !emailMessage.trim()) {
-            toast.error("Please enter the email subject and message.");
+            showError("Please enter the email subject and message.");
 
             return;
         }
@@ -1925,10 +1925,10 @@ const LocationList = () => {
                 >
                     <span
                         className={`size-2.5 shrink-0 rounded-full ${dbStatus.loading
-                                ? "animate-pulse bg-yellow-500"
-                                : dbStatus.online && isOnline
-                                    ? "bg-green-500"
-                                    : "bg-red-500"
+                            ? "animate-pulse bg-yellow-500"
+                            : dbStatus.online && isOnline
+                                ? "bg-green-500"
+                                : "bg-red-500"
                             }`}
                     />
 
@@ -1936,7 +1936,9 @@ const LocationList = () => {
                         {dbStatus.loading
                             ? "Checking..."
                             : dbStatus.online && isOnline
-                                ? String(dbStatus.env || "Database").toUpperCase()
+                                ? String(dbStatus.env || "Database")
+                                    .toLowerCase()
+                                    .replace(/\b\w/g, (char) => char.toUpperCase())
                                 : "Offline"}
                     </span>
 

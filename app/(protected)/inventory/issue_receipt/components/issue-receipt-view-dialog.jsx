@@ -152,11 +152,11 @@ export default function IssueReceiptViewDialog({
                   </p>
                 </div>
 
-                {/* ITEM MASTER */}
+                {/* ITEM */}
 
                 <div className="rounded-lg border p-4">
                   <div className="mb-2 text-xs font-medium text-muted-foreground">
-                    Item Master
+                    Item
                   </div>
 
                   <p className="break-words text-sm font-medium">

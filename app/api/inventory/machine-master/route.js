@@ -242,7 +242,7 @@ const getAuthenticatedUserOrResponse = async () => {
 };
 
 // ======================================================
-// GET MACHINE MASTER LIST / SINGLE MACHINE
+// GET MACHINE LIST / SINGLE MACHINE
 // ======================================================
 
 export async function GET(request) {
@@ -422,7 +422,7 @@ export async function GET(request) {
       },
     });
   } catch (error) {
-    console.error("MACHINE MASTER GET ERROR:", error);
+    console.error("MACHINE GET ERROR:", error);
 
     return NextResponse.json(
       {
@@ -435,7 +435,7 @@ export async function GET(request) {
 }
 
 // ======================================================
-// POST - CREATE MACHINE MASTER
+// POST - CREATE MACHINE
 // ======================================================
 
 export async function POST(request) {
@@ -639,7 +639,7 @@ export async function POST(request) {
     );
 
   } catch (error) {
-    console.error("MACHINE MASTER CREATE ERROR:", error);
+    console.error("MACHINE CREATE ERROR:", error);
 
     if (error.code === "P2002") {
       return NextResponse.json(
@@ -709,7 +709,7 @@ async function createMachineChangeLogs({
 
 
 // ======================================================
-// PUT - UPDATE MACHINE MASTER
+// PUT - UPDATE MACHINE
 // ======================================================
 
 export async function PUT(request) {
@@ -1039,7 +1039,7 @@ export async function PUT(request) {
       sync: true,
     });
   } catch (error) {
-    console.error("MACHINE MASTER UPDATE ERROR:", error);
+    console.error("MACHINE UPDATE ERROR:", error);
 
     if (error.code === "P2002") {
       return NextResponse.json(
@@ -1173,7 +1173,7 @@ export async function PATCH(request) {
       },
     });
   } catch (error) {
-    console.error("PATCH MACHINE MASTER ERROR:", error);
+    console.error("PATCH MACHINE ERROR:", error);
 
     return NextResponse.json(
       {
@@ -1185,7 +1185,7 @@ export async function PATCH(request) {
   }
 }
 // ======================================================
-// DELETE - SOFT DELETE MACHINE MASTER
+// DELETE - SOFT DELETE MACHINE
 // Supports { id } and { ids: [] }.
 // ======================================================
 
@@ -1288,7 +1288,7 @@ export async function DELETE(request) {
       sync: true,
     });
   } catch (error) {
-    console.error("MACHINE MASTER DELETE ERROR:", error);
+    console.error("MACHINE DELETE ERROR:", error);
 
     return NextResponse.json(
       {

@@ -36,6 +36,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
@@ -43,8 +48,42 @@ import { DataGrid } from "@/components/ui/data-grid";
 import { DataGridPagination } from "@/components/ui/data-grid-pagination";
 import { DataGridTable } from "@/components/ui/data-grid-table";
 import { DataGridColumnHeader } from "@/components/ui/data-grid-column-header";
-
+import { Alert, AlertIcon, AlertTitle } from "@/components/ui/alert";
+import { RiCheckboxCircleFill, RiErrorWarningFill } from "@remixicon/react";
 import { StoreClientFiltersSheet } from "./sheet/filters-sheet";
+
+const showSuccessToast = (message) => {
+  toast.custom(
+    () => (
+      <Alert variant="mono" icon="success">
+        <AlertIcon>
+          <RiCheckboxCircleFill />
+        </AlertIcon>
+        <AlertTitle>{message}</AlertTitle>
+      </Alert>
+    ),
+    { position: "top-center" },
+  );
+};
+
+const showErrorToast = (message) => {
+  toast.custom(
+    (t) => (
+      <Alert
+        variant="mono"
+        icon="destructive"
+        close={true}
+        onClose={() => toast.dismiss(t)}
+      >
+        <AlertIcon>
+          <RiErrorWarningFill />
+        </AlertIcon>
+        <AlertTitle>{message}</AlertTitle>
+      </Alert>
+    ),
+    { position: "top-center" },
+  );
+};
 const CHANGE_LOG_API = "/api/inventory/inventroy-change-log";
 const STAFF_API = "/api/staff?limit=10000";
 const EMAIL_API = `${CHANGE_LOG_API}/email-report`;
@@ -397,7 +436,7 @@ export default function InventoryChangeLogList() {
 
     console.error("INVENTORY CHANGE LOG QUERY ERROR:", changeLogError);
 
-    toast.error(getErrorMessage(changeLogError, "Failed to fetch change logs"));
+    showErrorToast(getErrorMessage(changeLogError, "Failed to fetch change logs"));
   }, [changeLogError]);
 
   // ---------------------------------------------------------------------------
@@ -426,7 +465,7 @@ export default function InventoryChangeLogList() {
 
   useEffect(() => {
     if (staffError && emailDialogOpen) {
-      toast.error(
+      showErrorToast(
         getErrorMessage(staffError, "Unable to load staff recipients"),
       );
     }
@@ -626,7 +665,7 @@ export default function InventoryChangeLogList() {
         selectedRows.length > 0 ? selectedRows : await getReportRows();
 
       if (!items.length) {
-        toast.error("No change log records to export.", {
+        showErrorToast("No change log records to export.", {
           id: "change-log-export",
         });
         return;
@@ -683,13 +722,13 @@ export default function InventoryChangeLogList() {
 
       XLSX.writeFile(workbook, "inventory-change-log.xlsx");
 
-      toast.success(`${items.length} change log record(s) exported.`, {
+      showSuccessToast(`${items.length} change log record(s) exported.`, {
         id: "change-log-export",
       });
     } catch (error) {
       console.error("CHANGE LOG EXCEL EXPORT ERROR:", error);
 
-      toast.error(getErrorMessage(error, "Excel export failed."), {
+      showErrorToast(getErrorMessage(error, "Excel export failed."), {
         id: "change-log-export",
       });
     } finally {
@@ -764,12 +803,12 @@ export default function InventoryChangeLogList() {
 
   const handleSendEmail = async () => {
     if (selectedRecipientEmails.length === 0) {
-      toast.error("Please select at least one recipient.");
+      showErrorToast("Please select at least one recipient.");
       return;
     }
 
     if (!emailSubject.trim() || !emailMessage.trim()) {
-      toast.error("Please enter the email subject and message.");
+      showErrorToast("Please enter the email subject and message.");
       return;
     }
 
@@ -807,7 +846,7 @@ export default function InventoryChangeLogList() {
         );
       }
 
-      toast.success(
+      showSuccessToast(
         attachExcel
           ? "Email sent successfully with the Excel attachment."
           : "Email sent successfully.",
@@ -817,7 +856,7 @@ export default function InventoryChangeLogList() {
     } catch (error) {
       console.error("CHANGE LOG EMAIL ERROR:", error);
 
-      toast.error(getErrorMessage(error, "Unable to send email."));
+      showErrorToast(getErrorMessage(error, "Unable to send email."));
     } finally {
       setEmailSending(false);
     }
@@ -1010,6 +1049,20 @@ export default function InventoryChangeLogList() {
                   </button>
                 )}
               </form>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className="flex size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                  >
+                    <Info className="size-4" />
+                  </button>
+                </TooltipTrigger>
+
+                <TooltipContent>
+                  <p>Search by username, item name, details.</p>
+                </TooltipContent>
+              </Tooltip>
             </div>
 
             <div className="flex flex-wrap items-center justify-end gap-2">
@@ -1032,7 +1085,9 @@ export default function InventoryChangeLogList() {
                   {dbStatus.loading
                     ? "Checking..."
                     : dbStatus.online && isOnline
-                      ? String(dbStatus.env || "Database").toUpperCase()
+                      ? String(dbStatus.env || "Database")
+                        .toLowerCase()
+                        .replace(/\b\w/g, (char) => char.toUpperCase())
                       : "Offline"}
                 </span>
 

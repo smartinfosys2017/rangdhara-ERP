@@ -423,7 +423,7 @@ export const MENU_SIDEBAR = [
         ]
       },
       {
-        title: "Employee Masters",
+        title: "Employee",
         children: [
           {
             title: "Employee",
@@ -452,17 +452,17 @@ export const MENU_SIDEBAR = [
         permission: "item_group.list",
       },
       {
-        title: "Item Condition Master",
+        title: "Item Condition",
         path: "/inventory/product_type",
         permission: "product_type.list",
       },
       {
-        title: "Transaction Type Master",
+        title: "Transaction Type",
         path: "/inventory/transaction_type",
         permission: "transaction_type.list",
       },
       {
-        title: "Item Master",
+        title: "Item",
         path: "/inventory/item_master",
         permission: "item_master.list",
       },
@@ -482,12 +482,12 @@ export const MENU_SIDEBAR = [
         permission: "issue_receipt.list",
       },
       {
-        title: "Machine Master",
+        title: "Machine",
         path: "/inventory/machine-master",
         permission: "machinemaster.list",
       },
       {
-        title: "Location Master",
+        title: "Location",
         path: "/inventory/location",
         permission: "location.list",
       },
@@ -1256,17 +1256,17 @@ export const MENU_SIDEBAR_COMPACT = [
         permission: "item_group.list",
       },
       {
-        title: "Item Condition Master",
+        title: "Item Condition",
         path: "/inventory/product_type",
         permission: "product_type.list",
       },
       {
-        title: "Transaction Type Master",
+        title: "Transaction Type",
         path: "/inventory/transaction_type",
         permission: "transaction_type.list",
       },
       {
-        title: "Item Master",
+        title: "Item",
         path: "/inventory/item_master",
         permission: "item_master.list",
       },
@@ -1286,7 +1286,7 @@ export const MENU_SIDEBAR_COMPACT = [
         permission: "issue_receipt.list",
       },
       {
-        title: "Machine Master",
+        title: "Machine",
         path: "/inventory/machine-master",
         permission: "machinemaster.list",
       },

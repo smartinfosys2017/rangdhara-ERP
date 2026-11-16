@@ -67,7 +67,7 @@ const badRequest = (message, extra = {}) =>
   NextResponse.json({ success: false, message, ...extra }, { status: 400 });
 
 // ======================================================
-// SEND ITEM MASTER EMAIL REPORT
+// SEND ITEM EMAIL REPORT
 // ======================================================
 
 export async function POST(request) {
@@ -253,14 +253,14 @@ export async function POST(request) {
       ];
 
       const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "Item Master");
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Item");
 
       const excelBuffer = XLSX.write(workbook, {
         type: "buffer",
         bookType: "xlsx",
       });
 
-      fileName = `inventory-item-master-${new Date()
+      fileName = `inventory-item-${new Date()
         .toISOString()
         .slice(0, 10)}.xlsx`;
 
@@ -276,7 +276,7 @@ export async function POST(request) {
 
     // 7. Build email content.
     const plainMessage = String(message || "").trim();
-    const defaultMessage = "Please find the Item Master report for your review.";
+    const defaultMessage = "Please find the Item report for your review.";
 
     const emailText = [
       plainMessage || defaultMessage,
@@ -295,7 +295,7 @@ export async function POST(request) {
 
     const emailHtml = `
       <div style="font-family:Arial,sans-serif;color:#333;line-height:1.7">
-        <h2 style="margin-bottom:16px">Item Master Report</h2>
+        <h2 style="margin-bottom:16px">Item Report</h2>
 
         <p>${safeMessage}</p>
 
@@ -355,7 +355,7 @@ export async function POST(request) {
       {
         success: false,
         message:
-          error.message || "Failed to generate or send the item master report.",
+          error.message || "Failed to generate or send the item report.",
       },
       { status: 500 },
     );

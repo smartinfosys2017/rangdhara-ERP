@@ -57,7 +57,7 @@ const getItemName = (item) =>
   "";
 
 const getItemUnit = (item, units = []) => {
-  // Use UnitName directly from Item Master API first
+  // Use UnitName directly from Item API first
   const directUnit =
     item?.UnitName ||
     item?.unitName ||
@@ -73,12 +73,12 @@ const getItemUnit = (item, units = []) => {
     item?.unit?.id ||
     item?.Unit?.id;
 
-  // Find matching Unit Master record
+  // Find matching Unit record
   const matchedUnit = unitId
     ? units.find((unit) => String(unit.id) === String(unitId))
     : null;
 
-  // Prefer Unit Master data when available
+  // Prefer Unit data when available
   const unitName =
     matchedUnit?.unitName ||
     directUnit ||
@@ -402,7 +402,7 @@ export default function MachineMasterAddDialog({
   };
 
   // ------------------------------------------------------
-  // LOAD ITEM MASTER
+  // LOAD ITEM
   // ------------------------------------------------------
 
   const loadAvailableItems = async () => {
@@ -549,7 +549,7 @@ export default function MachineMasterAddDialog({
             <AlertIcon>
               <RiCheckboxCircleFill />
             </AlertIcon>
-            <AlertTitle>{"Invalid Item Master record"}</AlertTitle>
+            <AlertTitle>{"Invalid Item record"}</AlertTitle>
           </Alert>
         ),
         {
@@ -999,7 +999,7 @@ export default function MachineMasterAddDialog({
     >
       <DialogContent className="max-w-4xl max-h-[95vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Add Machine Master</DialogTitle>
+          <DialogTitle>Add Machine</DialogTitle>
           <DialogDescription>
             Enter machine information and select the items assigned to
             this machine.
@@ -1081,6 +1081,7 @@ export default function MachineMasterAddDialog({
                     onValueChange={(value) =>
                       handleChange("status", value === "active")
                     }
+                    className="cursor-pointer"
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select status" />
@@ -1131,7 +1132,7 @@ export default function MachineMasterAddDialog({
 
               <div className="space-y-2">
                 <Label>
-                  Group Name <span className="text-red-500">*</span>
+                  Item Group <span className="text-red-500">*</span>
                 </Label>
 
                 <div className="relative">
@@ -1141,7 +1142,7 @@ export default function MachineMasterAddDialog({
                     onClick={() =>
                       setGroupDropdownOpen((prev) => !prev)
                     }
-                    className="w-full min-h-10 border rounded-md px-3 py-2 text-sm text-left flex items-center justify-between gap-2 bg-background"
+                    className="w-full min-h-10 border rounded-md px-3 py-2 text-sm text-left flex items-center justify-between gap-2 bg-background cursor-pointer"
                   >
                     <span className="truncate">
                       {loadingGroups
@@ -1166,7 +1167,7 @@ export default function MachineMasterAddDialog({
                         <div className="flex gap-2">
                           <button
                             type="button"
-                            className="text-xs text-primary hover:underline"
+                            className="text-xs text-primary hover:underline cursor-pointer"
                             onClick={() => {
                               const allGroups = itemGroups
                                 .map((group) => String(group.groupName || ""))
@@ -1184,7 +1185,7 @@ export default function MachineMasterAddDialog({
 
                           <button
                             type="button"
-                            className="text-xs text-destructive hover:underline"
+                            className="text-xs text-destructive hover:underline cursor-pointer"
                             onClick={clearSelectedGroups}
                           >
                             Clear All
@@ -1280,7 +1281,7 @@ export default function MachineMasterAddDialog({
                         type="button"
                         onClick={handleSelectAllAvailable}
                         disabled={!filteredItems.length}
-                        className="text-xs font-medium text-primary hover:underline disabled:opacity-40 disabled:cursor-not-allowed"
+                        className="text-xs font-medium text-primary hover:underline disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                       >
                         Select All
                       </button>
@@ -1289,7 +1290,7 @@ export default function MachineMasterAddDialog({
                         type="button"
                         onClick={handleClearAvailable}
                         disabled={!selectedAvailableIds.length}
-                        className="text-xs font-medium text-destructive hover:underline disabled:opacity-40 disabled:cursor-not-allowed"
+                        className="text-xs font-medium text-destructive hover:underline disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                       >
                         Clear All
                       </button>
@@ -1298,7 +1299,7 @@ export default function MachineMasterAddDialog({
                         type="button"
                         onClick={handleTransferSelected}
                         disabled={!selectedAvailableIds.length}
-                        className="text-xs font-semibold text-primary hover:underline disabled:opacity-40 disabled:cursor-not-allowed"
+                        className="text-xs font-semibold text-primary hover:underline disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                       >
                         Transfer Selected ({selectedAvailableIds.length})
                       </button>
@@ -1401,7 +1402,7 @@ export default function MachineMasterAddDialog({
                         type="button"
                         onClick={handleSelectAllDetails}
                         disabled={!selectedItems.length}
-                        className="text-xs font-medium text-primary hover:underline disabled:opacity-40 disabled:cursor-not-allowed"
+                        className="text-xs font-medium text-primary hover:underline disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                       >
                         Select All
                       </button>
@@ -1410,7 +1411,7 @@ export default function MachineMasterAddDialog({
                         type="button"
                         onClick={handleClearDetails}
                         disabled={!selectedDetailIds.length}
-                        className="text-xs font-medium text-primary hover:underline disabled:opacity-40 disabled:cursor-not-allowed"
+                        className="text-xs font-medium text-primary hover:underline disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                       >
                         Clear All
                       </button>
@@ -1419,7 +1420,7 @@ export default function MachineMasterAddDialog({
                         type="button"
                         onClick={handleRemoveSelected}
                         disabled={!selectedDetailIds.length}
-                        className="text-xs font-medium text-destructive hover:underline disabled:opacity-40 disabled:cursor-not-allowed"
+                        className="text-xs font-medium text-destructive hover:underline disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                       >
                         Remove Selected ({selectedDetailIds.length})
                       </button>

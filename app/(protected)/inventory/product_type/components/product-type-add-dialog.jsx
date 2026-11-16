@@ -17,7 +17,8 @@ import {
 } from "@/components/ui/dialog";
 
 import { Input } from "@/components/ui/input";
-
+import { Alert, AlertIcon, AlertTitle } from "@/components/ui/alert";
+import { RiCheckboxCircleFill, RiErrorWarningFill } from "@remixicon/react";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import {
@@ -27,7 +28,38 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+const showSuccessToast = (message) => {
+  toast.custom(
+    () => (
+      <Alert variant="mono" icon="success">
+        <AlertIcon>
+          <RiCheckboxCircleFill />
+        </AlertIcon>
+        <AlertTitle>{message}</AlertTitle>
+      </Alert>
+    ),
+    { position: "top-center" },
+  );
+};
 
+const showErrorToast = (message) => {
+  toast.custom(
+    (t) => (
+      <Alert
+        variant="mono"
+        icon="destructive"
+        close={true}
+        onClose={() => toast.dismiss(t)}
+      >
+        <AlertIcon>
+          <RiErrorWarningFill />
+        </AlertIcon>
+        <AlertTitle>{message}</AlertTitle>
+      </Alert>
+    ),
+    { position: "top-center" },
+  );
+};
 // =======================================================
 // DEFAULT FORM
 // =======================================================
@@ -122,7 +154,7 @@ export default function ProductTypeAddDialog({
     setErrors(newErrors);
 
     if (Object.keys(newErrors).length > 0) {
-      toast.error("Please check the required fields and character limits.");
+      showErrorToast("Please check the required fields and character limits.");
       return false;
     }
 
@@ -165,7 +197,7 @@ export default function ProductTypeAddDialog({
         throw new Error(result.message || "Item Condition save failed.");
       }
 
-      toast.success(
+      showSuccessToast(
         item
           ? "Item Condition updated successfully."
           : "Item Condition added successfully.",
@@ -177,7 +209,7 @@ export default function ProductTypeAddDialog({
     } catch (error) {
       console.error("Item Condition ERROR:", error);
 
-      toast.error(error.message || "Something went wrong.");
+      showErrorToast(error.message || "Something went wrong.");
     }
   };
 

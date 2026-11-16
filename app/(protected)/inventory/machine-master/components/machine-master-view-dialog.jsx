@@ -202,7 +202,7 @@ export default function MachineMasterViewDialog({
           {/* HEADER */}
           <DialogHeader>
             <DialogTitle>
-              Machine Master Details
+              Machine Details
             </DialogTitle>
 
             <DialogDescription>
@@ -432,7 +432,7 @@ export default function MachineMasterViewDialog({
                 </DetailCard>
               </div>
 
-              {/* MACHINE CHANGE HISTORY */}
+              {/* Machine Activity Log */}
               <div className="mt-3 mb-3 rounded-lg border p-3 min-w-0 flex flex-col h-[450px] shrink-0">
 
                 {/* HEADER */}
@@ -441,7 +441,7 @@ export default function MachineMasterViewDialog({
                     <History className="h-5 w-5 text-muted-foreground" />
 
                     <h3 className="text-sm font-semibold">
-                      Machine Change History
+                      Machine Activity Log
                     </h3>
 
                     <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium">

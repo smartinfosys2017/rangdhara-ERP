@@ -32,13 +32,13 @@ const ItemMastersDeleteDialog = ({
             <span className="flex size-9 items-center justify-center rounded-full bg-destructive/10">
               <Trash2 className="size-5 text-destructive" />
             </span>
-            Delete Item Masters
+            Delete Items
           </DialogTitle>
 
           <DialogDescription>
             Are you sure you want to delete{" "}
             <strong className="text-foreground">
-              {selectedCount} item master
+              {selectedCount} item
               {selectedCount !== 1 ? "s" : ""}
             </strong>
             ? This action cannot be undone.

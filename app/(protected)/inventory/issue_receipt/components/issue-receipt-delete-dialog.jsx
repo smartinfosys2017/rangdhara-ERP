@@ -103,16 +103,16 @@ export default function IssueReceiptDeleteDialog({
             </div>
           </div> */}
 
-          {/* ITEM MASTER */}
+          {/* ITEM */}
           {/* <pre className="whitespace-pre-wrap break-words text-xs">
                 {JSON.stringify(IssueReceipt, null, 2)}
               </pre>*/}
-              {/* Item Master */}
+              {/* Item */}
             <div className="flex min-w-0 items-start gap-3">
               <Package className="mt-0.5 h-5 w-5 shrink-0" />
               <div className="min-w-0">
                 <p className="text-xs font-medium text-muted-foreground">
-                  Item Master
+                  Item
                 </p>
                 <p className="break-words font-medium">
                   {displayValue(

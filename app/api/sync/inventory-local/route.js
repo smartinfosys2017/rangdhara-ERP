@@ -828,7 +828,7 @@ async function syncTransactionTypes({
   };
 }
 // =====================================================
-// ITEM MASTER SYNC
+// ITEM SYNC
 // CREATE + UPDATE + SOFT DELETE + RESTORE
 // =====================================================
 
@@ -1779,7 +1779,7 @@ export async function POST() {
     });
 
     // ==========================
-    // MACHINE MASTER LOCAL → LIVE
+    // MACHINE LOCAL → LIVE
     // ==========================
 
     const localToLiveMachineMasters = await syncMachineMasters({
@@ -1857,7 +1857,7 @@ export async function POST() {
     });
 
     // ==========================
-    // MACHINE MASTER LIVE → LOCAL
+    // MACHINE LIVE → LOCAL
     // ==========================
 
     const liveToLocalMachineMasters = await syncMachineMasters({

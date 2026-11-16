@@ -694,25 +694,29 @@ model TransactionType {
 }
 
 model ItemMaster {
-  id                         String    @id @default(uuid())
+  id                         String  @id @default(uuid())
   ItemGroupid                String
-  ItemName                   String    @db.VarChar(255)
-  Description                String?   @db.VarChar(255)
-  openingBalance             String?   @db.VarChar(255)
+  ItemName                   String  @db.VarChar(255)
+  Description                String? @db.VarChar(255)
+  openingBalance             String? @db.VarChar(255)
   Unitid                     String
   rather                     Int
   Tax1                       String
   Tax2                       String
-  ApplicableForRelocateLevel Boolean   @default(false)
-  RelocateLevel              String?   @db.VarChar(255)
-  status                     Boolean   @default(true)
-  isDefault                  Boolean   @default(false)
-  createby                   String?
-  updateby                   String?
-  createdAt                  DateTime  @default(now())
-  updatedAt                  DateTime  @updatedAt
-  deletedAt                  DateTime?
-  lastSyncAt                 DateTime?
+  ApplicableForRelocateLevel Boolean @default(false)
+  RelocateLevel              String? @db.VarChar(255)
+
+  Locationid String?
+  Machineid  String?
+
+  status     Boolean   @default(true)
+  isDefault  Boolean   @default(false)
+  createby   String?
+  updateby   String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
+  lastSyncAt DateTime?
 
   @@map("ItemMaster")
 }

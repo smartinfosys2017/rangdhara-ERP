@@ -25,9 +25,41 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-
+import { Alert, AlertIcon, AlertTitle } from "@/components/ui/alert";
+import { RiCheckboxCircleFill, RiErrorWarningFill } from "@remixicon/react";
 import { Textarea } from "@/components/ui/textarea";
+const showSuccessToast = (message) => {
+  toast.custom(
+    () => (
+      <Alert variant="mono" icon="success">
+        <AlertIcon>
+          <RiCheckboxCircleFill />
+        </AlertIcon>
+        <AlertTitle>{message}</AlertTitle>
+      </Alert>
+    ),
+    { position: "top-center" },
+  );
+};
 
+const showErrorToast = (message) => {
+  toast.custom(
+    (t) => (
+      <Alert
+        variant="mono"
+        icon="destructive"
+        close={true}
+        onClose={() => toast.dismiss(t)}
+      >
+        <AlertIcon>
+          <RiErrorWarningFill />
+        </AlertIcon>
+        <AlertTitle>{message}</AlertTitle>
+      </Alert>
+    ),
+    { position: "top-center" },
+  );
+};
 // =======================================================
 // EMPTY FORM
 // =======================================================
@@ -131,7 +163,7 @@ export default function ProductTypeEditDialog({
     setErrors(newErrors);
 
     if (Object.keys(newErrors).length > 0) {
-      toast.error("Please check the required fields and character limits.");
+      showErrorToast("Please check the required fields and character limits.");
       return false;
     }
 
@@ -178,7 +210,7 @@ export default function ProductTypeEditDialog({
         throw new Error(result.message || "Failed to update Item Condition.");
       }
 
-      toast.success("Item Condition updated successfully.");
+      showSuccessToast("Item Condition updated successfully.");
 
       onSuccess?.(result.data);
 
@@ -186,7 +218,7 @@ export default function ProductTypeEditDialog({
     } catch (error) {
       console.error("Item Condition UPDATE ERROR:", error);
 
-      toast.error(error.message || "Unable to update Item Condition.");
+      showErrorToast(error.message || "Unable to update Item Condition.");
     }
   };
 

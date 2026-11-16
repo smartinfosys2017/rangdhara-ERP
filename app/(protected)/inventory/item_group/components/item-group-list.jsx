@@ -637,21 +637,18 @@ const ItemGroupList = () => {
             );
         }
     }, [getItemGroupReportRows]);
-    const handleSearch = useCallback(
-        (event) => {
-            event?.preventDefault();
 
-            const keyword = searchInput.trim();
+    const handleSearch = useCallback((value) => {
+        setSearchInput(value);
 
-            setPagination((prev) => ({
-                ...prev,
-                pageIndex: 0,
-            }));
+        setPagination((prev) => ({
+            ...prev,
+            pageIndex: 0,
+        }));
 
-            setSearchQuery(keyword);
-        },
-        [searchInput]
-    );
+        setSearchQuery(value.trim());
+    }, []);
+
 
     // const clearFilters = useCallback(() => {
     //     setSearchInput("");
@@ -1743,7 +1740,7 @@ const ItemGroupList = () => {
                             type="text"
                             placeholder="Search item group"
                             value={searchInput}
-                            onChange={(event) => setSearchInput(event.target.value)}
+                            onChange={(event) => handleSearch(event.target.value)}
                             className="w-full pl-9 pr-9"
                             autoComplete="off"
                         />
@@ -1840,7 +1837,9 @@ const ItemGroupList = () => {
                             {dbStatus.loading
                                 ? "Checking..."
                                 : dbStatus.online && isOnline
-                                    ? `${String(dbStatus.env || "Database").toUpperCase()}`
+                                    ? String(dbStatus.env || "Database")
+                                        .toLowerCase()
+                                        .replace(/\b\w/g, (char) => char.toUpperCase())
                                     : "Offline"}
                         </span>
 

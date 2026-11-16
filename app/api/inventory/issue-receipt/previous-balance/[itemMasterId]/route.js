@@ -9,7 +9,7 @@ export async function GET(request, { params }) {
       return NextResponse.json(
         {
           success: false,
-          message: "Item Master ID is required",
+          message: "Item ID is required",
         },
         { status: 400 },
       );
@@ -17,7 +17,7 @@ export async function GET(request, { params }) {
 
     const id = itemMasterId;
 
-    // Get the latest Issue/Receipt for this Item Master
+    // Get the latest Issue/Receipt for this Item
     const latestReceipt = await prisma.issueReceipt.findFirst({
       where: {
         ItemMasterid: id,

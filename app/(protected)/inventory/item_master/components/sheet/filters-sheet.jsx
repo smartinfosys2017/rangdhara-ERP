@@ -632,7 +632,7 @@ export function StoreClientFiltersSheet({
 
       <SheetContent className="sm:w-[320px] sm:max-w-none inset-5 start-auto h-auto rounded-lg p-0 [&_[data-slot=sheet-close]]:top-4.5 [&_[data-slot=sheet-close]]:end-5">
         <SheetHeader className="border-b border-border px-5 py-3.5">
-          <SheetTitle>Filter Item Masters</SheetTitle>
+          <SheetTitle>Filter Item </SheetTitle>
         </SheetHeader>
 
         <SheetBody className="min-h-0 flex-1 py-0">
@@ -654,7 +654,7 @@ export function StoreClientFiltersSheet({
                   </TooltipTrigger>
 
                   <TooltipContent>
-                    <p>Filter item masters by status.</p>
+                    <p>Filter item by status.</p>
                   </TooltipContent>
                 </Tooltip>
               </div>
@@ -696,7 +696,7 @@ export function StoreClientFiltersSheet({
 
                   <TooltipContent>
                     <p>
-                      Filter item masters by restock level applicability.
+                      Filter item by restock level applicability.
                     </p>
                   </TooltipContent>
                 </Tooltip>

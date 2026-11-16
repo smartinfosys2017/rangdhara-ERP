@@ -1,100 +1,236 @@
+
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { checkMenuAccess } from "@/lib/module-access";
 import { systemLog } from "@/services/system-log";
 import { getAuthenticatedUser } from "@/lib/auth-user";
 
-const getAccessError = async () => checkMenuAccess("transaction-type-master");
+const getAccessError = async () =>
+  checkMenuAccess("transaction-type-master");
+
 const allowedSortFields = new Set([
-  "id", "TransactionType", "Description", "EffectOnTransaction", "status",
-  "isDefault", "createdAt", "updatedAt",
+  "id",
+  "TransactionType",
+  "Description",
+  "EffectOnTransaction",
+  "status",
+  "isDefault",
+  "createdAt",
+  "updatedAt",
 ]);
+
+const getIpAddress = (request) =>
+  request.headers
+    .get("x-forwarded-for")
+    ?.split(",")[0]
+    ?.trim() || null;
 
 function parseDateStart(value) {
   if (!value) return undefined;
+
   const date = new Date(`${value}T00:00:00.000`);
+
   return Number.isNaN(date.getTime()) ? undefined : date;
 }
 
 function parseDateEndExclusive(value) {
   if (!value) return undefined;
+
   const date = new Date(`${value}T00:00:00.000`);
+
   if (Number.isNaN(date.getTime())) return undefined;
+
   date.setDate(date.getDate() + 1);
+
   return date;
 }
 
+// GET filters
 function buildWhere(searchParams) {
   const query = (searchParams.get("query") || "").trim();
   const status = searchParams.get("status") || "all";
+
   const createdFrom = parseDateStart(searchParams.get("createdFrom"));
   const createdTo = parseDateEndExclusive(searchParams.get("createdTo"));
+
   const updatedFrom = parseDateStart(searchParams.get("updatedFrom"));
   const updatedTo = parseDateEndExclusive(searchParams.get("updatedTo"));
 
+  const createdBy = searchParams.get("createdBy");
+  const updatedBy = searchParams.get("updatedBy");
+
   return {
     deletedAt: null,
+
     ...(query && {
       OR: [
-        { TransactionType: { contains: query, mode: "insensitive" } },
-        { Description: { contains: query, mode: "insensitive" } },
+        {
+          TransactionType: {
+            contains: query,
+            mode: "insensitive",
+          },
+        },
+        {
+          Description: {
+            contains: query,
+            mode: "insensitive",
+          },
+        },
       ],
     }),
-    ...(status === "active" ? { status: true } : {}),
-    ...(status === "inactive" ? { status: false } : {}),
-    ...((createdFrom || createdTo) && {
-      createdAt: { ...(createdFrom ? { gte: createdFrom } : {}), ...(createdTo ? { lt: createdTo } : {}) },
-    }),
-    ...((updatedFrom || updatedTo) && {
-      updatedAt: { ...(updatedFrom ? { gte: updatedFrom } : {}), ...(updatedTo ? { lt: updatedTo } : {}) },
-    }),
+
+    ...(status === "active" && { status: true }),
+    ...(status === "inactive" && { status: false }),
+
+    ...(createdFrom || createdTo
+      ? {
+          createdAt: {
+            ...(createdFrom && { gte: createdFrom }),
+            ...(createdTo && { lt: createdTo }),
+          },
+        }
+      : {}),
+
+    ...(updatedFrom || updatedTo
+      ? {
+          updatedAt: {
+            ...(updatedFrom && { gte: updatedFrom }),
+            ...(updatedTo && { lt: updatedTo }),
+          },
+        }
+      : {}),
+
+    ...(createdBy && { createby: createdBy }),
+    ...(updatedBy && { updateby: updatedBy }),
   };
 }
 
-// GET: filtered, sorted, paginated list; export=1 returns all matching records.
+// Attach Created By and Updated By user names.
+async function attachUserNames(records) {
+  if (!records.length) return [];
+
+  const userIds = [
+    ...new Set(
+      records
+        .flatMap((record) => [
+          record.createby,
+          record.updateby,
+        ])
+        .filter(Boolean)
+        .map(String),
+    ),
+  ];
+
+  const users = userIds.length
+    ? await prisma.user.findMany({
+        where: {
+          id: {
+            in: userIds,
+          },
+        },
+        select: {
+          id: true,
+          name: true,
+        },
+      })
+    : [];
+
+  const userMap = new Map(
+    users.map((user) => [String(user.id), user.name]),
+  );
+
+  return records.map((record) => ({
+    ...record,
+    createdByName: record.createby
+      ? userMap.get(String(record.createby)) || "-"
+      : "-",
+    updatedByName: record.updateby
+      ? userMap.get(String(record.updateby)) || "-"
+      : "-",
+  }));
+}
+
+// GET: filtered, sorted, paginated list; export=1 returns all records.
 export async function GET(request) {
   try {
     const accessError = await getAccessError();
+
     if (accessError) return accessError;
 
     const { searchParams } = new URL(request.url);
-    const page = Math.max(1, Number(searchParams.get("page") || 1));
-    const limit = Math.min(200, Math.max(1, Number(searchParams.get("limit") || 10)));
+
+    const page = Math.max(
+      1,
+      Number(searchParams.get("page") || 1),
+    );
+
+    const limit = Math.min(
+      200,
+      Math.max(1, Number(searchParams.get("limit") || 10)),
+    );
+
     const requestedSort = searchParams.get("sort") || "createdAt";
-    const sort = allowedSortFields.has(requestedSort) ? requestedSort : "createdAt";
+
+    const sort = allowedSortFields.has(requestedSort)
+      ? requestedSort
+      : "createdAt";
+
     const dir = searchParams.get("dir") === "asc" ? "asc" : "desc";
+
     const where = buildWhere(searchParams);
+
     const isExport = searchParams.get("export") === "1";
 
-    const [total, data] = await Promise.all([
+    const [total, records] = await Promise.all([
       prisma.transactionType.count({ where }),
+
       prisma.transactionType.findMany({
         where,
-        orderBy: { [sort]: dir },
-        ...(isExport ? {} : { skip: (page - 1) * limit, take: limit }),
+        orderBy: {
+          [sort]: dir,
+        },
+        ...(isExport
+          ? {}
+          : {
+              skip: (page - 1) * limit,
+              take: limit,
+            }),
       }),
     ]);
+
+    const data = await attachUserNames(records);
 
     return NextResponse.json({
       success: true,
       message: "Transaction Type fetched successfully.",
       data,
-      pagination: { total, page, limit: isExport ? total : limit },
+      pagination: {
+        total,
+        page,
+        limit: isExport ? total : limit,
+      },
     });
   } catch (error) {
     console.error("TRANSACTION TYPE LIST ERROR", error);
-    return NextResponse.json({ success: false, message: error.message || "Failed to fetch Transaction Type." }, { status: 500 });
+
+    return NextResponse.json(
+      {
+        success: false,
+        message:
+          error.message || "Failed to fetch Transaction Type.",
+      },
+      { status: 500 },
+    );
   }
 }
 
-// POST: create a transaction type. The Copy action uses this endpoint too.
+// POST: create a transaction type.
 export async function POST(request) {
   try {
-    // 1. Check access
     const accessError = await getAccessError();
+
     if (accessError) return accessError;
 
-    // 2. Parse request body
     let body;
 
     try {
@@ -109,7 +245,7 @@ export async function POST(request) {
       );
     }
 
-    // 3. Validate TransactionType
+    // Validate TransactionType.
     if (
       typeof body.TransactionType !== "string" ||
       !body.TransactionType.trim()
@@ -117,7 +253,8 @@ export async function POST(request) {
       return NextResponse.json(
         {
           success: false,
-          message: "Transaction Type is required and must be a valid string.",
+          message:
+            "Transaction Type is required and must be a valid string.",
         },
         { status: 400 },
       );
@@ -135,7 +272,7 @@ export async function POST(request) {
       );
     }
 
-    // 4. Validate Description
+    // Validate Description.
     if (
       body.Description !== undefined &&
       body.Description !== null &&
@@ -162,7 +299,7 @@ export async function POST(request) {
       );
     }
 
-    // 5. Validate EffectOnTransaction
+    // Validate EffectOnTransaction.
     const allowedEffects = ["addition", "deductions"];
 
     if (
@@ -175,13 +312,14 @@ export async function POST(request) {
       return NextResponse.json(
         {
           success: false,
-          message: "EffectOnTransaction must be addition or deductions.",
+          message:
+            "EffectOnTransaction must be addition or deductions.",
         },
         { status: 400 },
       );
     }
 
-    // 6. Validate status
+    // Validate status.
     if (
       body.status !== undefined &&
       typeof body.status !== "boolean"
@@ -195,7 +333,7 @@ export async function POST(request) {
       );
     }
 
-    // 7. Validate isDefault
+    // Validate isDefault.
     if (
       body.isDefault !== undefined &&
       typeof body.isDefault !== "boolean"
@@ -209,7 +347,7 @@ export async function POST(request) {
       );
     }
 
-    // 8. Validate customFields
+    // Validate customFields.
     let submittedCustomFields = {};
 
     if (body.customFields !== undefined) {
@@ -230,7 +368,7 @@ export async function POST(request) {
       submittedCustomFields = body.customFields;
     }
 
-    // 9. Authenticate user
+    // Authenticate user.
     const user = await getAuthenticatedUser();
 
     if (!user) {
@@ -243,7 +381,9 @@ export async function POST(request) {
       );
     }
 
-    // 10. Check duplicate Transaction Type name
+    const userId = String(user.id);
+
+    // Check duplicate Transaction Type.
     const existingTransactionType =
       await prisma.transactionType.findFirst({
         where: {
@@ -266,7 +406,7 @@ export async function POST(request) {
       );
     }
 
-    // 11. Create Transaction Type
+    // Create Transaction Type.
     const transactionType = await prisma.$transaction(async (tx) => {
       if (body.isDefault === true) {
         await tx.transactionType.updateMany({
@@ -277,6 +417,7 @@ export async function POST(request) {
           data: {
             isDefault: false,
             lastSyncAt: new Date(),
+            updateby: userId,
           },
         });
       }
@@ -289,30 +430,32 @@ export async function POST(request) {
           status: body.status ?? true,
           isDefault: body.isDefault ?? false,
           customFields: submittedCustomFields,
+
+          // Created By.
+          createby: userId,
+
           lastSyncAt: new Date(),
         },
       });
     });
 
-    // 12. System log
+    // System log.
     await systemLog({
       event: "create",
-      userId: String(user.id),
+      userId,
       entityId: String(transactionType.id),
       entityType: "inventory.transaction-type",
       description: `Transaction Type created: ${transactionType.TransactionType}`,
-      ipAddress:
-        request.headers
-          .get("x-forwarded-for")
-          ?.split(",")[0]
-          ?.trim() || null,
+      ipAddress: getIpAddress(request),
     });
+
+    const [data] = await attachUserNames([transactionType]);
 
     return NextResponse.json(
       {
         success: true,
         message: "Transaction Type created successfully.",
-        data: transactionType,
+        data,
       },
       { status: 201 },
     );
@@ -323,6 +466,7 @@ export async function POST(request) {
       {
         success: false,
         message: "Failed to create Transaction Type.",
+        error: error.message,
       },
       { status: 500 },
     );
@@ -332,11 +476,10 @@ export async function POST(request) {
 // PUT: update one transaction type.
 export async function PUT(request) {
   try {
-    // 1. Check access
     const accessError = await getAccessError();
+
     if (accessError) return accessError;
 
-    // 2. Parse request body
     let body;
 
     try {
@@ -351,7 +494,7 @@ export async function PUT(request) {
       );
     }
 
-    // 3. Validate ID
+    // Validate ID.
     if (
       body.id === undefined ||
       body.id === null ||
@@ -366,7 +509,7 @@ export async function PUT(request) {
       );
     }
 
-    // 4. Validate TransactionType if supplied
+    // Validate TransactionType.
     if (body.TransactionType !== undefined) {
       if (
         typeof body.TransactionType !== "string" ||
@@ -375,7 +518,8 @@ export async function PUT(request) {
         return NextResponse.json(
           {
             success: false,
-            message: "Transaction Type is required and must be a valid string.",
+            message:
+              "Transaction Type is required and must be a valid string.",
           },
           { status: 400 },
         );
@@ -392,7 +536,7 @@ export async function PUT(request) {
       }
     }
 
-    // 5. Validate Description
+    // Validate Description.
     if (
       body.Description !== undefined &&
       body.Description !== null &&
@@ -420,7 +564,7 @@ export async function PUT(request) {
       );
     }
 
-    // 6. Validate EffectOnTransaction
+    // Validate EffectOnTransaction.
     const allowedEffects = ["addition", "deductions"];
 
     if (
@@ -433,13 +577,14 @@ export async function PUT(request) {
       return NextResponse.json(
         {
           success: false,
-          message: "EffectOnTransaction must be addition or deductions.",
+          message:
+            "EffectOnTransaction must be addition or deductions.",
         },
         { status: 400 },
       );
     }
 
-    // 7. Validate status
+    // Validate status.
     if (
       body.status !== undefined &&
       typeof body.status !== "boolean"
@@ -453,7 +598,7 @@ export async function PUT(request) {
       );
     }
 
-    // 8. Validate isDefault
+    // Validate isDefault.
     if (
       body.isDefault !== undefined &&
       typeof body.isDefault !== "boolean"
@@ -467,7 +612,7 @@ export async function PUT(request) {
       );
     }
 
-    // 9. Validate customFields
+    // Validate customFields.
     if (
       body.customFields !== undefined &&
       (
@@ -485,7 +630,7 @@ export async function PUT(request) {
       );
     }
 
-    // 10. Authenticate user
+    // Authenticate user.
     const user = await getAuthenticatedUser();
 
     if (!user) {
@@ -498,9 +643,13 @@ export async function PUT(request) {
       );
     }
 
-    // 11. Check existing record
+    const userId = String(user.id);
+
+    // Check existing record.
     const existing = await prisma.transactionType.findUnique({
-      where: { id: body.id },
+      where: {
+        id: body.id,
+      },
       select: {
         customFields: true,
         deletedAt: true,
@@ -517,7 +666,7 @@ export async function PUT(request) {
       );
     }
 
-    // 12. Check duplicate TransactionType name
+    // Check duplicate TransactionType.
     if (body.TransactionType !== undefined) {
       const name = body.TransactionType.trim();
 
@@ -527,7 +676,9 @@ export async function PUT(request) {
             equals: name,
             mode: "insensitive",
           },
-          id: { not: body.id },
+          id: {
+            not: body.id,
+          },
           deletedAt: null,
         },
       });
@@ -544,11 +695,11 @@ export async function PUT(request) {
       }
     }
 
-    // 13. Merge custom fields
+    // Merge custom fields.
     const existingCustomFields =
       existing.customFields &&
-        typeof existing.customFields === "object" &&
-        !Array.isArray(existing.customFields)
+      typeof existing.customFields === "object" &&
+      !Array.isArray(existing.customFields)
         ? existing.customFields
         : {};
 
@@ -562,24 +713,30 @@ export async function PUT(request) {
       ...submittedCustomFields,
     };
 
-    // 14. Update Transaction Type
+    // Update Transaction Type.
     const updated = await prisma.$transaction(async (tx) => {
       if (body.isDefault === true) {
         await tx.transactionType.updateMany({
           where: {
-            id: { not: body.id },
+            id: {
+              not: body.id,
+            },
             isDefault: true,
             deletedAt: null,
           },
           data: {
             isDefault: false,
             lastSyncAt: new Date(),
+            updateby: userId,
           },
         });
       }
 
       const updateData = {
         lastSyncAt: new Date(),
+
+        // Updated By.
+        updateby: userId,
       };
 
       if (body.TransactionType !== undefined) {
@@ -607,29 +764,29 @@ export async function PUT(request) {
       }
 
       return tx.transactionType.update({
-        where: { id: body.id },
+        where: {
+          id: body.id,
+        },
         data: updateData,
       });
     });
 
-    // 15. System log
+    // System log.
     await systemLog({
       event: "update",
-      userId: user?.id ? String(user.id) : null,
+      userId,
       entityId: String(updated.id),
       entityType: "inventory.transaction-type",
       description: `Transaction Type updated: ${updated.TransactionType}`,
-      ipAddress:
-        request.headers
-          .get("x-forwarded-for")
-          ?.split(",")[0]
-          ?.trim() || null,
+      ipAddress: getIpAddress(request),
     });
+
+    const [data] = await attachUserNames([updated]);
 
     return NextResponse.json({
       success: true,
       message: "Transaction Type updated successfully.",
-      data: updated,
+      data,
       sync: true,
     });
   } catch (error) {
@@ -639,6 +796,7 @@ export async function PUT(request) {
       {
         success: false,
         message: "Failed to update Transaction Type.",
+        error: error.message,
       },
       { status: 500 },
     );
@@ -649,29 +807,93 @@ export async function PUT(request) {
 export async function PATCH(request) {
   try {
     const accessError = await getAccessError();
+
     if (accessError) return accessError;
+
     const body = await request.json();
-    if (typeof body.status !== "boolean") return NextResponse.json({ success: false, message: "A valid status is required." }, { status: 400 });
-    const ids = [...new Set([...(Array.isArray(body.ids) ? body.ids : []), ...(body.id ? [body.id] : [])])].filter(Boolean);
-    if (!ids.length) return NextResponse.json({ success: false, message: "Select at least one Transaction Type." }, { status: 400 });
+
+    if (typeof body.status !== "boolean") {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "A valid status is required.",
+        },
+        { status: 400 },
+      );
+    }
+
+    const ids = [
+      ...new Set([
+        ...(Array.isArray(body.ids) ? body.ids : []),
+        ...(body.id ? [body.id] : []),
+      ]),
+    ].filter(Boolean);
+
+    if (!ids.length) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Select at least one Transaction Type.",
+        },
+        { status: 400 },
+      );
+    }
+
+    const user = await getAuthenticatedUser();
+
+    if (!user) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Unauthorized. Please log in again.",
+        },
+        { status: 401 },
+      );
+    }
 
     const result = await prisma.transactionType.updateMany({
-      where: { id: { in: ids }, deletedAt: null },
-      data: { status: body.status, lastSyncAt: new Date() },
+      where: {
+        id: {
+          in: ids,
+        },
+        deletedAt: null,
+      },
+      data: {
+        status: body.status,
+        updateby: String(user.id),
+        lastSyncAt: new Date(),
+      },
     });
-    const user = await getAuthenticatedUser();
+
     await systemLog({
       event: "update",
-      userId: user?.id ? String(user.id) : null,
+      userId: String(user.id),
       entityId: ids.join(","),
       entityType: "inventory.transaction-type",
-      description: `Transaction Type status set to ${body.status ? "Active" : "Inactive"} for ${result.count} record(s)`,
-      ipAddress: request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null,
+      description: `Transaction Type status set to ${
+        body.status ? "Active" : "Inactive"
+      } for ${result.count} record(s)`,
+      ipAddress: getIpAddress(request),
     });
-    return NextResponse.json({ success: true, message: `${result.count} transaction type(s) marked ${body.status ? "active" : "inactive"}.`, count: result.count, sync: true });
+
+    return NextResponse.json({
+      success: true,
+      message: `${result.count} transaction type(s) marked ${
+        body.status ? "active" : "inactive"
+      }.`,
+      count: result.count,
+      sync: true,
+    });
   } catch (error) {
     console.error("TRANSACTION TYPE STATUS ERROR", error);
-    return NextResponse.json({ success: false, message: error.message || "Failed to update status." }, { status: 500 });
+
+    return NextResponse.json(
+      {
+        success: false,
+        message: error.message || "Failed to update status.",
+      },
+      { status: 500 },
+    );
   }
 }
 
@@ -679,28 +901,95 @@ export async function PATCH(request) {
 export async function DELETE(request) {
   try {
     const accessError = await getAccessError();
-    if (accessError) return accessError;
-    const body = await request.json();
-    const ids = [...new Set([...(Array.isArray(body.ids) ? body.ids : []), ...(body.id ? [body.id] : [])])].filter(Boolean);
-    if (!ids.length) return NextResponse.json({ success: false, message: "Transaction Type ID required." }, { status: 400 });
 
-    const records = await prisma.transactionType.findMany({ where: { id: { in: ids }, deletedAt: null }, select: { id: true, TransactionType: true } });
-    const now = new Date();
-    const result = await prisma.transactionType.updateMany({ where: { id: { in: ids }, deletedAt: null }, data: { deletedAt: now, lastSyncAt: now } });
+    if (accessError) return accessError;
+
+    const body = await request.json();
+
+    const ids = [
+      ...new Set([
+        ...(Array.isArray(body.ids) ? body.ids : []),
+        ...(body.id ? [body.id] : []),
+      ]),
+    ].filter(Boolean);
+
+    if (!ids.length) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Transaction Type ID required.",
+        },
+        { status: 400 },
+      );
+    }
+
     const user = await getAuthenticatedUser();
+
+    if (!user) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Unauthorized. Please log in again.",
+        },
+        { status: 401 },
+      );
+    }
+
+    const records = await prisma.transactionType.findMany({
+      where: {
+        id: {
+          in: ids,
+        },
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+        TransactionType: true,
+      },
+    });
+
+    const now = new Date();
+
+    const result = await prisma.transactionType.updateMany({
+      where: {
+        id: {
+          in: ids,
+        },
+        deletedAt: null,
+      },
+      data: {
+        deletedAt: now,
+        updateby: String(user.id),
+        lastSyncAt: now,
+      },
+    });
+
     for (const record of records) {
       await systemLog({
         event: "delete",
-        userId: user?.id ? String(user.id) : null,
+        userId: String(user.id),
         entityId: String(record.id),
         entityType: "inventory.transaction-type",
         description: `Transaction Type deleted: ${record.TransactionType}`,
-        ipAddress: request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null,
+        ipAddress: getIpAddress(request),
       });
     }
-    return NextResponse.json({ success: true, message: `${result.count} transaction type(s) deleted successfully.`, count: result.count, sync: true });
+
+    return NextResponse.json({
+      success: true,
+      message: `${result.count} transaction type(s) deleted successfully.`,
+      count: result.count,
+      sync: true,
+    });
   } catch (error) {
     console.error("TRANSACTION TYPE DELETE ERROR", error);
-    return NextResponse.json({ success: false, message: error.message || "Failed to delete Transaction Type." }, { status: 500 });
+
+    return NextResponse.json(
+      {
+        success: false,
+        message: error.message || "Failed to delete Transaction Type.",
+      },
+      { status: 500 },
+    );
   }
 }

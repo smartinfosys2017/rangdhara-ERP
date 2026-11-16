@@ -25,9 +25,43 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-
+import { Alert, AlertIcon, AlertTitle } from "@/components/ui/alert";
+import { RiCheckboxCircleFill, RiErrorWarningFill } from "@remixicon/react";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+
+const showSuccessToast = (message) => {
+  toast.custom(
+    () => (
+      <Alert variant="mono" icon="success">
+        <AlertIcon>
+          <RiCheckboxCircleFill />
+        </AlertIcon>
+        <AlertTitle>{message}</AlertTitle>
+      </Alert>
+    ),
+    { position: "top-center" },
+  );
+};
+
+const showErrorToast = (message) => {
+  toast.custom(
+    (t) => (
+      <Alert
+        variant="mono"
+        icon="destructive"
+        close={true}
+        onClose={() => toast.dismiss(t)}
+      >
+        <AlertIcon>
+          <RiErrorWarningFill />
+        </AlertIcon>
+        <AlertTitle>{message}</AlertTitle>
+      </Alert>
+    ),
+    { position: "top-center" },
+  );
+};
 const getToday = () => {
   const date = new Date();
   const year = date.getFullYear();
@@ -143,7 +177,7 @@ export default function IssueReceiptAddDialog({
       return Number(result.data?.PreviousBalance ?? 0);
     } catch (error) {
       console.error("PREVIOUS BALANCE ERROR", error);
-      toast.error(error.message || "Failed to fetch previous balance");
+      showErrorToast(error.message || "Failed to fetch previous balance");
       return 0;
     }
   };
@@ -276,7 +310,7 @@ export default function IssueReceiptAddDialog({
       }));
     } catch (error) {
       console.error("ISSUE/RECEIPT DROPDOWN ERROR", error);
-      toast.error(error.message || "Failed loading dropdown data");
+      showErrorToast(error.message || "Failed loading dropdown data");
     } finally {
       setDropdownLoading(false);
     }
@@ -301,7 +335,7 @@ export default function IssueReceiptAddDialog({
     }));
   };
 
-  // ITEM MASTER CHANGE
+  // ITEM CHANGE
   const handleItemMasterChange = async (value) => {
     setForm((prev) => ({
       ...prev,
@@ -371,47 +405,47 @@ export default function IssueReceiptAddDialog({
   // VALIDATION
   const validateForm = () => {
     if (!form.ItemGroupid) {
-      toast.error("Item Group is required");
+      showErrorToast("Item Group is required");
       return false;
     }
 
     if (!form.ItemMasterid) {
-      toast.error("Item Master is required");
+      showErrorToast("Item is required");
       return false;
     }
 
     if (!form.ItemTypeid) {
-      toast.error("Item Type is required");
+      showErrorToast("Item Type is required");
       return false;
     }
 
     if (!form.TransactionTypeid) {
-      toast.error("Transaction Type is required");
+      showErrorToast("Transaction Type is required");
       return false;
     }
 
     if (!form.IssueDate) {
-      toast.error("Issue Date is required");
+      showErrorToast("Issue Date is required");
       return false;
     }
 
     if (!form.Qty) {
-      toast.error("Quantity is required");
+      showErrorToast("Quantity is required");
       return false;
     }
 
     if (Number(form.Qty) <= 0) {
-      toast.error("Quantity must be greater than 0");
+      showErrorToast("Quantity must be greater than 0");
       return false;
     }
 
     if (!form.Issue_by) {
-      toast.error("Issue By is required");
+      showErrorToast("Issue By is required");
       return false;
     }
 
     if (!form.RecivedBy) {
-      toast.error("Received By is required");
+      showErrorToast("Received By is required");
       return false;
     }
 
@@ -423,7 +457,7 @@ export default function IssueReceiptAddDialog({
     if (!validateForm()) return;
 
     if (status === "loading") {
-      toast.error("Please wait while your user session loads.");
+      showErrorToast("Please wait while your user session loads.");
       return;
     }
 
@@ -454,14 +488,14 @@ export default function IssueReceiptAddDialog({
         throw new Error(result.message || "Failed creating Issue/Receipt");
       }
 
-      toast.success("Issue/Receipt created successfully");
+      showSuccessToast("Issue/Receipt created successfully");
 
       onSuccess?.(result.data);
       resetForm();
       closeDialog?.();
     } catch (error) {
       console.error("CREATE ISSUE/RECEIPT ERROR", error);
-      toast.error(error.message || "Failed creating Issue/Receipt");
+      showErrorToast(error.message || "Failed creating Issue/Receipt");
     } finally {
       setLoading(false);
     }
@@ -531,10 +565,10 @@ export default function IssueReceiptAddDialog({
                 </Select>
               </div>
 
-              {/* ITEM MASTER */}
+              {/* ITEM */}
               <div className="space-y-2">
                 <label className="text-sm font-medium">
-                  Item Master <span className="ml-1 text-destructive">*</span>
+                  Item <span className="ml-1 text-destructive">*</span>
                 </label>
 
                 <Select
@@ -543,7 +577,7 @@ export default function IssueReceiptAddDialog({
                   disabled={dropdownLoading || !form.ItemGroupid}
                 >
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select Item Master" />
+                    <SelectValue placeholder="Select Item" />
                   </SelectTrigger>
                   <SelectContent>
                     {filteredItems.map((item) => (

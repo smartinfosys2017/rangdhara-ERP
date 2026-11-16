@@ -23,7 +23,8 @@ import {
   DialogBody,
   DialogTitle,
 } from "@/components/ui/dialog";
-
+import { Alert, AlertIcon, AlertTitle } from "@/components/ui/alert";
+import { RiCheckboxCircleFill, RiErrorWarningFill } from "@remixicon/react";
 import { Input } from "@/components/ui/input";
 
 import {
@@ -36,6 +37,38 @@ import {
 
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+const showSuccessToast = (message) => {
+  toast.custom(
+    () => (
+      <Alert variant="mono" icon="success">
+        <AlertIcon>
+          <RiCheckboxCircleFill />
+        </AlertIcon>
+        <AlertTitle>{message}</AlertTitle>
+      </Alert>
+    ),
+    { position: "top-center" },
+  );
+};
+
+const showErrorToast = (message) => {
+  toast.custom(
+    (t) => (
+      <Alert
+        variant="mono"
+        icon="destructive"
+        close={true}
+        onClose={() => toast.dismiss(t)}
+      >
+        <AlertIcon>
+          <RiErrorWarningFill />
+        </AlertIcon>
+        <AlertTitle>{message}</AlertTitle>
+      </Alert>
+    ),
+    { position: "top-center" },
+  );
+};
 // =======================================================
 // GET TODAY
 // =======================================================
@@ -241,7 +274,7 @@ export default function IssueReceiptEditDialog({
     } catch (error) {
       console.error("Issue/Receipt EDIT DROPDOWN ERROR", error);
 
-      toast.error(error.message || "Failed loading dropdown data");
+      showErrorToast(error.message || "Failed loading dropdown data");
     } finally {
       setDropdownLoading(false);
     }
@@ -366,7 +399,7 @@ export default function IssueReceiptEditDialog({
   };
 
   // =====================================================
-  // ITEM MASTER CHANGE
+  // ITEM CHANGE
   // =====================================================
 
   const handleItemMasterChange = async (value) => {
@@ -413,7 +446,7 @@ export default function IssueReceiptEditDialog({
     } catch (error) {
       console.error("EDIT PREVIOUS BALANCE ERROR", error);
 
-      toast.error(error.message || "Failed to fetch previous balance");
+      showErrorToast(error.message || "Failed to fetch previous balance");
     }
   };
 
@@ -473,7 +506,7 @@ export default function IssueReceiptEditDialog({
     }
 
     if (!form.ItemMasterid) {
-      newErrors.ItemMasterid = "Item Master is required.";
+      newErrors.ItemMasterid = "Item is required.";
     }
 
     if (!form.ItemTypeid) {
@@ -505,7 +538,7 @@ export default function IssueReceiptEditDialog({
     setErrors(newErrors);
 
     if (Object.keys(newErrors).length > 0) {
-      toast.error("Please complete required fields.");
+      showErrorToast("Please complete required fields.");
       return false;
     }
 
@@ -518,7 +551,7 @@ export default function IssueReceiptEditDialog({
 
   const handleSave = async () => {
     if (status === "loading") {
-      toast.error("Please wait while your user session loads.");
+      showErrorToast("Please wait while your user session loads.");
       return;
     }
 
@@ -527,7 +560,7 @@ export default function IssueReceiptEditDialog({
     }
 
     if (!form.id) {
-      toast.error("Issue/Receipt ID is missing.");
+      showErrorToast("Issue/Receipt ID is missing.");
       return;
     }
 
@@ -591,7 +624,7 @@ export default function IssueReceiptEditDialog({
         throw new Error(result.message || "Failed to update Issue/Receipt.");
       }
 
-      toast.success("Issue/Receipt updated successfully.");
+      showSuccessToast("Issue/Receipt updated successfully.");
 
       onSuccess?.(result.data);
 
@@ -601,7 +634,7 @@ export default function IssueReceiptEditDialog({
     } catch (error) {
       console.error("Issue/Receipt UPDATE ERROR:", error);
 
-      toast.error(error.message || "Unable to update Issue/Receipt.");
+      showErrorToast(error.message || "Unable to update Issue/Receipt.");
     } finally {
       setLoading(false);
     }
@@ -702,10 +735,10 @@ export default function IssueReceiptEditDialog({
                 )}
               </div>
 
-              {/* ITEM MASTER */}
+              {/* ITEM */}
               <div className="space-y-2">
                 <label className="text-sm font-medium">
-                  Item Master
+                  Item
                   <span className="ml-1 text-destructive">*</span>
                 </label>
 
@@ -715,7 +748,7 @@ export default function IssueReceiptEditDialog({
                   disabled={loading || dropdownLoading || !form.ItemGroupid}
                 >
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select Item Master" />
+                    <SelectValue placeholder="Select Item" />
                   </SelectTrigger>
 
                   <SelectContent>

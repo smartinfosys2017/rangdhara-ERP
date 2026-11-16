@@ -30,9 +30,10 @@ import {
 } from "@/components/ui/select";
 
 import { Checkbox } from "@/components/ui/checkbox";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 import { apiFetch } from "@/lib/api";
-import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+
 export default function ItemMasterEditDialog({
   open,
   closeDialog,
@@ -44,7 +45,11 @@ export default function ItemMasterEditDialog({
   const [itemGroups, setItemGroups] = useState([]);
   const [units, setUnits] = useState([]);
   const [taxes, setTaxes] = useState([]);
+  const [locations, setLocations] = useState([]);
+  const [machines, setMachines] = useState([]);
+
   const [errors, setErrors] = useState({});
+
   const [form, setForm] = useState({
     id: "",
     ItemGroupid: "",
@@ -55,6 +60,8 @@ export default function ItemMasterEditDialog({
     rather: "",
     Tax1: "",
     Tax2: "",
+    Locationid: "",
+    Machineid: "",
     ApplicableForRelocateLevel: false,
     RelocateLevel: "",
     status: true,
@@ -72,7 +79,6 @@ export default function ItemMasterEditDialog({
           <AlertIcon>
             <RiCheckboxCircleFill />
           </AlertIcon>
-
           <AlertTitle>{message}</AlertTitle>
         </Alert>
       ),
@@ -89,14 +95,11 @@ export default function ItemMasterEditDialog({
           variant="mono"
           icon="destructive"
           close={true}
-          onClose={() => {
-            toast.dismiss(t);
-          }}
+          onClose={() => toast.dismiss(t)}
         >
           <AlertIcon>
             <RiErrorWarningFill />
           </AlertIcon>
-
           <AlertTitle>{message}</AlertTitle>
         </Alert>
       ),
@@ -116,6 +119,47 @@ export default function ItemMasterEditDialog({
     }
   }, [open]);
 
+  const loadDropdowns = async () => {
+    try {
+      const [groupRes, unitRes, taxRes, locationRes, machineRes] =
+        await Promise.all([
+          apiFetch("/api/inventory/item-groups?limit=100&status=active"),
+          apiFetch("/api/inventory/unit?limit=100&status=active"),
+          apiFetch("/api/finance/tax_rates?status=active"),
+          apiFetch("/api/inventory/location?limit=100&status=active"),
+          apiFetch("/api/inventory/machine-master?limit=100&status=active"),
+        ]);
+
+      const [groupsData, unitsData, taxData, locationsData, machinesData] =
+        await Promise.all([
+          groupRes.json(),
+          unitRes.json(),
+          taxRes.json(),
+          locationRes.json(),
+          machineRes.json(),
+        ]);
+
+      setItemGroups(groupsData.data || []);
+      setUnits(unitsData.data || []);
+      setTaxes(taxData.data || []);
+
+      setLocations(
+        (locationsData.data || []).filter(
+          (location) => location.status === true && !location.deletedAt,
+        ),
+      );
+
+      setMachines(
+        (machinesData.data || []).filter(
+          (machine) => machine.status === true && !machine.deletedAt,
+        ),
+      );
+    } catch (error) {
+      console.error("LOAD ITEM DROPDOWNS ERROR", error);
+      showErrorToast("Failed to load dropdown data.");
+    }
+  };
+
   // ============================
   // LOAD ITEM DATA
   // ============================
@@ -123,61 +167,30 @@ export default function ItemMasterEditDialog({
   useEffect(() => {
     if (ItemMaster) {
       setForm({
-        id: ItemMaster.id,
-
-        ItemGroupid: ItemMaster.ItemGroupid || "",
-
+        id: ItemMaster.id || "",
+        ItemGroupid: String(ItemMaster.ItemGroupid || ""),
         ItemName: ItemMaster.ItemName || "",
-
         Description: ItemMaster.Description || "",
+        openingBalance: ItemMaster.openingBalance ?? "",
+        Unitid: String(ItemMaster.Unitid || ""),
+        rather: ItemMaster.rather ?? "",
+        Tax1: String(ItemMaster.Tax1 || ""),
+        Tax2: String(ItemMaster.Tax2 || ""),
 
-        openingBalance: ItemMaster.openingBalance || "",
-
-        Unitid: ItemMaster.Unitid || "",
-
-        rather: ItemMaster.rather || "",
-
-        Tax1: ItemMaster.Tax1 || "",
-
-        Tax2: ItemMaster.Tax2 || "",
+        Locationid: String(ItemMaster.Locationid || ""),
+        Machineid: String(ItemMaster.Machineid || ""),
 
         ApplicableForRelocateLevel:
-          ItemMaster.ApplicableForRelocateLevel || false,
+          ItemMaster.ApplicableForRelocateLevel ?? false,
 
         RelocateLevel: ItemMaster.RelocateLevel || "",
-
         status: ItemMaster.status ?? true,
-
         isDefault: ItemMaster.isDefault ?? false,
       });
+
+      setErrors({});
     }
   }, [ItemMaster]);
-
-  // ============================
-  // LOAD DROPDOWNS
-  // ============================
-
-  const loadDropdowns = async () => {
-    try {
-      const [groupRes, unitRes, taxRes] = await Promise.all([
-        apiFetch("/api/inventory/item-groups?limit=100&status=active"),
-
-        apiFetch("/api/inventory/unit?limit=100&status=active"),
-
-        apiFetch("/api/finance/tax_rates?status=active"),
-      ]);
-
-      const groups = await groupRes.json();
-      const unitsData = await unitRes.json();
-      const taxData = await taxRes.json();
-
-      setItemGroups(groups.data || []);
-      setUnits(unitsData.data || []);
-      setTaxes(taxData.data || []);
-    } catch (error) {
-      console.error("LOAD ITEM MASTER DROPDOWNS ERROR", error);
-    }
-  };
 
   // ============================
   // UPDATE FIELD
@@ -188,11 +201,17 @@ export default function ItemMasterEditDialog({
       ...prev,
       [key]: value,
     }));
+
     setErrors((prev) => ({
       ...prev,
       [key]: "",
     }));
   };
+
+  // ============================
+  // VALIDATION
+  // ============================
+
   const validate = () => {
     const newErrors = {};
 
@@ -204,19 +223,21 @@ export default function ItemMasterEditDialog({
     }
 
     if (!ItemName) {
-      newErrors.ItemName = "item name is required.";
+      newErrors.ItemName = "Item Name is required.";
     } else if (ItemName.length > 255) {
-      newErrors.ItemName = "item name must not exceed 255 characters.";
+      newErrors.ItemName = "Item Name must not exceed 255 characters.";
     }
 
     if (!form.Unitid) {
-      newErrors.Unitid = "unit is required.";
+      newErrors.Unitid = "Unit is required.";
     }
+
     if (form.ApplicableForRelocateLevel && !form.RelocateLevel?.trim()) {
       newErrors.RelocateLevel = "Restock Level is required.";
     }
+
     if (Description.length > 255) {
-      newErrors.Description = "description must not exceed 255 characters.";
+      newErrors.Description = "Description must not exceed 255 characters.";
     }
 
     setErrors(newErrors);
@@ -234,9 +255,8 @@ export default function ItemMasterEditDialog({
   // ============================
 
   const handleSubmit = async () => {
-    if (!validate()) {
-      return;
-    }
+    if (!validate()) return;
+
     try {
       setLoading(true);
 
@@ -252,11 +272,19 @@ export default function ItemMasterEditDialog({
 
           ItemName: form.ItemName.trim(),
 
+          Description: form.Description.trim(),
+
+          openingBalance: String(form.openingBalance ?? ""),
+
           rather: Number(form.rather || 0),
 
           Tax1: String(form.Tax1 || ""),
 
           Tax2: String(form.Tax2 || ""),
+
+          Locationid: form.Locationid || null,
+
+          Machineid: form.Machineid || null,
 
           status: form.status ?? true,
 
@@ -270,24 +298,12 @@ export default function ItemMasterEditDialog({
         throw new Error(result?.message || "Update failed");
       }
 
-      // ============================
-      // SUCCESS TOAST
-      // ============================
-
-      // showSuccessToast(
-      //   result?.data?.ItemName
-      //     ? `Item "${result.data.ItemName}" updated successfully`
-      //     : "Item updated successfully",
-      // );
-
-      // Send updated item to parent.
-      // Parent handles notification API,
-      // refresh and inventory sync.
+      // Parent handles notification, refresh and inventory sync.
       onSuccess?.(result.data);
 
       closeDialog?.();
     } catch (error) {
-      console.error("UPDATE ITEM MASTER ERROR", error);
+      console.error("UPDATE ITEM ERROR", error);
 
       showErrorToast(
         error?.message || "Something went wrong while updating the item.",
@@ -296,6 +312,10 @@ export default function ItemMasterEditDialog({
       setLoading(false);
     }
   };
+
+  // ============================
+  // RENDER
+  // ============================
 
   return (
     <Dialog
@@ -310,15 +330,19 @@ export default function ItemMasterEditDialog({
         <div className="flex flex-col h-full max-h-[90vh] overflow-hidden">
           <DialogHeader>
             <DialogTitle>Edit Item</DialogTitle>
-
-            <DialogDescription>Update inventory item details.</DialogDescription>
+            <DialogDescription>
+              Update inventory item details.
+            </DialogDescription>
           </DialogHeader>
+
           <ScrollArea className="grow min-h-0 flex flex-col h-full max-h-[90vh] overflow-hidden">
             <DialogBody className="space-y-6 pt-0 px-0 min-h-0">
               {/* ITEM GROUP */}
 
               <div>
-                <label>Item Group <span className="text-destructive">*</span></label>
+                <label>
+                  Item Group <span className="text-destructive">*</span>
+                </label>
 
                 <Select
                   value={form.ItemGroupid}
@@ -329,7 +353,6 @@ export default function ItemMasterEditDialog({
                   </SelectTrigger>
 
                   <SelectContent>
-                    <SelectItem value="all">All Groups</SelectItem>
                     {itemGroups.map((item) => (
                       <SelectItem key={item.id} value={String(item.id)}>
                         {item.groupName}
@@ -337,6 +360,7 @@ export default function ItemMasterEditDialog({
                     ))}
                   </SelectContent>
                 </Select>
+
                 {errors.ItemGroupid && (
                   <p className="mt-1 text-sm text-destructive">
                     {errors.ItemGroupid}
@@ -347,12 +371,15 @@ export default function ItemMasterEditDialog({
               {/* ITEM NAME */}
 
               <div>
-                <label>Item Name<span className="text-destructive">*</span></label>
+                <label>
+                  Item Name <span className="text-destructive">*</span>
+                </label>
 
                 <Input
                   value={form.ItemName}
                   onChange={(e) => updateField("ItemName", e.target.value)}
                 />
+
                 {errors.ItemName && (
                   <p className="mt-1 text-sm text-destructive">
                     {errors.ItemName}
@@ -367,7 +394,9 @@ export default function ItemMasterEditDialog({
               {/* UNIT */}
 
               <div>
-                <label>Unit <span className="text-destructive">*</span></label>
+                <label>
+                  Unit (Abbreviation) <span className="text-destructive">*</span>
+                </label>
 
                 <Select
                   value={form.Unitid}
@@ -385,11 +414,66 @@ export default function ItemMasterEditDialog({
                     ))}
                   </SelectContent>
                 </Select>
+
                 {errors.Unitid && (
                   <p className="mt-1 text-sm text-destructive">
                     {errors.Unitid}
                   </p>
                 )}
+              </div>
+
+              {/* LOCATION */}
+
+              <div>
+                <label>Location</label>
+
+                <Select
+                  value={form.Locationid || "none"}
+                  onValueChange={(value) =>
+                    updateField("Locationid", value === "none" ? "" : value)
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select Location" />
+                  </SelectTrigger>
+
+                  <SelectContent>
+                    <SelectItem value="none">No Location</SelectItem>
+
+                    {locations.map((location) => (
+                      <SelectItem key={location.id} value={String(location.id)}>
+                        {location.locationName} ({location.locationCode})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* MACHINE */}
+
+              <div>
+                <label>Machine</label>
+
+                <Select
+                  value={form.Machineid || "none"}
+                  onValueChange={(value) =>
+                    updateField("Machineid", value === "none" ? "" : value)
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select Machine" />
+                  </SelectTrigger>
+
+                  <SelectContent>
+                    <SelectItem value="none">No Machine</SelectItem>
+
+                    {machines.map((machine) => (
+                      <SelectItem key={machine.id} value={String(machine.id)}>
+                        {machine.machineName} ({machine.machineCode})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               {/* OPENING BALANCE */}
@@ -398,8 +482,11 @@ export default function ItemMasterEditDialog({
                 <label>Opening Balance</label>
 
                 <Input
+                  type="number"
                   value={form.openingBalance}
-                  onChange={(e) => updateField("openingBalance", e.target.value)}
+                  onChange={(e) =>
+                    updateField("openingBalance", e.target.value)
+                  }
                 />
               </div>
 
@@ -410,6 +497,8 @@ export default function ItemMasterEditDialog({
 
                 <Input
                   type="number"
+                  min="0"
+                  step="any"
                   value={form.rather}
                   onChange={(e) => updateField("rather", e.target.value)}
                 />
@@ -468,10 +557,10 @@ export default function ItemMasterEditDialog({
               {/* DESCRIPTION */}
 
               <div>
-                <label className="text-sm font-medium">Description </label>
+                <label className="text-sm font-medium">Description</label>
 
                 <Textarea
-                  value={form.Description || ""}
+                  value={form.Description}
                   maxLength={255}
                   onChange={(e) => updateField("Description", e.target.value)}
                   placeholder="Enter description"
@@ -479,6 +568,7 @@ export default function ItemMasterEditDialog({
                   aria-invalid={!!errors.Description}
                   className={errors.Description ? "border-destructive" : ""}
                 />
+
                 {errors.Description && (
                   <p className="mt-1 text-sm text-destructive">
                     {errors.Description}
@@ -505,12 +595,17 @@ export default function ItemMasterEditDialog({
 
               {form.ApplicableForRelocateLevel && (
                 <div>
-                  <label>Restock Level <span className="text-destructive">*</span></label>
+                  <label>
+                    Restock Level <span className="text-destructive">*</span>
+                  </label>
 
                   <Input
                     value={form.RelocateLevel}
-                    onChange={(e) => updateField("RelocateLevel", e.target.value)}
+                    onChange={(e) =>
+                      updateField("RelocateLevel", e.target.value)
+                    }
                   />
+
                   {errors.RelocateLevel && (
                     <p className="text-sm text-destructive">
                       {errors.RelocateLevel}
@@ -518,14 +613,19 @@ export default function ItemMasterEditDialog({
                   )}
                 </div>
               )}
+
               {/* STATUS */}
 
               <div>
-                <label>Status <span className="text-destructive">*</span></label>
+                <label>
+                  Status <span className="text-destructive">*</span>
+                </label>
 
                 <Select
                   value={String(form.status)}
-                  onValueChange={(value) => updateField("status", value === "true")}
+                  onValueChange={(value) =>
+                    updateField("status", value === "true")
+                  }
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -533,7 +633,6 @@ export default function ItemMasterEditDialog({
 
                   <SelectContent>
                     <SelectItem value="true">Active</SelectItem>
-
                     <SelectItem value="false">Inactive</SelectItem>
                   </SelectContent>
                 </Select>
@@ -542,7 +641,9 @@ export default function ItemMasterEditDialog({
               {/* DEFAULT */}
 
               <div>
-                <label>Default Item <span className="text-destructive">*</span></label>
+                <label>
+                  Default Item <span className="text-destructive">*</span>
+                </label>
 
                 <Select
                   value={String(form.isDefault)}
@@ -556,7 +657,6 @@ export default function ItemMasterEditDialog({
 
                   <SelectContent>
                     <SelectItem value="true">Yes</SelectItem>
-
                     <SelectItem value="false">No</SelectItem>
                   </SelectContent>
                 </Select>
@@ -564,9 +664,10 @@ export default function ItemMasterEditDialog({
             </DialogBody>
           </ScrollArea>
           <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={closeDialog} disabled={loading} >
+            <Button variant="outline" onClick={closeDialog} disabled={loading}>
               Cancel
             </Button>
+
             <Button disabled={loading} onClick={handleSubmit}>
               {loading ? "Updating..." : "Update"}
             </Button>

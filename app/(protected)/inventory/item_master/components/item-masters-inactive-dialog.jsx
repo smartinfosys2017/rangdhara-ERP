@@ -30,13 +30,13 @@ const ItemMastersInactiveDialog = ({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <XCircle className="size-5 text-red-600" />
-            Mark Item Masters Inactive
+            Mark Items Inactive
           </DialogTitle>
 
           <DialogDescription>
             Are you sure you want to mark{" "}
             <strong className="text-foreground">
-              {selectedCount} item master
+              {selectedCount} item
               {selectedCount !== 1 ? "s" : ""}
             </strong>{" "}
             as inactive?

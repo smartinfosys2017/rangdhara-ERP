@@ -149,7 +149,7 @@ const createItemMasterNotification = async ({
 
     return result;
   } catch (error) {
-    console.error("ITEM MASTER NOTIFICATION ERROR", error);
+    console.error("ITEM NOTIFICATION ERROR", error);
     return null;
   }
 };
@@ -277,7 +277,7 @@ export default function ItemMasterList() {
       window.dispatchEvent(new CustomEvent("notifications-refresh"));
       return result;
     } catch (error) {
-      console.error("ITEM MASTER SYNC ERROR", error);
+      console.error("ITEM SYNC ERROR", error);
       showErrorToast(error?.message || "Inventory sync failed");
       return null;
     } finally {
@@ -397,7 +397,7 @@ export default function ItemMasterList() {
     const result = await response.json().catch(() => ({}));
 
     if (!response.ok || !result.success) {
-      throw new Error(result?.message || "Failed to load Item Master.");
+      throw new Error(result?.message || "Failed to load Item.");
     }
 
     return result;
@@ -518,7 +518,7 @@ export default function ItemMasterList() {
       toast.dismiss("item-master-export");
       showSuccessToast(`${items.length} item(s) exported`);
     } catch (error) {
-      console.error("ITEM MASTER EXPORT ERROR", error);
+      console.error("ITEM EXPORT ERROR", error);
       toast.dismiss("item-master-export");
       showErrorToast(error.message || "Excel export failed");
     }
@@ -580,7 +580,7 @@ export default function ItemMasterList() {
       <!doctype html>
       <html>
         <head>
-          <title>Item Master Report</title>
+          <title>Item Report</title>
           <meta charset="utf-8">
           <style>
             body { font-family: Arial, sans-serif; padding: 24px; color: #222; }
@@ -594,7 +594,7 @@ export default function ItemMasterList() {
           </style>
         </head>
         <body>
-          <h1>Item Master Report</h1>
+          <h1>Item Report</h1>
           <p>Generated: ${escapeHtml(new Date().toLocaleString())}</p>
           <p>Total records: ${items.length}</p>
           <table>
@@ -618,7 +618,7 @@ export default function ItemMasterList() {
       printWindow.document.close();
     } catch (error) {
       printWindow.close();
-      console.error("ITEM MASTER PRINT ERROR", error);
+      console.error("ITEM PRINT ERROR", error);
       showErrorToast(error.message || "Unable to prepare print report");
     }
   }, [getItemMasterReportRows]);
@@ -731,7 +731,7 @@ export default function ItemMasterList() {
       await refreshItemMasters();
       await syncInventoryItemMasters();
     } catch (error) {
-      console.error("DELETE ITEM MASTER ERROR", error);
+      console.error("DELETE ITEM ERROR", error);
       showErrorToast(
         error?.message || "Something went wrong while deleting the item.",
       );
@@ -900,7 +900,7 @@ export default function ItemMasterList() {
       await refreshItemMasters();
       await syncInventoryItemMasters();
     } catch (error) {
-      console.error("ITEM MASTER COPY ERROR", error);
+      console.error("ITEM COPY ERROR", error);
       showErrorToast(error.message || "Copy failed.");
     } finally {
       setCopyLoading(false);
@@ -936,7 +936,7 @@ export default function ItemMasterList() {
         await refreshItemMasters();
         await syncInventoryItemMasters();
       } catch (error) {
-        console.error("ITEM MASTER STATUS ERROR", error);
+        console.error("ITEM STATUS ERROR", error);
         showErrorToast(error.message || "Status update failed");
       }
     },
@@ -1138,13 +1138,13 @@ export default function ItemMasterList() {
   const handleOpenEmailDialog = useCallback(() => {
     setSelectedRecipientEmails([]);
     setAttachExcel(true);
-    setEmailSubject("Item Master Report");
+    setEmailSubject("Item Report");
 
     setEmailMessage(
       [
         "Dear Team,",
         "",
-        "Please find the Item Master report for your review.",
+        "Please find the Item report for your review.",
         "",
         "The report includes the item name, description, rate, status, default setting, and creation and update dates.",
         "",
@@ -1356,7 +1356,7 @@ export default function ItemMasterList() {
         accessorKey: "Unitid",
         id: "Unitid",
         header: ({ column }) => (
-          <DataGridColumnHeader title="Unit Measure" column={column} visibility />
+          <DataGridColumnHeader title="Unit (Abbreviation)" column={column} visibility />
         ),
         cell: ({ row }) => (
           <span>{row.original?.UnitName || row.original?.unitName || "-"}</span>
@@ -1365,7 +1365,7 @@ export default function ItemMasterList() {
         enableSorting: true,
         enableHiding: true,
         meta: {
-          headerTitle: "Unit Measure",
+          headerTitle: "Unit (Abbreviation)",
           skeleton: <Skeleton className="h-7 w-24" />,
         },
       },
@@ -1373,7 +1373,7 @@ export default function ItemMasterList() {
         accessorKey: "groupName",
         id: "groupName",
         header: ({ column }) => (
-          <DataGridColumnHeader title="Group Name" column={column} visibility />
+          <DataGridColumnHeader title="Item Group" column={column} visibility />
         ),
         cell: ({ row }) => (
           <span>{row.original.GroupName || row.original?.GroupName || "-"}</span>
@@ -1382,7 +1382,7 @@ export default function ItemMasterList() {
         enableSorting: true,
         enableHiding: true,
         meta: {
-          headerTitle: "Group Name",
+          headerTitle: "Item Group",
           skeleton: <Skeleton className="h-7 w-28" />,
         },
       },
@@ -1754,34 +1754,34 @@ export default function ItemMasterList() {
           <div className="flex w-full items-center gap-2 sm:w-auto">
             <div className="relative flex-1 sm:w-[250px] sm:flex-none">
               <form
-              onSubmit={handleSearch}
-              className="flex w-full flex-col gap-2 sm:flex-row xl:max-w-2xl"
-            >
-              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                onSubmit={handleSearch}
+                className="flex w-full flex-col gap-2 sm:flex-row xl:max-w-2xl"
+              >
+                <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
 
-              <Input
-                type="text"
-                placeholder="Search item master"
-                value={searchInput}
-                onChange={(event) => setSearchInput(event.target.value)}
-                className="w-full pl-9 pr-9"
-                autoComplete="off"
-              />
+                <Input
+                  type="text"
+                  placeholder="Search item"
+                  value={searchInput}
+                  onChange={(event) => setSearchInput(event.target.value)}
+                  className="w-full pl-9 pr-9"
+                  autoComplete="off"
+                />
 
-              {searchInput.length > 0 && (
-                <button
-                  type="button"
-                  aria-label="Clear search input"
-                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:text-foreground"
-                  onClick={() => {
-                    setSearchInput("");
-                    setSearchQuery("");
-                    setPagination((prev) => ({ ...prev, pageIndex: 0 }));
-                  }}
-                >
-                  <X className="size-4" />
-                </button>
-              )}
+                {searchInput.length > 0 && (
+                  <button
+                    type="button"
+                    aria-label="Clear search input"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:text-foreground"
+                    onClick={() => {
+                      setSearchInput("");
+                      setSearchQuery("");
+                      setPagination((prev) => ({ ...prev, pageIndex: 0 }));
+                    }}
+                  >
+                    <X className="size-4" />
+                  </button>
+                )}
               </form>
             </div>
 
@@ -1796,7 +1796,7 @@ export default function ItemMasterList() {
               </TooltipTrigger>
 
               <TooltipContent>
-                <p>Search by item name, group name, description, unit of measure.</p>
+                <p>Search by item name,item group, description, unit of measure.</p>
               </TooltipContent>
             </Tooltip>
           </div>
@@ -1860,7 +1860,9 @@ export default function ItemMasterList() {
               {dbStatus.loading
                 ? "Checking..."
                 : dbStatus.online && isOnline
-                  ? `${String(dbStatus.env || "Database").toUpperCase()}`
+                  ? String(dbStatus.env || "Database")
+                    .toLowerCase()
+                    .replace(/\b\w/g, (char) => char.toUpperCase())
                   : "Offline"}
             </span>
 
@@ -1936,7 +1938,7 @@ export default function ItemMasterList() {
           <div>
             <h3 className="text-lg font-semibold">Access Denied</h3>
             <p className="mt-1 text-sm text-muted-foreground">
-              You do not have permission to view Item Master.
+              You do not have permission to view Item.
             </p>
           </div>
         </CardHeader>
@@ -2078,9 +2080,9 @@ export default function ItemMasterList() {
             }}
           >
             <DialogHeader className="px-6 pt-6 pb-4 shrink-0">
-              <DialogTitle>Email Item Master</DialogTitle>
+              <DialogTitle>Email Item</DialogTitle>
               <DialogDescription>
-                Select recipients and send the item master report.
+                Select recipients and send the item report.
               </DialogDescription>
             </DialogHeader>
 

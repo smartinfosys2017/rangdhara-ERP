@@ -36,7 +36,7 @@ const ItemMastersActiveDialog = ({
           <DialogDescription>
             Are you sure you want to mark{" "}
             <strong className="text-foreground">
-              {selectedCount} item master
+              {selectedCount} item
               {selectedCount !== 1 ? "s" : ""}
             </strong>{" "}
             as active?

@@ -28,9 +28,41 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-
+import { Alert, AlertIcon, AlertTitle } from "@/components/ui/alert";
+import { RiCheckboxCircleFill, RiErrorWarningFill } from "@remixicon/react";
 import TransactionCustomFields from "./transaction-custom-fields";
+const showSuccessToast = (message) => {
+  toast.custom(
+    () => (
+      <Alert variant="mono" icon="success">
+        <AlertIcon>
+          <RiCheckboxCircleFill />
+        </AlertIcon>
+        <AlertTitle>{message}</AlertTitle>
+      </Alert>
+    ),
+    { position: "top-center" },
+  );
+};
 
+const showErrorToast = (message) => {
+  toast.custom(
+    (t) => (
+      <Alert
+        variant="mono"
+        icon="destructive"
+        close={true}
+        onClose={() => toast.dismiss(t)}
+      >
+        <AlertIcon>
+          <RiErrorWarningFill />
+        </AlertIcon>
+        <AlertTitle>{message}</AlertTitle>
+      </Alert>
+    ),
+    { position: "top-center" },
+  );
+};
 // =======================================================
 // EMPTY FORM
 // =======================================================
@@ -154,7 +186,7 @@ export default function TransactionTypeEditDialog({
     setErrors(newErrors);
 
     if (Object.keys(newErrors).length > 0) {
-      toast.error("Please check the required fields and character limits.");
+      showErrorToast("Please check the required fields and character limits.");
       return false;
     }
 
@@ -203,7 +235,7 @@ export default function TransactionTypeEditDialog({
         throw new Error(result.message || "Failed to update Transaction Type.");
       }
 
-      toast.success("Transaction Type updated successfully.");
+      showSuccessToast("Transaction Type updated successfully.");
 
       onSuccess?.(result.data);
 
@@ -211,7 +243,7 @@ export default function TransactionTypeEditDialog({
     } catch (error) {
       console.error("TRANSACTION TYPE UPDATE ERROR", error);
 
-      toast.error(error.message || "Unable to update Transaction Type.");
+      showErrorToast(error.message || "Unable to update Transaction Type.");
     }
   };
 
@@ -313,7 +345,7 @@ export default function TransactionTypeEditDialog({
 
               <div>
                 <label className="mb-2 block text-sm font-medium">
-                  Effect On Transaction
+                  Effect On Transaction <span className="text-destructive">*</span>
                 </label>
 
                 <Select
@@ -337,7 +369,7 @@ export default function TransactionTypeEditDialog({
               {/* STATUS */}
 
               <div>
-                <label className="mb-2 block text-sm font-medium">Status</label>
+                <label className="mb-2 block text-sm font-medium">Status <span className="text-destructive">*</span></label>
 
                 <Select
                   value={form.status}
@@ -359,7 +391,7 @@ export default function TransactionTypeEditDialog({
 
               <div>
                 <label className="mb-2 block text-sm font-medium">
-                  Default Transaction Type
+                  Default Transaction Type <span className="text-destructive">*</span>
                 </label>
 
                 <Select

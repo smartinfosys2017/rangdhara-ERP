@@ -49,7 +49,7 @@ export default function EmployeeChecklistDetails({
         try {
             setLoading(true);
 
-            // 1. Fetch master checklist
+            // 1. Fetch checklist
             let checklistResponse = await apiFetch(
                 "/api/hr/Checklist?status=true"
             );
@@ -59,7 +59,7 @@ export default function EmployeeChecklistDetails({
                 checklistResponse = await checklistResponse.json();
             }
 
-            console.log("Raw Master API Response:", checklistResponse);
+            console.log("Raw API Response:", checklistResponse);
 
             // Handle direct and nested response formats
             const masterItems = Array.isArray(checklistResponse?.data)
@@ -99,7 +99,7 @@ export default function EmployeeChecklistDetails({
                 ])
             );
 
-            // 4. Create final list using master checklist
+            // 4. Create final list using checklist
             const finalChecklistItems = masterItems.map((item) => {
                 const savedDetail = savedDetailsMap.get(item.id);
 
@@ -115,7 +115,7 @@ export default function EmployeeChecklistDetails({
             // 5. Update UI
             setChecklistItems(finalChecklistItems);
 
-            console.log("Master Checklist:", masterItems);
+            console.log("Checklist:", masterItems);
             console.log("Employee Checklist:", savedDetails);
             console.log("Final Checklist:", finalChecklistItems);
 
@@ -246,8 +246,7 @@ export default function EmployeeChecklistDetails({
                             </p>
 
                             <p className="mt-1 text-sm text-muted-foreground">
-                                Add active checklist items in the Checklist
-                                Master to display them here.
+                                Add active checklist items in the Checklist to display them here.
                             </p>
                         </div>
                     ) : (

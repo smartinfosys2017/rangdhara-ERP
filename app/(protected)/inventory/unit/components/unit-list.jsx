@@ -194,10 +194,6 @@ const formatDate = (value) => {
     : date.toLocaleDateString();
 };
 
-const generateUnitAbbreviation = () => {
-  return `UNIT-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
-};
-
 // =======================================================
 // COMPONENT
 // =======================================================
@@ -632,7 +628,7 @@ const UnitList = () => {
   const downloadUnitExcel = useCallback(
     (items, filename = "units.xlsx") => {
       if (!items.length) {
-        toast.error("No units to export");
+        showError("No units to export");
         return false;
       }
 
@@ -652,7 +648,7 @@ const UnitList = () => {
       const items = await getUnitReportRows();
 
       if (!items.length) {
-        toast.error("No units to export", {
+        showError("No units to export", {
           id: "unit-export",
         });
 
@@ -677,7 +673,7 @@ const UnitList = () => {
       const items = await getUnitReportRows();
 
       if (!items.length) {
-        toast.error("No units to print");
+        showError("No units to print");
         return;
       }
 
@@ -701,7 +697,7 @@ const UnitList = () => {
       const printWindow = window.open("", "_blank", "width=1200,height=800");
 
       if (!printWindow) {
-        toast.error("Please allow pop-ups to print the report");
+        showError("Please allow pop-ups to print the report");
         return;
       }
 
@@ -924,9 +920,10 @@ const UnitList = () => {
     async (item) => {
       try {
         const originalName = String(item.unitName || "").trim();
+        const originalAbbreviation = String(item.abbreviation || "").trim();
 
         if (!originalName) {
-          toast.error("Unit name is missing.");
+          showError("Unit name is missing.");
           return;
         }
 
@@ -944,6 +941,7 @@ const UnitList = () => {
           ),
         );
 
+        // Generate unique copied unit name
         let copiedName = `${originalName} (Copy)`;
         let counter = 2;
 
@@ -952,12 +950,19 @@ const UnitList = () => {
           counter++;
         }
 
-        let copiedAbbreviation = generateUnitAbbreviation();
+        // Generate unique copied abbreviation
+        let copiedAbbreviation = originalAbbreviation
+          ? `${originalAbbreviation} (Copy)`
+          : "";
+
+        let abbreviationCounter = 2;
 
         while (
+          copiedAbbreviation &&
           existingAbbreviations.has(copiedAbbreviation.toLowerCase())
         ) {
-          copiedAbbreviation = generateUnitAbbreviation();
+          copiedAbbreviation = `${originalAbbreviation} (Copy ${abbreviationCounter})`;
+          abbreviationCounter++;
         }
 
         setCopySourceItem(item);
@@ -974,7 +979,7 @@ const UnitList = () => {
 
   const handleConfirmCopyUnit = useCallback(async () => {
     if (!copySourceItem?.id) {
-      toast.error("Please select a unit to copy.");
+      showError("Please select a unit to copy.");
       return;
     }
 
@@ -982,12 +987,12 @@ const UnitList = () => {
     const finalAbbreviation = copyAbbreviation.trim();
 
     if (!finalName || !finalAbbreviation) {
-      toast.error("Unit name and abbreviation are required.");
+      showError("Unit name and abbreviation are required.");
       return;
     }
 
     if (finalName.length > 255 || finalAbbreviation.length > 25) {
-      toast.error("Unit name or abbreviation exceeds the allowed character limit.");
+      showError("Unit name or abbreviation exceeds the allowed character limit.");
       return;
     }
 
@@ -1073,7 +1078,7 @@ const UnitList = () => {
   const handleToggleUnitStatus = useCallback(
     async (item) => {
       if (!(canManage || canEdit)) {
-        toast.error("You do not have permission to change unit status");
+        showError("You do not have permission to change unit status");
         return;
       }
 
@@ -1119,12 +1124,12 @@ const UnitList = () => {
   const handleBulkStatus = useCallback(
     async (status) => {
       if (!selectedIds.length) {
-        toast.error("Select at least one unit");
+        showError("Select at least one unit");
         return;
       }
 
       if (!(canManage || canEdit)) {
-        toast.error("You do not have permission to change unit status");
+        showError("You do not have permission to change unit status");
         return;
       }
 
@@ -1177,12 +1182,12 @@ const UnitList = () => {
 
   const handleBulkDelete = useCallback(() => {
     if (!selectedIds.length) {
-      toast.error("Select at least one unit");
+      showError("Select at least one unit");
       return;
     }
 
     if (!canDelete) {
-      toast.error("You do not have permission to delete units");
+      showError("You do not have permission to delete units");
       return;
     }
 
@@ -1309,12 +1314,12 @@ const UnitList = () => {
 
   const handleSendEmail = useCallback(async () => {
     if (!selectedRecipientEmails.length) {
-      toast.error("Please select at least one recipient.");
+      showError("Please select at least one recipient.");
       return;
     }
 
     if (!emailSubject.trim() || !emailMessage.trim()) {
-      toast.error("Please enter the email subject and message.");
+      showError("Please enter the email subject and message.");
       return;
     }
 
@@ -1925,20 +1930,21 @@ const UnitList = () => {
           aria-live="polite"
         >
           <span
-            className={`size-2.5 shrink-0 rounded-full ${
-              dbStatus.loading
-                ? "animate-pulse bg-yellow-500"
-                : dbStatus.online && isOnline
-                  ? "bg-green-500"
-                  : "bg-red-500"
-            }`}
+            className={`size-2.5 shrink-0 rounded-full ${dbStatus.loading
+              ? "animate-pulse bg-yellow-500"
+              : dbStatus.online && isOnline
+                ? "bg-green-500"
+                : "bg-red-500"
+              }`}
           />
 
           <span className="text-xs font-medium">
             {dbStatus.loading
               ? "Checking..."
               : dbStatus.online && isOnline
-                ? String(dbStatus.env || "Database").toUpperCase()
+                ? String(dbStatus.env || "Database")
+                  .toLowerCase()
+                  .replace(/\b\w/g, (char) => char.toUpperCase())
                 : "Offline"}
           </span>
 
@@ -2438,17 +2444,17 @@ const UnitList = () => {
                           setSelectedRecipientEmails((previous) =>
                             checked === true
                               ? [
-                                  ...new Set([
-                                    ...previous,
-                                    ...staffList.map((person) => person.email),
-                                  ]),
-                                ]
+                                ...new Set([
+                                  ...previous,
+                                  ...staffList.map((person) => person.email),
+                                ]),
+                              ]
                               : previous.filter(
-                                  (email) =>
-                                    !staffList.some(
-                                      (person) => person.email === email,
-                                    ),
-                                ),
+                                (email) =>
+                                  !staffList.some(
+                                    (person) => person.email === email,
+                                  ),
+                              ),
                           );
                         }}
                       />
@@ -2487,14 +2493,14 @@ const UnitList = () => {
                                     setSelectedRecipientEmails((previous) =>
                                       checked === true
                                         ? [
-                                            ...new Set([
-                                              ...previous,
-                                              person.email,
-                                            ]),
-                                          ]
+                                          ...new Set([
+                                            ...previous,
+                                            person.email,
+                                          ]),
+                                        ]
                                         : previous.filter(
-                                            (email) => email !== person.email,
-                                          ),
+                                          (email) => email !== person.email,
+                                        ),
                                     );
                                   }}
                                 />

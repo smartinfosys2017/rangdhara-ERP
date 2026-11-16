@@ -22,8 +22,8 @@ import {
 import MachineMasterList from "./components/machine-master-list";
 
 export const metadata = {
-  title: "Machine Master",
-  description: "Manage Machine Master.",
+  title: "Machine",
+  description: "Manage Machine.",
 };
 
 export default async function Page() {
@@ -37,7 +37,7 @@ export default async function Page() {
       {/* <Container>
         <Toolbar>
           <ToolbarHeading>
-            <ToolbarTitle>Machine Master</ToolbarTitle>
+            <ToolbarTitle>Machine</ToolbarTitle>
 
             <Breadcrumb>
               <BreadcrumbList>
@@ -52,7 +52,7 @@ export default async function Page() {
 
                 <BreadcrumbSeparator />
                 <BreadcrumbItem>
-                  <BreadcrumbPage>Machine Master</BreadcrumbPage>
+                  <BreadcrumbPage>Machine</BreadcrumbPage>
                 </BreadcrumbItem>
               </BreadcrumbList>
             </Breadcrumb>

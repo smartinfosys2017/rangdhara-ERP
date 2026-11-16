@@ -30,13 +30,13 @@ const ItemGroupsInactiveDialog = ({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <XCircle className="size-5 text-red-600" />
-            Mark Machine Masters No
+            Mark Machine No
           </DialogTitle>
 
           <DialogDescription>
             Are you sure you want to mark{" "}
             <strong className="text-foreground">
-              {selectedCount} machine master
+              {selectedCount} machine
               {selectedCount !== 1 ? "s" : ""}
             </strong>{" "}
             as no?

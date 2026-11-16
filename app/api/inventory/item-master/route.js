@@ -54,11 +54,11 @@ const getDateRange = (from, to) => {
     range:
       start || end
         ? {
-            ...(start ? { gte: start } : {}),
-            ...(end
-              ? { lt: new Date(end.getTime() + 24 * 60 * 60 * 1000) }
-              : {}),
-          }
+          ...(start ? { gte: start } : {}),
+          ...(end
+            ? { lt: new Date(end.getTime() + 24 * 60 * 60 * 1000) }
+            : {}),
+        }
         : undefined,
   };
 };
@@ -73,7 +73,7 @@ const matchesName = (value, search) => {
 };
 
 // ======================================================
-// BUILD ITEM MASTER WHERE CONDITIONS
+// BUILD ITEM WHERE CONDITIONS
 // ======================================================
 
 const getItemMasterWhere = (searchParams, options = {}) => {
@@ -314,13 +314,13 @@ const logItemMaster = async ({
     userId: String(user.id),
     entityId: String(itemMaster.id),
     entityType: ENTITY_TYPE,
-    description: `Item Master ${action}: ${itemMaster.ItemName}`,
+    description: `Item ${action}: ${itemMaster.ItemName}`,
     ipAddress: getClientIp(request),
   });
 };
 
 // ======================================================
-// GET ITEM MASTER LIST
+// GET ITEM LIST
 // ======================================================
 
 export async function GET(request) {
@@ -438,43 +438,43 @@ export async function GET(request) {
     // Global search: unit name
     const searchUnitIds = query
       ? units
-          .filter((unit) =>
-            matchesName(
-              unit.unitName || unit.name || unit.abbreviation,
-              query,
-            ),
-          )
-          .map((unit) => unit.id)
+        .filter((unit) =>
+          matchesName(
+            unit.unitName || unit.name || unit.abbreviation,
+            query,
+          ),
+        )
+        .map((unit) => unit.id)
       : [];
 
     // Global search: group name
     const searchGroupIds = query
       ? itemGroups
-          .filter((group) =>
-            matchesName(group.groupName || group.name, query),
-          )
-          .map((group) => group.id)
+        .filter((group) =>
+          matchesName(group.groupName || group.name, query),
+        )
+        .map((group) => group.id)
       : [];
 
     // Unit name filter
     const unitIds = unitName
       ? units
-          .filter((unit) =>
-            matchesName(
-              unit.unitName || unit.name || unit.abbreviation,
-              unitName,
-            ),
-          )
-          .map((unit) => unit.id)
+        .filter((unit) =>
+          matchesName(
+            unit.unitName || unit.name || unit.abbreviation,
+            unitName,
+          ),
+        )
+        .map((unit) => unit.id)
       : undefined;
 
     // Group name filter
     const groupNameIds = groupName
       ? itemGroups
-          .filter((group) =>
-            matchesName(group.groupName || group.name, groupName),
-          )
-          .map((group) => group.id)
+        .filter((group) =>
+          matchesName(group.groupName || group.name, groupName),
+        )
+        .map((group) => group.id)
       : undefined;
 
     // Created by / Updated by - same user IDs as Unit API
@@ -488,7 +488,7 @@ export async function GET(request) {
     ) {
       return NextResponse.json({
         success: true,
-        message: "Item Master fetched successfully.",
+        message: "Item fetched successfully.",
         data: [],
         pagination: {
           total: 0,
@@ -527,7 +527,7 @@ export async function GET(request) {
     // ======================================================
 
     if (restockLevelMin !== null && restockLevelMin !== "" ||
-        restockLevelMax !== null && restockLevelMax !== "") {
+      restockLevelMax !== null && restockLevelMax !== "") {
       const min =
         restockLevelMin !== null && restockLevelMin !== ""
           ? Number(restockLevelMin)
@@ -593,8 +593,9 @@ export async function GET(request) {
     const unitMap = new Map(
       units.map((unit) => [
         String(unit.id),
-        unit.unitName || unit.name || unit.abbreviation || "-",
-      ]),
+        `${unit.unitName || unit.name || "-"}${unit.abbreviation ? ` (${unit.abbreviation})` : ""
+        }`,
+      ])
     );
 
     // Item group map
@@ -618,16 +619,16 @@ export async function GET(request) {
     // Fetch users - same as Unit API
     const users = userIds.length
       ? await prisma.user.findMany({
-          where: {
-            id: {
-              in: userIds,
-            },
+        where: {
+          id: {
+            in: userIds,
           },
-          select: {
-            id: true,
-            name: true,
-          },
-        })
+        },
+        select: {
+          id: true,
+          name: true,
+        },
+      })
       : [];
 
     // User ID-to-name map
@@ -655,7 +656,7 @@ export async function GET(request) {
 
     return NextResponse.json({
       success: true,
-      message: "Item Master fetched successfully.",
+      message: "Item fetched successfully.",
       data,
       pagination: {
         total,
@@ -665,12 +666,12 @@ export async function GET(request) {
       },
     });
   } catch (error) {
-    console.error("ITEM MASTER GET ERROR:", error);
+    console.error("ITEM GET ERROR:", error);
 
     return NextResponse.json(
       {
         success: false,
-        message: error.message || "Failed to fetch Item Master.",
+        message: error.message || "Failed to fetch Item.",
       },
       { status: 500 },
     );
@@ -678,7 +679,7 @@ export async function GET(request) {
 }
 
 // ======================================================
-// CREATE ITEM MASTER (ALSO USED BY COPY)
+// CREATE ITEM (ALSO USED BY COPY)
 // ======================================================
 
 export async function POST(request) {
@@ -702,6 +703,58 @@ export async function POST(request) {
     const user = await getAuthenticatedUser();
     if (!user) return unauthorized();
 
+    // Location and Machine IDs
+    const Locationid = body.Locationid || null;
+    const Machineid = body.Machineid || null;
+
+    // Validate selected Location
+    if (Locationid) {
+      const location = await prisma.location.findFirst({
+        where: {
+          id: Locationid,
+          status: true,
+          deletedAt: null,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      if (!location) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Selected Location is invalid or inactive.",
+          },
+          { status: 400 },
+        );
+      }
+    }
+
+    // Validate selected Machine
+    if (Machineid) {
+      const machine = await prisma.machineMaster.findFirst({
+        where: {
+          id: Machineid,
+          status: true,
+          deletedAt: null,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      if (!machine) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Selected Machine is invalid or inactive.",
+          },
+          { status: 400 },
+        );
+      }
+    }
+
     const item = await prisma.$transaction(async (tx) => {
       if (body.isDefault === true) {
         await tx.itemMaster.updateMany({
@@ -711,6 +764,8 @@ export async function POST(request) {
           },
           data: {
             isDefault: false,
+            updateby: String(user.id),
+            lastSyncAt: new Date(),
           },
         });
       }
@@ -718,11 +773,15 @@ export async function POST(request) {
       return tx.itemMaster.create({
         data: {
           ...buildItemData(body),
+
           ItemName,
+
+          Locationid,
+          Machineid,
+
           status: body.status ?? true,
           isDefault: body.isDefault ?? false,
 
-          // Same as Unit API
           createby: String(user.id),
           updateby: String(user.id),
 
@@ -740,26 +799,22 @@ export async function POST(request) {
 
     return NextResponse.json({
       success: true,
-      message: "Item Master created successfully.",
+      message: "Item created successfully.",
       data: item,
       sync: true,
     });
   } catch (error) {
-    console.error("ITEM MASTER CREATE ERROR:", error);
+    console.error("ITEM CREATE ERROR:", error);
 
     return NextResponse.json(
       {
         success: false,
-        message: error.message || "Failed to create Item Master.",
+        message: error.message || "Failed to create Item.",
       },
       { status: 500 },
     );
   }
 }
-
-// ======================================================
-// UPDATE ITEM MASTER
-// ======================================================
 
 export async function PUT(request) {
   try {
@@ -772,7 +827,7 @@ export async function PUT(request) {
       return NextResponse.json(
         {
           success: false,
-          message: "Item Master ID required.",
+          message: "Item ID required.",
         },
         { status: 400 },
       );
@@ -795,7 +850,7 @@ export async function PUT(request) {
       return NextResponse.json(
         {
           success: false,
-          message: "Item Master not found.",
+          message: "Item not found.",
         },
         { status: 404 },
       );
@@ -806,6 +861,66 @@ export async function PUT(request) {
       updateby: String(user.id),
       lastSyncAt: new Date(),
     };
+
+    // Update Location only when provided
+    if (body.Locationid !== undefined) {
+      const Locationid = body.Locationid || null;
+
+      if (Locationid) {
+        const location = await prisma.location.findFirst({
+          where: {
+            id: Locationid,
+            status: true,
+            deletedAt: null,
+          },
+          select: {
+            id: true,
+          },
+        });
+
+        if (!location) {
+          return NextResponse.json(
+            {
+              success: false,
+              message: "Selected Location is invalid or inactive.",
+            },
+            { status: 400 },
+          );
+        }
+      }
+
+      updateData.Locationid = Locationid;
+    }
+
+    // Update Machine only when provided
+    if (body.Machineid !== undefined) {
+      const Machineid = body.Machineid || null;
+
+      if (Machineid) {
+        const machine = await prisma.machineMaster.findFirst({
+          where: {
+            id: Machineid,
+            status: true,
+            deletedAt: null,
+          },
+          select: {
+            id: true,
+          },
+        });
+
+        if (!machine) {
+          return NextResponse.json(
+            {
+              success: false,
+              message: "Selected Machine is invalid or inactive.",
+            },
+            { status: 400 },
+          );
+        }
+      }
+
+      updateData.Machineid = Machineid;
+    }
 
     if (body.ItemName !== undefined) {
       const ItemName = body.ItemName?.trim();
@@ -833,6 +948,8 @@ export async function PUT(request) {
           },
           data: {
             isDefault: false,
+            updateby: String(user.id),
+            lastSyncAt: new Date(),
           },
         });
       }
@@ -854,17 +971,17 @@ export async function PUT(request) {
 
     return NextResponse.json({
       success: true,
-      message: "Item Master updated successfully.",
+      message: "Item updated successfully.",
       data: updated,
       sync: true,
     });
   } catch (error) {
-    console.error("ITEM MASTER UPDATE ERROR:", error);
+    console.error("ITEM UPDATE ERROR:", error);
 
     return NextResponse.json(
       {
         success: false,
-        message: error.message || "Failed to update Item Master.",
+        message: error.message || "Failed to update Item.",
       },
       { status: 500 },
     );
@@ -872,7 +989,7 @@ export async function PUT(request) {
 }
 
 // ======================================================
-// PATCH ITEM MASTER STATUS
+// PATCH ITEM STATUS
 // Supports { id, status } and { ids: [], status }
 // ======================================================
 
@@ -960,7 +1077,7 @@ export async function PATCH(request) {
       sync: true,
     });
   } catch (error) {
-    console.error("ITEM MASTER STATUS UPDATE ERROR:", error);
+    console.error("ITEM STATUS UPDATE ERROR:", error);
 
     return NextResponse.json(
       {
@@ -973,7 +1090,7 @@ export async function PATCH(request) {
 }
 
 // ======================================================
-// DELETE ITEM MASTER(S) - SOFT DELETE
+// DELETE ITEM - SOFT DELETE
 // Supports { id } and { ids: [] }
 // ======================================================
 
@@ -1046,18 +1163,18 @@ export async function DELETE(request) {
       success: true,
       message:
         deleteResult.count === 1
-          ? "Item Master deleted successfully."
+          ? "Item deleted successfully."
           : `${deleteResult.count} item(s) deleted successfully.`,
       count: deleteResult.count,
       sync: true,
     });
   } catch (error) {
-    console.error("ITEM MASTER DELETE ERROR:", error);
+    console.error("ITEM DELETE ERROR:", error);
 
     return NextResponse.json(
       {
         success: false,
-        message: error.message || "Failed to delete Item Master.",
+        message: error.message || "Failed to delete Item.",
       },
       { status: 500 },
     );

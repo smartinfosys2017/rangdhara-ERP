@@ -30,13 +30,13 @@ const ItemGroupsActiveDialog = ({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <CheckCircle className="size-5 text-green-600" />
-            Mark Machine Master Yes
+            Mark Machine Yes
           </DialogTitle>
 
           <DialogDescription>
             Are you sure you want to mark{" "}
             <strong className="text-foreground">
-              {selectedCount} machine master
+              {selectedCount} machine
               {selectedCount !== 1 ? "s" : ""}
             </strong>{" "}
             as yes?

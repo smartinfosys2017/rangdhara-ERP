@@ -32,9 +32,42 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-
+import { Alert, AlertIcon, AlertTitle } from "@/components/ui/alert";
+import { RiCheckboxCircleFill, RiErrorWarningFill } from "@remixicon/react";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+const showSuccessToast = (message) => {
+  toast.custom(
+    () => (
+      <Alert variant="mono" icon="success">
+        <AlertIcon>
+          <RiCheckboxCircleFill />
+        </AlertIcon>
+        <AlertTitle>{message}</AlertTitle>
+      </Alert>
+    ),
+    { position: "top-center" },
+  );
+};
+
+const showErrorToast = (message) => {
+  toast.custom(
+    (t) => (
+      <Alert
+        variant="mono"
+        icon="destructive"
+        close={true}
+        onClose={() => toast.dismiss(t)}
+      >
+        <AlertIcon>
+          <RiErrorWarningFill />
+        </AlertIcon>
+        <AlertTitle>{message}</AlertTitle>
+      </Alert>
+    ),
+    { position: "top-center" },
+  );
+};
 const getToday = () => {
   const date = new Date();
   const year = date.getFullYear();
@@ -155,7 +188,7 @@ export default function IssueReceiptAddDialog({
       return Number(result.data?.PreviousBalance ?? 0);
     } catch (error) {
       console.error("PREVIOUS BALANCE ERROR", error);
-      toast.error(error.message || "Failed to fetch previous balance");
+      showErrorToast(error.message || "Failed to fetch previous balance");
       return 0;
     }
   };
@@ -288,7 +321,7 @@ export default function IssueReceiptAddDialog({
       }));
     } catch (error) {
       console.error("Issue/Receipt DROPDOWN ERROR", error);
-      toast.error(error.message || "Failed loading dropdown data");
+      showErrorToast(error.message || "Failed loading dropdown data");
     } finally {
       setDropdownLoading(false);
     }
@@ -319,7 +352,7 @@ export default function IssueReceiptAddDialog({
     }));
   };
 
-  // ITEM MASTER CHANGE
+  // ITEM CHANGE
   const handleItemMasterChange = async (value) => {
     setForm((prev) => ({
       ...prev,
@@ -393,7 +426,7 @@ export default function IssueReceiptAddDialog({
 
     const requiredFields = [
       ["ItemGroupid", "Item Group"],
-      ["ItemMasterid", "Item Master"],
+      ["ItemMasterid", "Item"],
       ["ItemTypeid", "Item Type"],
       ["TransactionTypeid", "Transaction Type"],
       ["IssueDate", "Date"],
@@ -446,7 +479,7 @@ export default function IssueReceiptAddDialog({
     setErrors(newErrors);
 
     if (Object.keys(newErrors).length > 0) {
-      toast.error("Please correct the highlighted fields.");
+      showErrorToast("Please correct the highlighted fields.");
       return false;
     }
 
@@ -459,7 +492,7 @@ export default function IssueReceiptAddDialog({
     if (!validateForm()) return;
 
     if (status === "loading") {
-      toast.error("Please wait while your user session loads.");
+      showErrorToast("Please wait while your user session loads.");
       return;
     }
 
@@ -490,14 +523,14 @@ export default function IssueReceiptAddDialog({
         throw new Error(result.message || "Failed creating Issue/Receipt");
       }
 
-      toast.success("Issue/Receipt created successfully");
+      showSuccessToast("Issue/Receipt created successfully");
 
       onSuccess?.(result.data);
       resetForm();
       closeDialog?.();
     } catch (error) {
       console.error("CREATE Issue/Receipt ERROR", error);
-      toast.error(error.message || "Failed creating Issue/Receipt");
+      showErrorToast(error.message || "Failed creating Issue/Receipt");
     } finally {
       setLoading(false);
     }
@@ -570,10 +603,10 @@ export default function IssueReceiptAddDialog({
                 )}
               </div>
 
-              {/* ITEM MASTER */}
+              {/* ITEM */}
               <div className="space-y-2">
                 <label className="text-sm font-medium">
-                  Item Master <span className="ml-1 text-destructive">*</span>
+                  Item <span className="ml-1 text-destructive">*</span>
                 </label>
 
                 <Select
@@ -582,7 +615,7 @@ export default function IssueReceiptAddDialog({
                   disabled={dropdownLoading || filteredItems.length === 0}
                 >
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select Item Master" />
+                    <SelectValue placeholder="Select Item" />
                   </SelectTrigger>
                   <SelectContent>
                     {filteredItems.map((item) => (

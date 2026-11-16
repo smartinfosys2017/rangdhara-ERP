@@ -185,7 +185,7 @@ export async function POST(request) {
             );
         }
 
-        // Verify all checklist master items exist and are active
+        // Verify all checklist items exist and are active
         const validChecklistItems = await prisma.checklistItem.findMany({
             where: {
                 id: {

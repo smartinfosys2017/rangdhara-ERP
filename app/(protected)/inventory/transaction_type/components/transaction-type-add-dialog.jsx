@@ -29,9 +29,41 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-
+import { Alert, AlertIcon, AlertTitle } from "@/components/ui/alert";
+import { RiCheckboxCircleFill, RiErrorWarningFill } from "@remixicon/react";
 import TransactionCustomFields from "./transaction-custom-fields";
+const showSuccessToast = (message) => {
+  toast.custom(
+    () => (
+      <Alert variant="mono" icon="success">
+        <AlertIcon>
+          <RiCheckboxCircleFill />
+        </AlertIcon>
+        <AlertTitle>{message}</AlertTitle>
+      </Alert>
+    ),
+    { position: "top-center" },
+  );
+};
 
+const showErrorToast = (message) => {
+  toast.custom(
+    (t) => (
+      <Alert
+        variant="mono"
+        icon="destructive"
+        close={true}
+        onClose={() => toast.dismiss(t)}
+      >
+        <AlertIcon>
+          <RiErrorWarningFill />
+        </AlertIcon>
+        <AlertTitle>{message}</AlertTitle>
+      </Alert>
+    ),
+    { position: "top-center" },
+  );
+};
 const DEFAULT_FORM = {
   TransactionType: "",
   Description: "",
@@ -93,7 +125,7 @@ export default function TransactionTypeAddDialog({
     setErrors(newErrors);
 
     if (Object.keys(newErrors).length > 0) {
-      toast.error("Please check the required fields and character limits.");
+      showErrorToast("Please check the required fields and character limits.");
       return false;
     }
 
@@ -132,7 +164,7 @@ export default function TransactionTypeAddDialog({
         );
       }
 
-      toast.success("Transaction Type added successfully.");
+      showSuccessToast("Transaction Type added successfully.");
 
       onSuccess?.(result.data);
 
@@ -140,7 +172,7 @@ export default function TransactionTypeAddDialog({
     } catch (error) {
       console.error("TRANSACTION TYPE CREATE ERROR", error);
 
-      toast.error(error?.message || "Failed to add Transaction Type.");
+      showErrorToast(error?.message || "Failed to add Transaction Type.");
     }
   };
 
@@ -220,7 +252,7 @@ export default function TransactionTypeAddDialog({
 
               <div>
                 <label className="mb-2 block text-sm font-medium">
-                  Effect On Transaction
+                  Effect On Transaction <span className="text-destructive">*</span>
                 </label>
 
                 <Select
@@ -242,7 +274,7 @@ export default function TransactionTypeAddDialog({
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium">Status</label>
+                <label className="mb-2 block text-sm font-medium">Status <span className="text-destructive">*</span></label>
 
                 <Select
                   value={form.status}
@@ -262,7 +294,7 @@ export default function TransactionTypeAddDialog({
 
               <div>
                 <label className="mb-2 block text-sm font-medium">
-                  Default Transaction Type
+                  Default Transaction Type <span className="text-destructive">*</span>
                 </label>
 
                 <Select

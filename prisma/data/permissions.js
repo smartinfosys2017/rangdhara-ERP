@@ -842,26 +842,26 @@ const permissions = [
         description: 'Permission to delete items.',
     },
 
-    // Item Master
+    // Item
     {
         slug: 'item_master.view',
-        name: 'View Item Master',
-        description: 'Permission to view item master records.',
+        name: 'View Item',
+        description: 'Permission to view item records.',
     },
     {
         slug: 'item_master.manage',
-        name: 'Manage Item Master',
-        description: 'Permission to create and manage item master records.',
+        name: 'Manage Item',
+        description: 'Permission to create and manage item records.',
     },
     {
         slug: 'item_master.edit',
-        name: 'Edit Item Master',
-        description: 'Permission to edit item master records.',
+        name: 'Edit Item',
+        description: 'Permission to edit item records.',
     },
     {
         slug: 'item_master.delete',
-        name: 'Delete Item Master',
-        description: 'Permission to delete item master records.',
+        name: 'Delete Item',
+        description: 'Permission to delete item records.',
     },
 
     // Issue/Receipt

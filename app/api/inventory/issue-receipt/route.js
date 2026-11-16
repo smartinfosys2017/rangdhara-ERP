@@ -703,7 +703,7 @@ export async function POST(request) {
       return NextResponse.json(
         {
           success: false,
-          message: "Item Master is required",
+          message: "Item is required",
         },
         { status: 400 },
       );
@@ -1066,7 +1066,7 @@ export async function PUT(request) {
       return NextResponse.json(
         {
           success: false,
-          message: "Item Master is required",
+          message: "Item is required",
         },
         { status: 400 },
       );

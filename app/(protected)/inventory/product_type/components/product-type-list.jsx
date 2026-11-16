@@ -36,6 +36,8 @@ import { DataGrid } from "@/components/ui/data-grid";
 import { DataGridColumnHeader } from "@/components/ui/data-grid-column-header";
 import { DataGridPagination } from "@/components/ui/data-grid-pagination";
 import { DataGridTable } from "@/components/ui/data-grid-table";
+import { Alert, AlertIcon, AlertTitle } from "@/components/ui/alert";
+import { RiCheckboxCircleFill, RiErrorWarningFill } from "@remixicon/react";
 import {
   Dialog,
   DialogContent,
@@ -69,6 +71,38 @@ import { StoreClientFiltersSheet } from "./sheet/filters-sheet";
 import ProductTypesActiveDialog from "./product-types-active-dialog";
 import ProductTypesInactiveDialog from "./product-types-inactive-dialog";
 import ProductTypesDeleteDialog from "./product-types-delete-dialog";
+const showSuccessToast = (message) => {
+  toast.custom(
+    () => (
+      <Alert variant="mono" icon="success">
+        <AlertIcon>
+          <RiCheckboxCircleFill />
+        </AlertIcon>
+        <AlertTitle>{message}</AlertTitle>
+      </Alert>
+    ),
+    { position: "top-center" },
+  );
+};
+
+const showErrorToast = (message) => {
+  toast.custom(
+    (t) => (
+      <Alert
+        variant="mono"
+        icon="destructive"
+        close={true}
+        onClose={() => toast.dismiss(t)}
+      >
+        <AlertIcon>
+          <RiErrorWarningFill />
+        </AlertIcon>
+        <AlertTitle>{message}</AlertTitle>
+      </Alert>
+    ),
+    { position: "top-center" },
+  );
+};
 
 const createProductTypeNotification = async ({
   action,
@@ -264,7 +298,7 @@ const ProductTypeList = () => {
       return result;
     } catch (error) {
       console.error("Item Condition SYNC ERROR", error);
-      toast.error(error.message || "Inventory sync failed");
+      showErrorToast(error.message || "Inventory sync failed");
       return null;
     } finally {
       syncingRef.current = false;
@@ -557,7 +591,7 @@ const ProductTypeList = () => {
   const downloadProductTypeExcel = useCallback(
     (items, filename = "item-conditions.xlsx") => {
       if (!items.length) {
-        toast.error("No item condition to export");
+        showErrorToast("No item condition to export");
         return false;
       }
 
@@ -576,23 +610,17 @@ const ProductTypeList = () => {
       const items = await getProductTypeReportRows();
 
       if (!items.length) {
-        toast.error("No item condition to export", {
-          id: "product-type-export",
-        });
+        showErrorToast("No item condition to export");
         return;
       }
 
       downloadProductTypeExcel(items);
 
-      toast.success(`${items.length} item condition(s) exported`, {
-        id: "product-type-export",
-      });
+      showSuccessToast(`${items.length} item condition(s) exported`);
     } catch (error) {
       console.error("Item Condition EXPORT ERROR", error);
 
-      toast.error(error.message || "Excel export failed", {
-        id: "product-type-export",
-      });
+      showErrorToast(error.message || "Excel export failed");
     }
   }, [getProductTypeReportRows, downloadProductTypeExcel]);
 
@@ -601,7 +629,7 @@ const ProductTypeList = () => {
       const items = await getProductTypeReportRows();
 
       if (!items.length) {
-        toast.error("No item condition to print");
+        showErrorToast("No item condition to print");
         return;
       }
 
@@ -625,7 +653,7 @@ const ProductTypeList = () => {
       const printWindow = window.open("", "_blank", "width=1200,height=800");
 
       if (!printWindow) {
-        toast.error("Please allow pop-ups to print the report");
+        showErrorToast("Please allow pop-ups to print the report");
         return;
       }
 
@@ -704,7 +732,7 @@ const ProductTypeList = () => {
       printWindow.document.close();
     } catch (error) {
       console.error("Item Condition PRINT ERROR", error);
-      toast.error(error.message || "Unable to prepare print report");
+      showErrorToast(error.message || "Unable to prepare print report");
     }
   }, [getProductTypeReportRows]);
 
@@ -756,7 +784,7 @@ const ProductTypeList = () => {
 
         if (!cancelled) {
           setStaffList([]);
-          toast.error(error.message || "Unable to load staff recipients");
+          showErrorToast(error.message || "Unable to load staff recipients");
         }
       } finally {
         if (!cancelled) setStaffLoading(false);
@@ -883,12 +911,12 @@ const ProductTypeList = () => {
   ]);
   const handleSendEmail = async () => {
     if (!selectedRecipientEmails.length) {
-      toast.error("Please select at least one recipient.");
+      showErrorToast("Please select at least one recipient.");
       return;
     }
 
     if (!emailSubject.trim() || !emailMessage.trim()) {
-      toast.error("Please enter the email subject and message.");
+      showErrorToast("Please enter the email subject and message.");
       return;
     }
 
@@ -925,7 +953,7 @@ const ProductTypeList = () => {
         );
       }
 
-      toast.success(
+      showSuccessToast(
         attachExcel
           ? "Email sent successfully with the Excel attachment."
           : "Email sent successfully.",
@@ -935,7 +963,7 @@ const ProductTypeList = () => {
     } catch (error) {
       console.error("Item Condition EMAIL ERROR", error);
 
-      toast.error(error.message || "Unable to send email.");
+      showErrorToast(error.message || "Unable to send email.");
     } finally {
       setEmailSending(false);
     }
@@ -970,7 +998,7 @@ const ProductTypeList = () => {
         throw new Error(result.message || "Delete failed");
       }
 
-      toast.success("Item Condition deleted successfully");
+      showSuccessToast("Item Condition deleted successfully");
 
       await createProductTypeNotification({
         action: "deleted",
@@ -990,7 +1018,7 @@ const ProductTypeList = () => {
       await syncInventoryProductType();
     } catch (error) {
       console.error("Item Condition  DELETE ERROR", error);
-      toast.error(error.message || "Delete failed");
+      showErrorToast(error.message || "Delete failed");
     } finally {
       setDeleteLoading(false);
     }
@@ -1029,7 +1057,7 @@ const ProductTypeList = () => {
         const originalName = String(item.ProductType || "").trim();
 
         if (!originalName) {
-          toast.error("The original item condition name is empty.");
+          showErrorToast("The original item condition name is empty.");
           return;
         }
 
@@ -1049,7 +1077,7 @@ const ProductTypeList = () => {
         setCopyDialogOpen(true);
       } catch (error) {
         console.error("OPEN COPY DIALOG ERROR", error);
-        toast.error(error.message || "Unable to open copy dialog.");
+        showErrorToast(error.message || "Unable to open copy dialog.");
       }
     },
     [getExistingProductTypeNames],
@@ -1057,14 +1085,14 @@ const ProductTypeList = () => {
 
   const handleConfirmCopyProductType = useCallback(async () => {
     if (!copySourceItem?.id) {
-      toast.error("Please select an item condition to copy.");
+      showErrorToast("Please select an item condition to copy.");
       return;
     }
 
     const finalName = copyProductType.trim();
 
     if (!finalName) {
-      toast.error("Please enter an item condition name.");
+      showErrorToast("Please enter an item condition name.");
       return;
     }
 
@@ -1074,7 +1102,7 @@ const ProductTypeList = () => {
       const existingNames = await getExistingProductTypeNames();
 
       if (existingNames.has(finalName.toLowerCase())) {
-        toast.error("This item condition already exists. Please use another name.");
+        showErrorToast("This item condition already exists. Please use another name.");
         return;
       }
 
@@ -1098,7 +1126,7 @@ const ProductTypeList = () => {
 
       const createdItem = result.data || {};
 
-      toast.success("Item Condition copied successfully.");
+      showSuccessToast("Item Condition copied successfully.");
 
       await createProductTypeNotification({
         action: "created",
@@ -1117,7 +1145,7 @@ const ProductTypeList = () => {
       await syncInventoryProductType();
     } catch (error) {
       console.error("Item Condition COPY ERROR", error);
-      toast.error(error.message || "Copy failed.");
+      showErrorToast(error.message || "Copy failed.");
     } finally {
       setCopyLoading(false);
     }
@@ -1150,7 +1178,7 @@ const ProductTypeList = () => {
           throw new Error(result.message || "Status update failed");
         }
 
-        toast.success(
+        showSuccessToast(
           `${getProductTypeName(item)} marked ${nextStatus ? "active" : "inactive"}`,
         );
 
@@ -1158,7 +1186,7 @@ const ProductTypeList = () => {
         await syncInventoryProductType();
       } catch (error) {
         console.error("Item Condition STATUS ERROR", error);
-        toast.error(error.message || "Status update failed");
+        showErrorToast(error.message || "Status update failed");
       }
     },
     [refreshProductTypes, syncInventoryProductType],
@@ -1167,12 +1195,12 @@ const ProductTypeList = () => {
   const handleBulkStatus = useCallback(
     async (status) => {
       if (!selectedIds.length) {
-        toast.error("Select at least one item condition");
+        showErrorToast("Select at least one item condition");
         return;
       }
 
       if (!(canManage || canEdit)) {
-        toast.error("You do not have permission to change item condition status");
+        showErrorToast("You do not have permission to change item condition status");
         return;
       }
 
@@ -1199,7 +1227,7 @@ const ProductTypeList = () => {
           );
         }
 
-        toast.success(
+        showSuccessToast(
           `${result.count ?? idsToUpdate.length} item condition(s) marked ${status ? "active" : "inactive"}`,
         );
 
@@ -1211,7 +1239,7 @@ const ProductTypeList = () => {
         await syncInventoryProductType();
       } catch (error) {
         console.error("BULK Item Condition STATUS ERROR", error);
-        toast.error(error.message || "Bulk status update failed");
+        showErrorToast(error.message || "Bulk status update failed");
       } finally {
         setBulkLoading(false);
       }
@@ -1227,12 +1255,12 @@ const ProductTypeList = () => {
 
   const handleBulkDelete = useCallback(() => {
     if (!selectedIds.length) {
-      toast.error("Please select at least one item condition to delete.");
+      showErrorToast("Please select at least one item condition to delete.");
       return;
     }
 
     if (!canDelete) {
-      toast.error("You do not have permission to delete item condition.");
+      showErrorToast("You do not have permission to delete item condition.");
       return;
     }
 
@@ -1267,7 +1295,7 @@ const ProductTypeList = () => {
         );
       }
 
-      toast.success(
+      showSuccessToast(
         result.message ||
         `${idsToDelete.length} item condition(s) deleted successfully.`,
       );
@@ -1281,7 +1309,7 @@ const ProductTypeList = () => {
     } catch (error) {
       console.error("BULK Item Condition DELETE ERROR", error);
 
-      toast.error(error.message || "Failed to delete selected item condition.");
+      showErrorToast(error.message || "Failed to delete selected item condition.");
     } finally {
       setIsDeleting(false);
     }
@@ -1791,7 +1819,9 @@ const ProductTypeList = () => {
               {dbStatus.loading
                 ? "Checking..."
                 : dbStatus.online && isOnline
-                  ? `${String(dbStatus.env || "Database").toUpperCase()}`
+                  ? String(dbStatus.env || "Database")
+                    .toLowerCase()
+                    .replace(/\b\w/g, (char) => char.toUpperCase())
                   : "Offline"}
             </span>
 
