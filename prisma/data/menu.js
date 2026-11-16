@@ -218,7 +218,7 @@ const menus = [
                         menuType: "item",
                     },
                     {
-                        title: "Item Type Master",
+                        title: "Item Condition Master",
                         path: "/inventory/product_type",
                         permission: "product_type.list",
                         menuType: "item",

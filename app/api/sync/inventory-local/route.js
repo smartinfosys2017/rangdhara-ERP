@@ -1363,6 +1363,326 @@ async function syncSimpleModel({
   };
 }
 
+async function syncMachineMasters({
+  sourceDb,
+  targetDb,
+  sourceName,
+  targetName,
+}) {
+  const machines = await sourceDb.machineMaster.findMany({
+    orderBy: { updatedAt: "asc" },
+  });
+
+  let created = 0;
+  let updated = 0;
+  let deleted = 0;
+  let skipped = 0;
+  let failed = 0;
+
+  const errors = [];
+
+  for (const machine of machines) {
+    try {
+      if (!machine.id) throw new Error("Machine ID missing");
+      if (!machine.machineNumber) {
+        throw new Error("Machine Number missing");
+      }
+
+      const existing = await targetDb.machineMaster.findUnique({
+        where: { id: machine.id },
+      });
+
+      const data = {
+        machineNumber: machine.machineNumber,
+        machineName: machine.machineName,
+        machineCode: machine.machineCode,
+        ipAddress: machine.ipAddress,
+        GroupName: machine.GroupName,
+        comment: machine.comment,
+        status: machine.status ?? true,
+      };
+
+      if (!existing) {
+        await targetDb.machineMaster.create({
+          data: {
+            id: machine.id,
+            ...data,
+            createdAt: machine.createdAt,
+            updatedAt: machine.updatedAt,
+            deletedAt: machine.deletedAt || null,
+            createby: machine.createby,
+            updateby: machine.updateby,
+            lastSyncAt: new Date(),
+          },
+        });
+
+        machine.deletedAt ? deleted++ : created++;
+        continue;
+      }
+
+      const sourceUpdated = new Date(machine.updatedAt).getTime();
+      const targetUpdated = new Date(existing.updatedAt).getTime();
+
+      if (sourceUpdated <= targetUpdated) {
+        skipped++;
+        continue;
+      }
+
+      await targetDb.machineMaster.update({
+        where: { id: machine.id },
+        data: {
+          ...data,
+          deletedAt: machine.deletedAt || null,
+          updatedAt: machine.updatedAt,
+          updateby: machine.updateby,
+          lastSyncAt: new Date(),
+        },
+      });
+
+      machine.deletedAt ? deleted++ : updated++;
+    } catch (error) {
+      failed++;
+
+      errors.push({
+        id: machine?.id || null,
+        machineNumber: machine?.machineNumber || null,
+        source: sourceName,
+        target: targetName,
+        error: error.message,
+      });
+    }
+  }
+
+  return {
+    total: machines.length,
+    created,
+    updated,
+    deleted,
+    skipped,
+    failed,
+    errors,
+  };
+}
+
+async function syncMachineItemDetails({
+  sourceDb,
+  targetDb,
+  sourceName,
+  targetName,
+}) {
+  const machineItems = await sourceDb.machineItemDetails.findMany({
+    orderBy: { updatedAt: "asc" },
+  });
+
+  let created = 0;
+  let updated = 0;
+  let deleted = 0;
+  let skipped = 0;
+  let failed = 0;
+
+  const errors = [];
+
+  for (const item of machineItems) {
+    try {
+      if (!item.id) throw new Error("Machine Item Detail ID missing");
+      if (!item.machineId) throw new Error("Machine ID missing");
+
+      // Check parent machine exists in target database
+      const machineExists = await targetDb.machineMaster.findUnique({
+        where: { id: item.machineId },
+        select: { id: true },
+      });
+
+      if (!machineExists) {
+        throw new Error(`Machine not found in target: ${item.machineId}`);
+      }
+
+      const existing = await targetDb.machineItemDetails.findUnique({
+        where: { id: item.id },
+      });
+
+      const data = {
+        machineId: item.machineId,
+        itemMasterId: item.itemMasterId,
+        SelectedGroupName: item.SelectedGroupName,
+        Selecteditem: item.Selecteditem,
+        itemUnit: item.itemUnit,
+        itemQty: item.itemQty,
+        itemdescription: item.itemdescription,
+      };
+
+      if (!existing) {
+        await targetDb.machineItemDetails.create({
+          data: {
+            id: item.id,
+            ...data,
+            createdAt: item.createdAt,
+            updatedAt: item.updatedAt,
+            deletedAt: item.deletedAt || null,
+            createby: item.createby,
+            updateby: item.updateby,
+            lastSyncAt: new Date(),
+          },
+        });
+
+        item.deletedAt ? deleted++ : created++;
+        continue;
+      }
+
+      const sourceUpdated = new Date(item.updatedAt).getTime();
+      const targetUpdated = new Date(existing.updatedAt).getTime();
+
+      if (sourceUpdated <= targetUpdated) {
+        skipped++;
+        continue;
+      }
+
+      await targetDb.machineItemDetails.update({
+        where: { id: item.id },
+        data: {
+          ...data,
+          deletedAt: item.deletedAt || null,
+          updatedAt: item.updatedAt,
+          updateby: item.updateby,
+          lastSyncAt: new Date(),
+        },
+      });
+
+      item.deletedAt ? deleted++ : updated++;
+    } catch (error) {
+      failed++;
+
+      errors.push({
+        id: item?.id || null,
+        machineId: item?.machineId || null,
+        Selecteditem: item?.Selecteditem || null,
+        source: sourceName,
+        target: targetName,
+        error: error.message,
+      });
+    }
+  }
+
+  return {
+    total: machineItems.length,
+    created,
+    updated,
+    deleted,
+    skipped,
+    failed,
+    errors,
+  };
+}
+
+async function syncMachineChangeLogs({
+  sourceDb,
+  targetDb,
+  sourceName,
+  targetName,
+}) {
+  const changeLogs = await sourceDb.machineChangeLog.findMany({
+    orderBy: { createdAt: "asc" },
+  });
+
+  let created = 0;
+  let updated = 0;
+  let deleted = 0;
+  let skipped = 0;
+  let failed = 0;
+
+  const errors = [];
+
+  for (const log of changeLogs) {
+    try {
+      if (!log.id) throw new Error("Machine Change Log ID missing");
+      if (!log.machineId) throw new Error("Machine ID missing");
+
+      // Check parent machine exists in target database
+      const machineExists = await targetDb.machineMaster.findUnique({
+        where: { id: log.machineId },
+        select: { id: true },
+      });
+
+      if (!machineExists) {
+        throw new Error(`Machine not found in target: ${log.machineId}`);
+      }
+
+      const existing = await targetDb.machineChangeLog.findUnique({
+        where: { id: log.id },
+      });
+
+      const data = {
+        machineId: log.machineId,
+        UserId: log.UserId,
+        UserName: log.UserName,
+        Action: log.Action,
+        Selecteditem: log.Selecteditem,
+        Details: log.Details,
+      };
+
+      if (!existing) {
+        await targetDb.machineChangeLog.create({
+          data: {
+            id: log.id,
+            ...data,
+            createdAt: log.createdAt,
+            updatedAt: log.updatedAt,
+            deletedAt: log.deletedAt || null,
+            createby: log.createby,
+            updateby: log.updateby,
+            lastSyncAt: new Date(),
+          },
+        });
+
+        log.deletedAt ? deleted++ : created++;
+        continue;
+      }
+
+      const sourceUpdated = new Date(log.updatedAt).getTime();
+      const targetUpdated = new Date(existing.updatedAt).getTime();
+
+      if (sourceUpdated <= targetUpdated) {
+        skipped++;
+        continue;
+      }
+
+      await targetDb.machineChangeLog.update({
+        where: { id: log.id },
+        data: {
+          ...data,
+          deletedAt: log.deletedAt || null,
+          updatedAt: log.updatedAt,
+          updateby: log.updateby,
+          lastSyncAt: new Date(),
+        },
+      });
+
+      log.deletedAt ? deleted++ : updated++;
+    } catch (error) {
+      failed++;
+
+      errors.push({
+        id: log?.id || null,
+        machineId: log?.machineId || null,
+        Action: log?.Action || null,
+        source: sourceName,
+        target: targetName,
+        error: error.message,
+      });
+    }
+  }
+
+  return {
+    total: changeLogs.length,
+    created,
+    updated,
+    deleted,
+    skipped,
+    failed,
+    errors,
+  };
+}
+
 // =====================================================
 // POST INVENTORY SYNC
 // LOCAL ↔ LIVE
@@ -1385,6 +1705,10 @@ export async function POST() {
       itemMasters: await localDb.itemMaster.count(),
       issueReceipts: await localDb.issueReceipt.count(),
       inventoryChangeLogs: await localDb.inventoryChangeLog.count(),
+
+      machineMasters: await localDb.machineMaster.count(),
+      machineItemDetails: await localDb.machineItemDetails.count(),
+      machineChangeLogs: await localDb.machineChangeLog.count(),
     };
 
     const liveBefore = {
@@ -1395,6 +1719,10 @@ export async function POST() {
       itemMasters: await liveDb.itemMaster.count(),
       issueReceipts: await liveDb.issueReceipt.count(),
       inventoryChangeLogs: await liveDb.inventoryChangeLog.count(),
+
+      machineMasters: await liveDb.machineMaster.count(),
+      machineItemDetails: await liveDb.machineItemDetails.count(),
+      machineChangeLogs: await liveDb.machineChangeLog.count(),
     };
 
     // =====================================================
@@ -1444,6 +1772,31 @@ export async function POST() {
     });
 
     const localToLiveChangeLogs = await syncChangeLog({
+      sourceDb: localDb,
+      targetDb: liveDb,
+      sourceName: "LOCAL",
+      targetName: "LIVE",
+    });
+
+    // ==========================
+    // MACHINE MASTER LOCAL → LIVE
+    // ==========================
+
+    const localToLiveMachineMasters = await syncMachineMasters({
+      sourceDb: localDb,
+      targetDb: liveDb,
+      sourceName: "LOCAL",
+      targetName: "LIVE",
+    });
+
+    const localToLiveMachineItemDetails = await syncMachineItemDetails({
+      sourceDb: localDb,
+      targetDb: liveDb,
+      sourceName: "LOCAL",
+      targetName: "LIVE",
+    });
+
+    const localToLiveMachineChangeLogs = await syncMachineChangeLogs({
       sourceDb: localDb,
       targetDb: liveDb,
       sourceName: "LOCAL",
@@ -1504,6 +1857,31 @@ export async function POST() {
     });
 
     // ==========================
+    // MACHINE MASTER LIVE → LOCAL
+    // ==========================
+
+    const liveToLocalMachineMasters = await syncMachineMasters({
+      sourceDb: liveDb,
+      targetDb: localDb,
+      sourceName: "LIVE",
+      targetName: "LOCAL",
+    });
+
+    const liveToLocalMachineItemDetails = await syncMachineItemDetails({
+      sourceDb: liveDb,
+      targetDb: localDb,
+      sourceName: "LIVE",
+      targetName: "LOCAL",
+    });
+
+    const liveToLocalMachineChangeLogs = await syncMachineChangeLogs({
+      sourceDb: liveDb,
+      targetDb: localDb,
+      sourceName: "LIVE",
+      targetName: "LOCAL",
+    });
+
+    // ==========================
     // AFTER COUNT
     // ==========================
 
@@ -1515,6 +1893,10 @@ export async function POST() {
       itemMasters: await localDb.itemMaster.count(),
       issueReceipts: await localDb.issueReceipt.count(),
       inventoryChangeLogs: await localDb.inventoryChangeLog.count(),
+
+      machineMasters: await localDb.machineMaster.count(),
+      machineItemDetails: await localDb.machineItemDetails.count(),
+      machineChangeLogs: await localDb.machineChangeLog.count(),
     };
 
     const liveAfter = {
@@ -1525,6 +1907,10 @@ export async function POST() {
       itemMasters: await liveDb.itemMaster.count(),
       issueReceipts: await liveDb.issueReceipt.count(),
       inventoryChangeLogs: await liveDb.inventoryChangeLog.count(),
+
+      machineMasters: await liveDb.machineMaster.count(),
+      machineItemDetails: await liveDb.machineItemDetails.count(),
+      machineChangeLogs: await liveDb.machineChangeLog.count(),
     };
 
     // ==========================
@@ -1556,6 +1942,15 @@ export async function POST() {
 
         inventoryChangeLogs:
           localAfter.inventoryChangeLogs === liveAfter.inventoryChangeLogs,
+
+        machineMasters:
+          localAfter.machineMasters === liveAfter.machineMasters,
+
+        machineItemDetails:
+          localAfter.machineItemDetails === liveAfter.machineItemDetails,
+
+        machineChangeLogs:
+          localAfter.machineChangeLogs === liveAfter.machineChangeLogs,
       },
 
       before: {
@@ -1576,6 +1971,10 @@ export async function POST() {
         itemMasters: localToLiveItemMasters,
         issueReceipts: localToLiveIssueReceipts,
         inventoryChangeLogs: localToLiveChangeLogs,
+
+        machineMasters: localToLiveMachineMasters,
+        machineItemDetails: localToLiveMachineItemDetails,
+        machineChangeLogs: localToLiveMachineChangeLogs,
       },
 
       liveToLocal: {
@@ -1586,8 +1985,13 @@ export async function POST() {
         itemMasters: liveToLocalItemMasters,
         issueReceipts: liveToLocalIssueReceipts,
         inventoryChangeLogs: liveToLocalChangeLogs,
+
+        machineMasters: liveToLocalMachineMasters,
+        machineItemDetails: liveToLocalMachineItemDetails,
+        machineChangeLogs: liveToLocalMachineChangeLogs,
       },
     });
+
   } catch (error) {
     console.error("INVENTORY SYNC ERROR", error);
 

@@ -319,6 +319,8 @@ model Ticket {
   projectId    Int?
   message      String
   status       String   @default("open")
+  createby     String?
+  updateby     String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   customFields Json?
@@ -332,6 +334,8 @@ model Ticket {
 model Department {
   id        Int      @id @default(autoincrement())
   name      String?
+  createby  String?
+  updateby  String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -341,6 +345,8 @@ model Department {
 model Service {
   id        Int      @id @default(autoincrement())
   name      String?
+  createby  String?
+  updateby  String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -350,6 +356,8 @@ model Service {
 model Project {
   id        Int      @id @default(autoincrement())
   name      String?
+  createby  String?
+  updateby  String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -361,6 +369,8 @@ model Contact {
   name      String?
   email     String?
   phone     String?
+  createby  String?
+  updateby  String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -386,6 +396,8 @@ model EstimateRequestForm {
   notifyStaffIds         Json?
   notifyRoleIds          Json?
   fields                 Json?
+  createby               String?
+  updateby               String?
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 
@@ -400,6 +412,8 @@ model EstimateRequest {
   publicToken String   @db.VarChar(64)
   data        Json
   status      Int      @default(0)
+  createby    String?
+  updateby    String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -436,6 +450,8 @@ model StaffUser {
   lastLoginAt      DateTime?
   isTrashed        Boolean   @default(false)
   createdByUserId  String?
+  createby         String?
+  updateby         String?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -468,6 +484,8 @@ model CustomerGroup {
 model Sources {
   id        Int      @id @default(autoincrement())
   name      String?
+  createby  String?
+  updateby  String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -479,6 +497,8 @@ model Statuses {
   name        String
   color       String?
   statusOrder Int      @default(0) @map("statusorder")
+  createby    String?
+  updateby    String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -489,6 +509,8 @@ model Tax {
   id         Int       @id @default(autoincrement())
   name       String
   taxrate    Float?
+  createby   String?
+  updateby   String?
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
   deletedAt  DateTime?
@@ -502,6 +524,8 @@ model Currency {
   decimal_separator  String   @default(".")
   thousand_separator String   @default(",")
   placement          String   @default("before")
+  createby           String?
+  updateby           String?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 }
@@ -515,6 +539,8 @@ model PaymentMethod {
   selected_by_default Boolean  @default(false)
   invoices_only       Boolean  @default(false)
   expenses_only       Boolean  @default(false)
+  createby            String?
+  updateby            String?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 }
@@ -523,6 +549,8 @@ model ExpenseCategory {
   id          Int      @id @default(autoincrement())
   name        String
   description String?
+  createby    String?
+  updateby    String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
@@ -530,6 +558,8 @@ model ExpenseCategory {
 model ContractType {
   id        Int      @id @default(autoincrement())
   name      String?
+  createby  String?
+  updateby  String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -541,6 +571,8 @@ model customer_sync {
   name         String
   email        String    @unique
   phone        String?
+  createby     String?
+  updateby     String?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   lastSyncedAt DateTime?
@@ -602,6 +634,8 @@ model ItemGroup {
   description String?
   status      Boolean   @default(true)
   isDefault   Boolean   @default(false)
+  createby    String?
+  updateby    String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
@@ -615,6 +649,8 @@ model Unit {
   unitName     String    @db.VarChar(255)
   abbreviation String    @db.VarChar(255)
   status       Boolean   @default(true)
+  createby     String?
+  updateby     String?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   deletedAt    DateTime?
@@ -629,6 +665,8 @@ model PtoductType {
   Description String    @db.VarChar(255)
   status      Boolean   @default(true)
   isDefault   Boolean   @default(false)
+  createby    String?
+  updateby    String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
@@ -644,6 +682,8 @@ model TransactionType {
   EffectOnTransaction EffectOnTransaction
   status              Boolean             @default(true)
   isDefault           Boolean             @default(false)
+  createby            String?
+  updateby            String?
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
   deletedAt           DateTime?
@@ -667,6 +707,8 @@ model ItemMaster {
   RelocateLevel              String?   @db.VarChar(255)
   status                     Boolean   @default(true)
   isDefault                  Boolean   @default(false)
+  createby                   String?
+  updateby                   String?
   createdAt                  DateTime  @default(now())
   updatedAt                  DateTime  @updatedAt
   deletedAt                  DateTime?
@@ -688,6 +730,8 @@ model Country {
   lastSyncAt   DateTime?
   phoneCode    String?   @db.VarChar(10)
   updatedAt    DateTime  @updatedAt
+  createby     String?
+  updateby     String?
 
   @@index([name])
   @@index([isActive])
@@ -713,6 +757,8 @@ model IssueReceipt {
   ReciptChallanNo   String?   @db.VarChar(100)
   RecivedBy         String    @db.VarChar(36)
   Comment           String?
+  createby          String?
+  updateby          String?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
   deletedAt         DateTime?
@@ -738,6 +784,8 @@ model ExtensionModule {
   status      String    @default("INACTIVE")
   icon        String    @default("element-11")
   urlPath     String?
+  createby    String?
+  updateby    String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
@@ -756,6 +804,8 @@ model Menu {
   status     Boolean  @default(true)
   menuType   String   @default("item") @db.VarChar(30)
   target     String   @default("_self") @db.VarChar(20)
+  createby   String?
+  updateby   String?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   parent     Menu?    @relation("MenuHierarchy", fields: [parentId], references: [id])
@@ -780,6 +830,8 @@ model EmailTemplate {
   message   String
   plaintext Boolean  @default(false)
   disabled  Boolean  @default(false)
+  createby  String?
+  updateby  String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -797,6 +849,8 @@ model InventoryChangeLog {
   ItemTypeid     String?   @db.VarChar(36)
   ItemType       String?   @db.VarChar(255)
   Details        String?
+  createby       String?
+  updateby       String?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @default(now()) @updatedAt
   deletedAt      DateTime?
@@ -831,6 +885,8 @@ model UserDetails {
   socialDribbble String?
   referralCode   String?   @unique
   referralLink   String?
+  createby       String?
+  updateby       String?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
   User           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -866,6 +922,8 @@ model Holiday {
   toDate      DateTime  @db.Date
   description String?   @db.VarChar(1000)
   status      Boolean   @default(true)
+  createby    String?
+  updateby    String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
@@ -887,6 +945,8 @@ model BreakTime {
   breakType       String    @default("paid") @db.VarChar(20)
   isFlexible      Boolean   @default(false)
   status          Boolean   @default(true)
+  createby        String?
+  updateby        String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   deletedAt       DateTime?
@@ -912,6 +972,8 @@ model Shift {
   halfDayMinutes  Int       @default(240)
   fullDayMinutes  Int       @default(480)
   status          Boolean   @default(true)
+  createby        String?
+  updateby        String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   deletedAt       DateTime?
@@ -929,6 +991,8 @@ model Security {
   description  String?
   status       Boolean   @default(true)
   isDefault    Boolean   @default(false)
+  createby     String?
+  updateby     String?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   deletedAt    DateTime?
@@ -942,6 +1006,8 @@ model Position {
   positionName String    @db.VarChar(255)
   description  String?
   status       Boolean   @default(true)
+  createby     String?
+  updateby     String?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   deletedAt    DateTime?
@@ -957,6 +1023,8 @@ model ChecklistItem {
   status           Boolean           @default(true)
   makeGlobal       Boolean           @default(false)
   checklistDetails ChecklistDetail[]
+  createby         String?
+  updateby         String?
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
   deletedAt        DateTime?
@@ -1012,8 +1080,9 @@ model Employee {
   reasonToLeave   String?
 
   // Education Information
-  educationDetails Json?
-
+  educationDetails   Json?
+  createby           String?
+  updateby           String?
   // Timestamps
   createdAt          DateTime              @default(now())
   updatedAt          DateTime              @updatedAt
@@ -1043,6 +1112,8 @@ model ContactCategory {
   description  String?
   status       Boolean   @default(true)
   isDefault    Boolean   @default(false)
+  createby     String?
+  updateby     String?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   deletedAt    DateTime?
@@ -1058,6 +1129,8 @@ model EmployeeCandidateStatus {
   description  String?
   mode         String    @db.VarChar(255)
   isDefault    Boolean   @default(false)
+  createby     String?
+  updateby     String?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   deletedAt    DateTime?
@@ -1102,13 +1175,14 @@ model EmployeeFamilyDetail {
 
   // Additional Custom Fields
   customFields Json?
-
+  createby     String?
+  updateby     String?
   // Timestamps
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-  deletedAt  DateTime?
-  lastSyncAt DateTime?
-  employee   Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+  lastSyncAt   DateTime?
+  employee     Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
   @@map("employee_family_detail")
 }
@@ -1146,13 +1220,14 @@ model ProfessionalDetail {
   previousEmployeeDetails Json?
   documentDetails         Json?
   customFields            Json?
-
+  createby                String?
+  updateby                String?
   // Timestamps
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-  deletedAt  DateTime?
-  lastSyncAt DateTime?
-  employee   Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+  deletedAt               DateTime?
+  lastSyncAt              DateTime?
+  employee                Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
   @@map("professional_detail")
 }
@@ -1167,12 +1242,13 @@ model ChecklistDetail {
   comment String?
 
   // Relations
-  employee  Employee      @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  checklist ChecklistItem @relation(fields: [checklistId], references: [id], onDelete: Cascade)
-
+  employee   Employee      @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  checklist  ChecklistItem @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  createby   String?
+  updateby   String?
   // Timestamps
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
   deletedAt  DateTime?
   lastSyncAt DateTime?
 
@@ -1180,4 +1256,311 @@ model ChecklistDetail {
   @@index([employeeId])
   @@index([checklistId])
   @@map("checklist_detail")
+}
+
+model QuestionnaireCategory {
+  id           String    @id @default(uuid())
+  categoryName String    @db.VarChar(255)
+  description  String?
+  status       Boolean   @default(true)
+  createby     String?
+  updateby     String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+  lastSyncAt   DateTime?
+
+  questionnaireTypes QuestionnaireType[]
+  candidates         Candidate[]
+
+  @@map("questionnaire_category")
+}
+
+model QuestionnaireType {
+  id                      String    @id @default(uuid())
+  typeName                String    @db.VarChar(255)
+  questionnaireCategoryId String
+  description             String?
+  status                  Boolean   @default(true)
+  createby                String?
+  updateby                String?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+  deletedAt               DateTime?
+  lastSyncAt              DateTime?
+
+  questionnaireCategory QuestionnaireCategory @relation(fields: [questionnaireCategoryId], references: [id], onDelete: Cascade)
+  questions             Question[]
+
+  @@index([questionnaireCategoryId])
+  @@map("questionnaire_type")
+}
+
+model Question {
+  id                  String    @id @default(uuid())
+  questionName        String    @db.VarChar(255)
+  questionnaireTypeId String
+  question            String?
+  status              Boolean   @default(true)
+  createby            String?
+  updateby            String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  deletedAt           DateTime?
+  lastSyncAt          DateTime?
+
+  questionnaireType QuestionnaireType         @relation(fields: [questionnaireTypeId], references: [id], onDelete: Cascade)
+  answers           QuestionAnswerCandidate[]
+
+  @@index([questionnaireTypeId])
+  @@map("question")
+}
+
+model QuestionAnswerCandidate {
+  id         String    @id @default(uuid())
+  questionId String
+  answer     String    @db.Text
+  status     Boolean   @default(true)
+  createby   String?
+  updateby   String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
+  lastSyncAt DateTime?
+
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@index([questionId])
+  @@map("question_answer_candidate")
+}
+
+model Candidate {
+  id            String    @id @default(uuid())
+  firstName     String
+  middleName    String?
+  lastName      String
+  dateOfBirth   DateTime?
+  gender        String?
+  bloodGroup    String?
+  emailId       String?   @unique
+  maritalStatus String?
+  mobile        String?
+
+  // Profile Information
+  profilePic            String?
+  signature             String?
+  qualifiedForInterview Boolean @default(false)
+  status                String  @default("ACTIVE")
+
+  // Correspondence Address
+  correspondenceAddress String?
+  correspondenceCity    String?
+  correspondenceState   String?
+  correspondenceCountry String?
+  correspondencePincode String?
+
+  // Permanent Address
+  permanentAddress String?
+  permanentCity    String?
+  permanentState   String?
+  permanentCountry String?
+  permanentPincode String?
+
+  permanentSameAsCorrespondence Boolean @default(false)
+
+  // Candidate Information
+  resignationDate DateTime?
+  leavingDate     DateTime?
+  reasonToLeave   String?
+
+  // Education Information
+  educationDetails Json?
+
+  // Custom Fields
+  customFields Json?
+
+  // Relations
+  professionalDetails     ProfessionalCandidateDetail?
+  followupDetails         FollowupCandidateDetail?
+  questionnaireDetails    QuestionnaireCandidateDetail?
+  QuestionnaireCategory   QuestionnaireCategory?        @relation(fields: [questionnaireCategoryId], references: [id])
+  questionnaireCategoryId String?
+  createby                String?
+  updateby                String?
+  // Timestamps
+  createdAt               DateTime                      @default(now())
+  updatedAt               DateTime                      @updatedAt
+  deletedAt               DateTime?
+  lastSyncAt              DateTime?
+
+  @@map("candidate")
+}
+
+model ProfessionalCandidateDetail {
+  id String @id @default(uuid())
+
+  // Job Information
+  appliedDate      String?
+  applyForPost     String?
+  totalExperience  String?
+  salaryBeingDrawn String?
+
+  // Skills & References
+  interviewConductedAt String?
+  skills               Json?
+  referenceName        String?
+
+  // Additional Information
+  remarks                 String?
+  previousEmployeeDetails Json?
+  documentDetails         Json?
+  customFields            Json?
+
+  // Relation
+  candidateId String    @unique
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  createby    String?
+  updateby    String?
+  // Timestamps
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  lastSyncAt  DateTime?
+
+  @@map("professional_candidate_detail")
+}
+
+model FollowupCandidateDetail {
+  id String @id @default(uuid())
+
+  // follow Information
+  followupDate        DateTime?
+  followupResponse    String?
+  appointmentDate     DateTime?
+  appointmentResponse String?
+
+  // Skills & References
+  interviewConductedBy String?
+  mode                 String?
+  status               String?
+  // Relation
+  candidateId          String    @unique
+  candidate            Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  createby             String?
+  updateby             String?
+  // Timestamps
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  deletedAt            DateTime?
+  lastSyncAt           DateTime?
+
+  @@map("followup_candidate_detail")
+}
+
+model QuestionnaireCandidateDetail {
+  id               String @id @default(uuid())
+  questionCategory String
+  questionName     String
+  questionnaireID  String
+  questionAnswer   String
+
+  candidateId String    @unique
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  createby    String?
+  updateby    String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  lastSyncAt  DateTime?
+
+  @@map("questionnaire_candidate_detail")
+}
+
+model MachineMaster {
+  id            String               @id @default(uuid()) @db.VarChar(36)
+  machineNumber String               @unique @db.VarChar(255)
+  machineName   String               @db.VarChar(255)
+  machineCode   String               @unique @db.VarChar(25)
+  ipAddress     String?              @db.VarChar(45)
+  GroupName     String               @db.VarChar(255)
+  comment       String?
+  OperateId     String               @db.VarChar(255)
+  Specification String?
+  status        Boolean              @default(true)
+  createby      String?
+  updateby      String?
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  deletedAt     DateTime?
+  lastSyncAt    DateTime?
+  itemDetails   MachineItemDetails[]
+  changeLogs    MachineChangeLog[]
+
+  @@index([machineName])
+  @@index([OperateId])
+  @@index([status])
+  @@index([deletedAt])
+  @@map("machine_master")
+}
+
+model MachineItemDetails {
+  id                String        @id @default(uuid()) @db.VarChar(36)
+  machineId         String        @db.VarChar(36)
+  SelectedGroupName String        @db.VarChar(255)
+  Selecteditem      String        @db.VarChar(255)
+  itemUnit          String        @db.VarChar(255)
+  itemQty           String        @db.VarChar(255)
+  itemdescription   String?       @db.VarChar(255)
+  createby          String?
+  updateby          String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  deletedAt         DateTime?
+  lastSyncAt        DateTime?
+  machine           MachineMaster @relation(fields: [machineId], references: [id], onDelete: Cascade)
+
+  @@index([machineId])
+  @@index([SelectedGroupName])
+  @@index([Selecteditem])
+  @@index([deletedAt])
+  @@map("machine_item_details")
+}
+
+model MachineChangeLog {
+  id           String         @id @default(uuid()) @db.VarChar(36)
+  machineId    String?        @db.VarChar(36)
+  UserId       String?        @db.VarChar(36)
+  UserName     String         @db.VarChar(255)
+  Action       String         @db.VarChar(50)
+  Selecteditem String?        @db.VarChar(255)
+  Details      String?        @db.Text
+  createby     String?
+  updateby     String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  deletedAt    DateTime?
+  lastSyncAt   DateTime?
+  machine      MachineMaster? @relation(fields: [machineId], references: [id], onDelete: SetNull)
+
+  @@index([machineId])
+  @@index([UserId])
+  @@index([Action])
+  @@index([createdAt])
+  @@index([deletedAt])
+  @@map("machine_change_log")
+}
+
+model Location {
+  id           String    @id @default(uuid())
+  locationName String    @db.VarChar(255)
+  locationCode String    @unique @db.VarChar(25)
+  status       Boolean   @default(true)
+  createby     String?
+  updateby     String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+  lastSyncAt   DateTime?
+
+  @@map("location")
 }

@@ -1861,16 +1861,6 @@ const LocationList = () => {
                         </button>
                     )}
                 </div>
-
-                <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={handleSearch}
-                >
-                    Search
-                </Button>
-
                 <Tooltip>
                     <TooltipTrigger asChild>
                         <button

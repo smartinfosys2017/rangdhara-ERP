@@ -40,7 +40,7 @@ const VALID_TYPES = [
   "multi_image",
 ];
 
-const VALID_FIELD_TO = ["company", "leads", "customers", "tasks", "transaction","employee"];
+const VALID_FIELD_TO = ["company", "leads", "customers", "tasks", "transaction","employee","candidate"];
 
 /*
 |--------------------------------------------------------------------------

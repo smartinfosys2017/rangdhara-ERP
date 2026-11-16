@@ -403,6 +403,26 @@ export const MENU_SIDEBAR = [
         ],
       },
       {
+        title: "Questionnaire",
+        children: [
+          {
+            title: "QuestionnaireCategory",
+            path: "/hr/Questionnaire/QuestionnaireCategory",
+            permission: "quecategory.list",
+          },
+          {
+            title: "QuestionnaireType",
+            path: "/hr/Questionnaire/QuestionnaireType",
+            permission: "quetype.list",
+          },
+          {
+            title: "Question",
+            path: "/hr/Questionnaire/Question",
+            permission: "question.list",
+          },
+        ]
+      },
+      {
         title: "Employee Masters",
         children: [
           {
@@ -432,7 +452,7 @@ export const MENU_SIDEBAR = [
         permission: "item_group.list",
       },
       {
-        title: "Item Type Master",
+        title: "Item Condition Master",
         path: "/inventory/product_type",
         permission: "product_type.list",
       },
@@ -450,6 +470,26 @@ export const MENU_SIDEBAR = [
         title: "Inventory Issue/Receipt",
         path: "/inventory/issue_receipt",
         permission: "issue_receipt.list",
+      },
+      {
+        title: "Inventory Register",
+        path: "/inventory/inventory_register",
+        permission: "issue_receipt.list",
+      },
+      {
+        title: "Inventory Change Log",
+        path: "/inventory/inventory_change_log",
+        permission: "issue_receipt.list",
+      },
+      {
+        title: "Machine Master",
+        path: "/inventory/machine-master",
+        permission: "machinemaster.list",
+      },
+      {
+        title: "Location Master",
+        path: "/inventory/location",
+        permission: "location.list",
       },
     ],
     permission: "inventory.list",
@@ -1180,6 +1220,26 @@ export const MENU_SIDEBAR_COMPACT = [
     ],
     permission: "hr.list",
   },
+  {
+    title: "Questionnaire",
+    children: [
+      {
+        title: "QuestionnaireCategory",
+        path: "/hr/Questionnaire/QuestionnaireCategory",
+        permission: "quecategory.list",
+      },
+      {
+        title: "QuestionnaireType",
+        path: "/hr/Questionnaire/QuestionnaireType",
+        permission: "quetype.list",
+      },
+      {
+        title: "Question",
+        path: "/hr/Questionnaire/Question",
+        permission: "question.list",
+      },
+    ]
+  },
   { heading: "diveder" },
   {
     title: "inventory",
@@ -1196,7 +1256,7 @@ export const MENU_SIDEBAR_COMPACT = [
         permission: "item_group.list",
       },
       {
-        title: "Item Type Master",
+        title: "Item Condition Master",
         path: "/inventory/product_type",
         permission: "product_type.list",
       },
@@ -1214,6 +1274,26 @@ export const MENU_SIDEBAR_COMPACT = [
         title: "Inventory Issue/Receipt",
         path: "/inventory/issue_receipt",
         permission: "issue_receipt.list",
+      },
+      {
+        title: "Inventory Register",
+        path: "/inventory/inventory_register",
+        permission: "issue_receipt.list",
+      },
+      {
+        title: "Inventory Change Log",
+        path: "/inventory/inventory_change_log",
+        permission: "issue_receipt.list",
+      },
+      {
+        title: "Machine Master",
+        path: "/inventory/machine-master",
+        permission: "machinemaster.list",
+      },
+      {
+        title: "Location",
+        path: "/inventory/location",
+        permission: "location.list",
       },
     ],
     permission: "inventory.list",

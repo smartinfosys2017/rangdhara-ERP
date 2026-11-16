@@ -2,8 +2,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { addDays, format, parseISO } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { Info, CalendarDays } from 'lucide-react';
+
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Calendar } from '@/components/ui/calendar';
@@ -87,6 +88,26 @@ const DateRangeFilter = ({ label, date, setDate }) => (
   </div>
 );
 
+const UserFilter = ({ label, value, onChange, users }) => (
+  <div className="flex flex-col gap-2.5 px-5">
+    <span className="text-sm font-medium text-mono">{label}</span>
+
+    <select
+      value={value || 'all'}
+      onChange={(e) => onChange(e.target.value === 'all' ? '' : e.target.value)}
+      className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+    >
+      <option value="all">All Users</option>
+
+      {users.map((user) => (
+        <option key={user.id} value={user.id}>
+          {user.name}
+        </option>
+      ))}
+    </select>
+  </div>
+);
+
 export function StoreClientFiltersSheet({
   trigger,
   statusFilter,
@@ -99,10 +120,19 @@ export function StoreClientFiltersSheet({
   setUpdatedFrom,
   updatedTo,
   setUpdatedTo,
+
+  createdBy,
+  setCreatedBy,
+  updatedBy,
+  setUpdatedBy,
 }) {
   const [open, setOpen] = useState(false);
 
+  const [users, setUsers] = useState([]);
+
   const [draftStatus, setDraftStatus] = useState(statusFilter || 'all');
+  const [draftCreatedBy, setDraftCreatedBy] = useState(createdBy || '');
+  const [draftUpdatedBy, setDraftUpdatedBy] = useState(updatedBy || '');
 
   const [createdDate, setCreatedDate] = useState(
     () => toDateRange(createdFrom, createdTo),
@@ -112,11 +142,32 @@ export function StoreClientFiltersSheet({
     () => toDateRange(updatedFrom, updatedTo),
   );
 
+  // Fetch users for Created By and Updated By dropdowns.
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const response = await fetch('/api/inventory/filter-users');
+        const result = await response.json();
+
+        if (response.ok && result.success) {
+          setUsers(result.data || []);
+        }
+      } catch (error) {
+        console.error('Failed to fetch filter users:', error);
+      }
+    };
+
+    fetchUsers();
+  }, []);
+
   // Refresh draft values whenever the sheet opens.
   useEffect(() => {
     if (!open) return;
 
     setDraftStatus(statusFilter || 'all');
+    setDraftCreatedBy(createdBy || '');
+    setDraftUpdatedBy(updatedBy || '');
+
     setCreatedDate(toDateRange(createdFrom, createdTo));
     setUpdatedDate(toDateRange(updatedFrom, updatedTo));
   }, [
@@ -126,14 +177,22 @@ export function StoreClientFiltersSheet({
     createdTo,
     updatedFrom,
     updatedTo,
+    createdBy,
+    updatedBy,
   ]);
 
   const handleReset = () => {
     setDraftStatus('all');
+    setDraftCreatedBy('');
+    setDraftUpdatedBy('');
+
     setCreatedDate({ from: undefined, to: undefined });
     setUpdatedDate({ from: undefined, to: undefined });
 
     setStatusFilter('all');
+    setCreatedBy('');
+    setUpdatedBy('');
+
     setCreatedFrom('');
     setCreatedTo('');
     setUpdatedFrom('');
@@ -144,6 +203,9 @@ export function StoreClientFiltersSheet({
 
   const handleApply = () => {
     setStatusFilter(draftStatus || 'all');
+
+    setCreatedBy(draftCreatedBy);
+    setUpdatedBy(draftUpdatedBy);
 
     setCreatedFrom(toDateString(createdDate?.from));
     setCreatedTo(toDateString(createdDate?.to));
@@ -160,7 +222,7 @@ export function StoreClientFiltersSheet({
 
       <SheetContent className="sm:w-[320px] sm:max-w-none inset-5 start-auto h-auto rounded-lg p-0 [&_[data-slot=sheet-close]]:top-4.5 [&_[data-slot=sheet-close]]:end-5">
         <SheetHeader className="border-b border-border px-5 py-3.5">
-          <SheetTitle>Filter Item Types</SheetTitle>
+          <SheetTitle>Filter Item Condition</SheetTitle>
         </SheetHeader>
 
         <SheetBody className="py-0">
@@ -175,7 +237,7 @@ export function StoreClientFiltersSheet({
                   </TooltipTrigger>
 
                   <TooltipContent>
-                    <p>Filter item types by status.</p>
+                    <p>Filter item condition by status.</p>
                   </TooltipContent>
                 </Tooltip>
               </div>
@@ -208,6 +270,20 @@ export function StoreClientFiltersSheet({
                 label="Updated Date"
                 date={updatedDate}
                 setDate={setUpdatedDate}
+              />
+
+              <UserFilter
+                label="Created By"
+                value={draftCreatedBy}
+                onChange={setDraftCreatedBy}
+                users={users}
+              />
+
+              <UserFilter
+                label="Updated By"
+                value={draftUpdatedBy}
+                onChange={setDraftUpdatedBy}
+                users={users}
               />
             </div>
           </ScrollArea>

@@ -1471,7 +1471,7 @@ const QuestionnaireCategoryList = () => {
 
                             <Input
                                 type="text"
-                                placeholder="Search questionnaire-category..."
+                                placeholder="Search questionnaire-category"
                                 value={searchInput}
                                 onChange={(event) => setSearchInput(event.target.value)}
                                 className="w-full pl-9 pr-9"

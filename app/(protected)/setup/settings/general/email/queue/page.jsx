@@ -452,7 +452,7 @@ export default function EmailQueuePage() {
                             <Input
                                 value={queueSearch}
                                 onChange={(e) => setQueueSearch(e.target.value)}
-                                placeholder="Search subject or recipient..."
+                                placeholder="Search subject or recipient"
                                 className="pl-9"
                             />
                         </div>

@@ -1220,7 +1220,7 @@ export default function HolidayList() {
               >
                 <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
-                  placeholder="Search holidays..."
+                  placeholder="Search holidays"
                   value={searchInput}
                   onChange={(event) => setSearchInput(event.target.value)}
                   className="w-full pl-9 pr-9"

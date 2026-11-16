@@ -558,7 +558,7 @@ export default function TaskList() {
                       })
                     );
                   }}
-                  placeholder="Search tasks..."
+                  placeholder="Search tasks"
                   className="w-[250px] pl-9"
                 />
 

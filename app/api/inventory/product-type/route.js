@@ -172,16 +172,12 @@ export async function GET(request) {
 
     const limit = Math.min(
       10000,
-      Math.max(
-        1,
-        Number.isFinite(requestedLimit) ? requestedLimit : 10,
-      ),
+      Math.max(1, Number.isFinite(requestedLimit) ? requestedLimit : 10),
     );
 
     const sort = searchParams.get("sort") || "createdAt";
     const dir = searchParams.get("dir") === "asc" ? "asc" : "desc";
 
-    // Whitelist Prisma sort fields.
     const allowedSortFields = [
       "id",
       "ProductType",
@@ -208,7 +204,19 @@ export async function GET(request) {
       );
     }
 
-    const where = filterResult.where;
+    const where = { ...filterResult.where };
+
+    // Created By filter
+    const createdBy = searchParams.get("createdBy");
+    if (createdBy) {
+      where.createby = createdBy;
+    }
+
+    // Updated By filter
+    const updatedBy = searchParams.get("updatedBy");
+    if (updatedBy) {
+      where.updateby = updatedBy;
+    }
 
     const [total, data] = await Promise.all([
       prisma.ptoductType.count({ where }),
@@ -221,10 +229,43 @@ export async function GET(request) {
       }),
     ]);
 
+    // Get unique creator and updater IDs
+    const userIds = [
+      ...new Set(
+        data
+          .flatMap((item) => [item.createby, item.updateby])
+          .filter(Boolean),
+      ),
+    ];
+
+    // Fetch user names
+    const users = userIds.length
+      ? await prisma.user.findMany({
+        where: {
+          id: { in: userIds },
+        },
+        select: {
+          id: true,
+          name: true,
+        },
+      })
+      : [];
+
+    const userMap = new Map(
+      users.map((user) => [user.id, user.name]),
+    );
+
+    // Attach creator and updater names
+    const formattedData = data.map((item) => ({
+      ...item,
+      createdByName: userMap.get(item.createby) || "-",
+      updatedByName: userMap.get(item.updateby) || "-",
+    }));
+
     return NextResponse.json({
       success: true,
       message: "Item Types fetched successfully.",
-      data,
+      data: formattedData,
       pagination: {
         total,
         page,
@@ -380,6 +421,7 @@ export async function POST(request) {
           },
           data: {
             isDefault: false,
+            updateby: user.id,
             lastSyncAt: new Date(),
           },
         });
@@ -391,6 +433,10 @@ export async function POST(request) {
           Description,
           status: body.status ?? true,
           isDefault: body.isDefault ?? false,
+
+          createby: user.id,
+          updateby: user.id,
+
           lastSyncAt: new Date(),
         },
       });
@@ -604,12 +650,14 @@ export async function PUT(request) {
           data: {
             isDefault: false,
             lastSyncAt: new Date(),
+            updateby: user.id,
           },
         });
       }
 
       const updateData = {
         lastSyncAt: new Date(),
+        updateby: user.id,
       };
 
       if (body.ProductType !== undefined) {
@@ -738,6 +786,7 @@ export async function PATCH(request) {
       },
       data: {
         status: body.status,
+        updateby: user.id,
         lastSyncAt: new Date(),
       },
     });
@@ -840,6 +889,7 @@ export async function DELETE(request) {
       },
       data: {
         deletedAt: new Date(),
+        updateby: user.id,
         lastSyncAt: new Date(),
       },
     });

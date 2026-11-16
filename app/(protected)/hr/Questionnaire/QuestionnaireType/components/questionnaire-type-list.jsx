@@ -2006,7 +2006,7 @@ const QuestionnaireTypeList = () => {
 
                             <Input
                                 type="text"
-                                placeholder="Search questionnaire type..."
+                                placeholder="Search questionnaire type"
                                 value={searchInput}
                                 onChange={(event) =>
                                     setSearchInput(event.target.value)

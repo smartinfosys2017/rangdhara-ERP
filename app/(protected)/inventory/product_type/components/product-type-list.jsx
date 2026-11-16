@@ -13,6 +13,7 @@ import {
   Mail,
   Pencil,
   Plus,
+  Info,
   Printer,
   RefreshCw,
   Search,
@@ -51,6 +52,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -129,7 +136,19 @@ const escapeHtml = (value) =>
         "'": "&#39;",
       })[char],
   );
+const getCreatedByName = (item) =>
+  item?.createdBy?.name ||
+  item?.createdByName ||
+  item?.createdByUser?.name ||
+  item?.createbyUser?.name ||
+  "-";
 
+const getUpdatedByName = (item) =>
+  item?.updatedBy?.name ||
+  item?.updatedByName ||
+  item?.updatedByUser?.name ||
+  item?.updatebyUser?.name ||
+  "-";
 const ProductTypeList = () => {
   const queryClient = useQueryClient();
   const { data: session } = useSession();
@@ -159,7 +178,8 @@ const ProductTypeList = () => {
   const [createdTo, setCreatedTo] = useState("");
   const [updatedFrom, setUpdatedFrom] = useState("");
   const [updatedTo, setUpdatedTo] = useState("");
-
+  const [createdBy, setCreatedBy] = useState("");
+  const [updatedBy, setUpdatedBy] = useState("");
   const [selectedIds, setSelectedIds] = useState([]);
   const [bulkLoading, setBulkLoading] = useState(false);
 
@@ -303,6 +323,8 @@ const ProductTypeList = () => {
       createdTo: createdTo || "",
       updatedFrom: updatedFrom || "",
       updatedTo: updatedTo || "",
+      createdBy: createdBy || "",
+      updatedBy: updatedBy || "",
       sort: sorting?.[0]?.id || "createdAt",
       dir: sorting?.[0]?.desc ? "desc" : "asc",
     });
@@ -314,7 +336,7 @@ const ProductTypeList = () => {
     const result = await response.json();
 
     if (!response.ok || !result.success) {
-      throw new Error(result.message || "Failed loading Item Types");
+      throw new Error(result.message || "Failed loading Item Condition");
     }
 
     return result;
@@ -327,6 +349,8 @@ const ProductTypeList = () => {
     createdTo,
     updatedFrom,
     updatedTo,
+    createdBy,
+    updatedBy,
     sorting,
   ]);
 
@@ -342,6 +366,8 @@ const ProductTypeList = () => {
       createdTo,
       updatedFrom,
       updatedTo,
+      createdBy,
+      updatedBy,
     ],
     queryFn: fetchProductType,
     staleTime: 0,
@@ -501,9 +527,11 @@ const ProductTypeList = () => {
       "Created Date": item.createdAt
         ? new Date(item.createdAt).toLocaleString()
         : "",
+      "Created By": getCreatedByName(item),
       "Updated Date": item.updatedAt
         ? new Date(item.updatedAt).toLocaleString()
         : "",
+      "Updated By": getUpdatedByName(item),
     }));
 
     const worksheet = XLSX.utils.json_to_sheet(rows);
@@ -514,20 +542,22 @@ const ProductTypeList = () => {
       { wch: 45 },
       { wch: 14 },
       { wch: 22 },
+      { wch: 25 },
       { wch: 22 },
+      { wch: 25 },
     ];
 
     const workbook = XLSX.utils.book_new();
 
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Item Types");
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Item Condition");
 
     return workbook;
   }, []);
 
   const downloadProductTypeExcel = useCallback(
-    (items, filename = "item-types.xlsx") => {
+    (items, filename = "item-conditions.xlsx") => {
       if (!items.length) {
-        toast.error("No item types to export");
+        toast.error("No item condition to export");
         return false;
       }
 
@@ -546,7 +576,7 @@ const ProductTypeList = () => {
       const items = await getProductTypeReportRows();
 
       if (!items.length) {
-        toast.error("No item types to export", {
+        toast.error("No item condition to export", {
           id: "product-type-export",
         });
         return;
@@ -571,7 +601,7 @@ const ProductTypeList = () => {
       const items = await getProductTypeReportRows();
 
       if (!items.length) {
-        toast.error("No item types to print");
+        toast.error("No item condition to print");
         return;
       }
 
@@ -584,7 +614,9 @@ const ProductTypeList = () => {
           <td>${escapeHtml(item.Description || "-")}</td>
           <td>${isActiveStatus(item.status) ? "Active" : "Inactive"}</td>
           <td>${escapeHtml(item.createdAt ? new Date(item.createdAt).toLocaleDateString() : "-")}</td>
+          <td>${escapeHtml(getCreatedByName(item))}</td>
           <td>${escapeHtml(item.updatedAt ? new Date(item.updatedAt).toLocaleDateString() : "-")}</td>
+          <td>${escapeHtml(getUpdatedByName(item))}</td>
         </tr>
       `,
         )
@@ -601,7 +633,7 @@ const ProductTypeList = () => {
         <!doctype html>
         <html>
           <head>
-            <title>Item Types Report</title>
+            <title>Item Condition Report</title>
             <meta charset="utf-8">
             <style>
               body {
@@ -641,7 +673,7 @@ const ProductTypeList = () => {
             </style>
           </head>
           <body>
-            <h1>Item Types Report</h1>
+            <h1>Item Condition Report</h1>
             <p>Generated: ${escapeHtml(new Date().toLocaleString())}</p>
             <p>Total records: ${items.length}</p>
             <table>
@@ -652,7 +684,9 @@ const ProductTypeList = () => {
                   <th>Description</th>
                   <th>Status</th>
                   <th>Created Date</th>
+                  <th>Created By</th>
                   <th>Updated Date</th>
+                  <th>Updated By</th>
                 </tr>
               </thead>
               <tbody>${rows}</tbody>
@@ -789,13 +823,13 @@ const ProductTypeList = () => {
     setSelectedRecipientEmails([]);
     setRecipientSearch("");
     setAttachExcel(true);
-    setEmailSubject("Item Types Report");
+    setEmailSubject("Item Condition Report");
 
     setEmailMessage(
       [
         "Dear Team,",
         "",
-        "Please find the Item Types report for your review.",
+        "Please find the Item Condition report for your review.",
         "",
         "The report includes the item condition name, description, status, and creation and update dates.",
         "",
@@ -977,7 +1011,7 @@ const ProductTypeList = () => {
     const result = await response.json();
 
     if (!response.ok || !result.success) {
-      throw new Error(result.message || "Unable to check existing item types.");
+      throw new Error(result.message || "Unable to check existing item condition.");
     }
 
     return new Set(
@@ -1198,7 +1232,7 @@ const ProductTypeList = () => {
     }
 
     if (!canDelete) {
-      toast.error("You do not have permission to delete item types.");
+      toast.error("You do not have permission to delete item condition.");
       return;
     }
 
@@ -1229,7 +1263,7 @@ const ProductTypeList = () => {
 
       if (!response.ok || !result.success) {
         throw new Error(
-          result.message || "Failed to delete selected item types.",
+          result.message || "Failed to delete selected item condition.",
         );
       }
 
@@ -1247,7 +1281,7 @@ const ProductTypeList = () => {
     } catch (error) {
       console.error("BULK Item Condition DELETE ERROR", error);
 
-      toast.error(error.message || "Failed to delete selected item types.");
+      toast.error(error.message || "Failed to delete selected item condition.");
     } finally {
       setIsDeleting(false);
     }
@@ -1463,6 +1497,56 @@ const ProductTypeList = () => {
         },
       },
       {
+        accessorKey: "createdBy",
+        id: "createdBy",
+        header: ({ column }) => (
+          <DataGridColumnHeader
+            title="Created By"
+            column={column}
+            visibility
+          />
+        ),
+        cell: ({ row }) => (
+          <span className="font-medium">
+            {row.original?.createdBy?.name ||
+              row.original?.createdByName ||
+              row.original?.createdBy ||
+              "-"}
+          </span>
+        ),
+        size: 180,
+        enableSorting: false,
+        meta: {
+          headerTitle: "Created By",
+          skeleton: <Skeleton className="h-7 w-28" />,
+        },
+      },
+      {
+        accessorKey: "updatedBy",
+        id: "updatedBy",
+        header: ({ column }) => (
+          <DataGridColumnHeader
+            title="Updated By"
+            column={column}
+            visibility
+          />
+        ),
+        cell: ({ row }) => (
+          <span className="font-medium">
+            {row.original?.updatedBy?.name ||
+              row.original?.updatedByName ||
+              row.original?.updatedBy ||
+              "-"}
+          </span>
+        ),
+        size: 180,
+        enableSorting: false,
+        meta: {
+          headerTitle: "Updated By",
+          skeleton: <Skeleton className="h-7 w-28" />,
+        },
+      },
+      {
         id: "actions",
         header: "Actions",
         cell: ({ row }) => {
@@ -1593,8 +1677,8 @@ const ProductTypeList = () => {
 
     return (
       <CardHeader className="flex-col flex-wrap items-stretch gap-3 py-5 sm:flex-row sm:items-center">
-        <div className="flex min-w-0 flex-col gap-2.5 sm:flex-row sm:items-center">
-          <div className="relative">
+        <div className="flex w-full items-center gap-2 sm:w-auto">
+          <div className="relative flex-1 sm:w-[250px] sm:flex-none">
             <form onSubmit={handleSearch} className="relative w-full sm:w-64">
               <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
 
@@ -1603,6 +1687,11 @@ const ProductTypeList = () => {
                 placeholder="Search item condition"
                 value={searchInput}
                 onChange={(event) => setSearchInput(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    handleSearch(event);
+                  }
+                }}
                 className="w-full pl-9 pr-9"
                 autoComplete="off"
               />
@@ -1615,7 +1704,11 @@ const ProductTypeList = () => {
                   onClick={() => {
                     setSearchInput("");
                     setSearchQuery("");
-                    setPagination((prev) => ({ ...prev, pageIndex: 0 }));
+
+                    setPagination((prev) => ({
+                      ...prev,
+                      pageIndex: 0,
+                    }));
                   }}
                 >
                   <X className="size-4" />
@@ -1623,6 +1716,20 @@ const ProductTypeList = () => {
               )}
             </form>
           </div>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className="flex size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                <Info className="size-4" />
+              </button>
+            </TooltipTrigger>
+
+            <TooltipContent>
+              <p>Search by item condition or description.</p>
+            </TooltipContent>
+          </Tooltip>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
           {selectedIds.length > 0 && (
@@ -1728,6 +1835,11 @@ const ProductTypeList = () => {
             setUpdatedFrom={setUpdatedFrom}
             updatedTo={updatedTo}
             setUpdatedTo={setUpdatedTo}
+            createdBy={createdBy}
+            setCreatedBy={setCreatedBy}
+
+            updatedBy={updatedBy}
+            setUpdatedBy={setUpdatedBy}
           />
 
           {/* {hasActiveFilters && (
@@ -1878,9 +1990,9 @@ const ProductTypeList = () => {
 
           <form className="flex flex-col h-full max-h-[90vh] overflow-hidden" onSubmit={(event) => { event.preventDefault(); handleSendEmail(); }} >
             <DialogHeader className="px-6 pt-6 pb-4 shrink-0">
-              <DialogTitle>Email Item Types</DialogTitle>
+              <DialogTitle>Email Item Condition</DialogTitle>
               <DialogDescription>
-                Send the Item Types report to selected staff members.
+                Send the Item Condition report to selected staff members.
               </DialogDescription>
             </DialogHeader>
 
@@ -2064,7 +2176,7 @@ const ProductTypeList = () => {
                     required
                     value={emailSubject}
                     onChange={(event) => setEmailSubject(event.target.value)}
-                    placeholder="Item Types Report"
+                    placeholder="Item Condition Report"
                   />
                 </div>
 

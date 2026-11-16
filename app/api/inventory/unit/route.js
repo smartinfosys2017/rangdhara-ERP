@@ -9,6 +9,9 @@ import { getAuthenticatedUser } from "@/lib/auth-user";
 // HELPERS
 // ======================================================
 
+const getClientIp = (request) =>
+  request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null;
+
 const allowedSortFields = [
   "id",
   "unitName",
@@ -171,16 +174,16 @@ export async function GET(request) {
     // Fetch user names
     const users = userIds.length
       ? await prisma.user.findMany({
-          where: {
-            id: {
-              in: userIds,
-            },
+        where: {
+          id: {
+            in: userIds,
           },
-          select: {
-            id: true,
-            name: true,
-          },
-        })
+        },
+        select: {
+          id: true,
+          name: true,
+        },
+      })
       : [];
 
     // Create user ID-to-name mapping
@@ -573,6 +576,131 @@ export async function PUT(request) {
         message: error.message || "Failed to update unit.",
       },
       { status: 500 }
+    );
+  }
+}
+
+export async function PATCH(request) {
+  try {
+    const accessError = await checkMenuAccess("unit");
+
+    if (accessError) return accessError;
+
+    const body = await request.json();
+
+    if (typeof body.status !== "boolean") {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "A valid status (true or false) is required.",
+        },
+        { status: 400 },
+      );
+    }
+
+    const ids = [
+      ...new Set(
+        (Array.isArray(body.ids) ? body.ids : body.id ? [body.id] : [])
+          .filter(
+            (id) =>
+              id !== null &&
+              id !== undefined &&
+              String(id).trim() !== "",
+          )
+          .map(String),
+      ),
+    ];
+
+    if (!ids.length) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "At least one Unit ID is required.",
+        },
+        { status: 400 },
+      );
+    }
+
+    const user = await getAuthenticatedUser();
+
+    if (!user?.id) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Unauthorized. Please log in again.",
+        },
+        { status: 401 },
+      );
+    }
+
+    // Find existing units
+    const existingUnits = await prisma.unit.findMany({
+      where: {
+        id: {
+          in: ids,
+        },
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+        unitName: true,
+      },
+    });
+
+    if (!existingUnits.length) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "No active units were found.",
+        },
+        { status: 404 },
+      );
+    }
+
+    // Update unit status
+    const updateResult = await prisma.unit.updateMany({
+      where: {
+        id: {
+          in: existingUnits.map((item) => item.id),
+        },
+        deletedAt: null,
+      },
+      data: {
+        status: body.status,
+        updateby: String(user.id),
+        lastSyncAt: new Date(),
+      },
+    });
+
+    // System logs
+    for (const item of existingUnits) {
+      await systemLog({
+        event: "update",
+        userId: String(user.id),
+        entityId: String(item.id),
+        entityType: "inventory.unit",
+        description: `Unit marked ${body.status ? "active" : "inactive"
+          }: ${item.unitName}`,
+        ipAddress: getClientIp(request),
+      });
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: `Unit(s) marked ${body.status ? "active" : "inactive"
+        }.`,
+      count: updateResult.count,
+      sync: true,
+    });
+  } catch (error) {
+    console.error("UNIT STATUS UPDATE ERROR:", error);
+
+    return NextResponse.json(
+      {
+        success: false,
+        message: error.message || "Failed to update unit status.",
+      },
+      { status: 500 },
     );
   }
 }

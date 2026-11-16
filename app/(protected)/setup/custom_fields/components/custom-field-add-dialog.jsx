@@ -68,6 +68,7 @@ const FIELD_TO_OPTIONS = [
   { value: 'projects', label: 'Projects' },
   { value: 'transaction', label: 'Transaction' },
   { value: 'employee', label: 'Employee' },
+  { value: 'candidate', label: 'Candidate' },
 ];
 
 

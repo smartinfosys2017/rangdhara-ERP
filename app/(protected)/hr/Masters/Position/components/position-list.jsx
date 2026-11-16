@@ -1471,7 +1471,7 @@ const PositionList = () => {
 
                             <Input
                                 type="text"
-                                placeholder="Search position..."
+                                placeholder="Search position"
                                 value={searchInput}
                                 onChange={(event) => setSearchInput(event.target.value)}
                                 className="w-full pl-9 pr-9"

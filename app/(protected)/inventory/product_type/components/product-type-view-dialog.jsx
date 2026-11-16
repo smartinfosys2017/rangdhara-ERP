@@ -63,21 +63,21 @@ export default function ProductTypeViewDialog({
         <div className="flex flex-col h-full max-h-[90vh] overflow-hidden">
           <DialogHeader>
             <DialogTitle>
-              Item Type Details
+              Item Condition Details
             </DialogTitle>
 
             <DialogDescription>
-              View complete item type information.
+              View complete item condition information.
             </DialogDescription>
           </DialogHeader>
           <ScrollArea className="grow min-h-0 flex flex-col h-full max-h-[90vh] overflow-hidden">
             <DialogBody className="space-y-6 pt-0 px-0 min-h-0">
-              {/* Item TYPE */}
+              {/* Item Condition */}
 
               <div className="rounded-lg border p-4">
                 <div className="mb-2 flex items-center gap-2 font-semibold">
                   <Layers className="h-4 w-4" />
-                  Item Type
+                  Item Condition
                 </div>
 
                 <p className="text-sm">{ProductType.ProductType || "-"}</p>
@@ -119,7 +119,7 @@ export default function ProductTypeViewDialog({
                 <div className="rounded-lg border p-4">
                   <div className="mb-2 flex items-center gap-2 font-semibold">
                     <CheckCircle className="h-4 w-4" />
-                    Default Item Type
+                    Default Item Condition
                   </div>
 
                   <p className="text-sm">{ProductType.isDefault ? "Yes" : "No"}</p>

@@ -1997,7 +1997,7 @@ const QuestionList = () => {
 
                             <Input
                                 type="text"
-                                placeholder="Search questions..."
+                                placeholder="Search questions"
                                 value={searchInput}
                                 onChange={(event) =>
                                     setSearchInput(event.target.value)
