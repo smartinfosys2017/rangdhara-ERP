@@ -1,3 +1,4 @@
+
 "use client";
 
 import { RiCheckboxCircleFill, RiErrorWarningFill } from "@remixicon/react";
@@ -6,7 +7,6 @@ import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
 
 import { Alert, AlertIcon, AlertTitle } from "@/components/ui/alert";
-
 import { Button } from "@/components/ui/button";
 
 import {
@@ -59,12 +59,16 @@ const UnitDeleteDialog = ({ open, closeDialog, Unit, onSuccess }) => {
 
       closeDialog?.();
 
+      // Run parent success callback if provided.
       if (typeof onSuccess === "function") {
         await onSuccess(result.data);
       }
 
+      // Refresh all UnitList queries, including filtered and paginated queries.
       await queryClient.invalidateQueries({
-        queryKey: ["unit-units"],
+        queryKey: ["unit"],
+        exact: false,
+        refetchType: "active",
       });
     },
 

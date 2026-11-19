@@ -594,17 +594,10 @@ const LocationList = () => {
             "Location Name": item.locationName || "",
             "Location Code": item.locationCode || "",
             Status: item.status ? "Active" : "Inactive",
-
-            "Created Date": item.createdAt
-                ? new Date(item.createdAt).toLocaleString()
-                : "",
-
-            "Updated Date": item.updatedAt
-                ? new Date(item.updatedAt).toLocaleString()
-                : "",
-
-            "Created By": item.createdByName || "",
-            "Updated By": item.updatedByName || "",
+            "Created Date": formatDate(item.createdAt),
+            "Created By": item.createdByName || "-",
+            "Updated Date": formatDate(item.updatedAt),
+            "Updated By": item.updatedByName || "-",
         }));
 
         const worksheet = XLSX.utils.json_to_sheet(rows);
@@ -688,8 +681,8 @@ const LocationList = () => {
                     <td>${escapeHtml(item.locationCode)}</td>
                     <td>${item.status ? "Active" : "Inactive"}</td>
                     <td>${escapeHtml(formatDate(item.createdAt))}</td>
-                    <td>${escapeHtml(formatDate(item.updatedAt))}</td>
                     <td>${escapeHtml(item.createdByName || "-")}</td>
+                    <td>${escapeHtml(formatDate(item.updatedAt))}</td>              
                     <td>${escapeHtml(item.updatedByName || "-")}</td>
                 </tr>
             `,
@@ -753,9 +746,9 @@ const LocationList = () => {
                                     <th>Location Name</th>
                                     <th>Location Code</th>
                                     <th>Status</th>
-                                    <th>Added Date</th>
-                                    <th>Updated Date</th>
+                                    <th>Created Date</th>
                                     <th>Created By</th>
+                                    <th>Updated Date</th>
                                     <th>Updated By</th>
                                 </tr>
                             </thead>
@@ -1616,7 +1609,7 @@ const LocationList = () => {
                 id: "createdAt",
 
                 header: ({ column }) => (
-                    <DataGridColumnHeader title="Added Date" column={column} visibility />
+                    <DataGridColumnHeader title="Created Date" column={column} visibility />
                 ),
 
                 cell: ({ row }) => formatDate(row.original?.createdAt),
@@ -1625,11 +1618,28 @@ const LocationList = () => {
                 enableSorting: true,
 
                 meta: {
-                    headerTitle: "Added Date",
+                    headerTitle: "Created Date",
                     skeleton: <Skeleton className="h-7 w-24" />,
                 },
             },
+            {
+                accessorKey: "createdByName",
+                id: "createdByName",
 
+                header: ({ column }) => (
+                    <DataGridColumnHeader title="Created By" column={column} visibility />
+                ),
+
+                cell: ({ row }) => <span>{row.original.createdByName || "-"}</span>,
+
+                size: 180,
+                enableSorting: false,
+
+                meta: {
+                    headerTitle: "Created By",
+                    skeleton: <Skeleton className="h-7 w-24" />,
+                },
+            },
             {
                 accessorKey: "updatedAt",
                 id: "updatedAt",
@@ -1653,24 +1663,6 @@ const LocationList = () => {
                 },
             },
 
-            {
-                accessorKey: "createdByName",
-                id: "createdByName",
-
-                header: ({ column }) => (
-                    <DataGridColumnHeader title="Created By" column={column} visibility />
-                ),
-
-                cell: ({ row }) => <span>{row.original.createdByName || "-"}</span>,
-
-                size: 180,
-                enableSorting: false,
-
-                meta: {
-                    headerTitle: "Created By",
-                    skeleton: <Skeleton className="h-7 w-24" />,
-                },
-            },
 
             {
                 accessorKey: "updatedByName",
@@ -2211,7 +2203,7 @@ const LocationList = () => {
                                 }
                             >
                                 <Copy className="mr-2 size-4" />
-                                {copyLoading ? "Copying..." : "Copy Location"}
+                                {copyLoading ? "Copying..." : "Copy"}
                             </Button>
                         </DialogFooter>
                     </form>

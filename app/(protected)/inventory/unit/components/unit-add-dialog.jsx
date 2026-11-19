@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { RiCheckboxCircleFill, RiErrorWarningFill } from "@remixicon/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -42,13 +42,44 @@ import {
 } from "@/components/ui/select";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { UnitAddSchema } from "../forms/unit-add-schema";
-
+import UnitCustomFields, {validateRequiredCustomFields,} from "../../custom-fields/import-custom-fields";
 const DEFAULT_FORM = {
   unitName: "",
   abbreviation: "",
   status: "true",
 };
+const showSuccessToast = (message) => {
+  toast.custom(
+    () => (
+      <Alert variant="mono" icon="success">
+        <AlertIcon>
+          <RiCheckboxCircleFill />
+        </AlertIcon>
+        <AlertTitle>{message}</AlertTitle>
+      </Alert>
+    ),
+    { position: "top-center" },
+  );
+};
 
+const showErrorToast = (message) => {
+  toast.custom(
+    (t) => (
+      <Alert
+        variant="mono"
+        icon="destructive"
+        close={true}
+        onClose={() => toast.dismiss(t)}
+      >
+        <AlertIcon>
+          <RiErrorWarningFill />
+        </AlertIcon>
+        <AlertTitle>{message}</AlertTitle>
+      </Alert>
+    ),
+    { position: "top-center" },
+  );
+};
 export default function UnitAddDialog({
   open,
   closeDialog,
@@ -62,7 +93,9 @@ export default function UnitAddDialog({
     defaultValues: DEFAULT_FORM,
     mode: "onSubmit",
   });
-
+  const [customFieldDefinitions, setCustomFieldDefinitions] = useState([]);
+  const [customFields, setCustomFields] = useState({});
+  const [customFieldsReady, setCustomFieldsReady] = useState(false);
   // Reset form whenever the dialog opens or the selected unit changes.
   useEffect(() => {
     if (open) {
@@ -72,6 +105,10 @@ export default function UnitAddDialog({
         status:
           item?.status === false || item?.status === "false" ? "false" : "true",
       });
+
+      setCustomFields(item?.customFields ?? {});
+      setCustomFieldDefinitions([]);
+      setCustomFieldsReady(false);
     }
   }, [open, item, form]);
 
@@ -81,6 +118,7 @@ export default function UnitAddDialog({
         unitName: values.unitName.trim(),
         abbreviation: values.abbreviation.trim(),
         status: values.status === "true",
+        customFields: customFields ?? {},
       };
 
       const response = await apiFetch("/api/inventory/unit", {
@@ -146,6 +184,18 @@ export default function UnitAddDialog({
   const isProcessing = mutation.isPending;
 
   const handleSave = (values) => {
+    const missingCustomFields = validateRequiredCustomFields(
+      customFieldDefinitions,
+      customFields,
+    );
+
+    if (missingCustomFields.length > 0) {
+      showErrorToast(
+        `Please fill in required custom fields: ${missingCustomFields.join(", ")}`,
+      );
+      return;
+    }
+
     mutation.mutate(values);
   };
 
@@ -174,9 +224,9 @@ export default function UnitAddDialog({
               {item ? "Update Unit information." : "Create a new Unit."}
             </DialogDescription>
           </DialogHeader>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(handleSave)}>
-              <ScrollArea className="grow min-h-0 flex flex-col h-full max-h-[90vh] overflow-hidden">
+          <ScrollArea className="grow min-h-0 flex flex-col h-full max-h-[90vh] overflow-hidden">
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(handleSave)}>
                 <DialogBody className="space-y-6 pt-0 px-0 min-h-0">
                   {/* UNIT NAME */}
                   <FormField
@@ -230,7 +280,7 @@ export default function UnitAddDialog({
                     name="status"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Status<span className="text-destructive">*</span></FormLabel>
+                        <FormLabel>Status <span className="text-destructive">*</span></FormLabel>
 
                         <FormControl>
                           <Select
@@ -253,29 +303,50 @@ export default function UnitAddDialog({
                       </FormItem>
                     )}
                   />
+                  {/* CUSTOM FIELDS */}
+
+                  <div className="space-y-4 border-t pt-5">
+                    <div>
+                      <h3 className="text-base font-semibold">Custom Fields</h3>
+
+                      <p className="text-sm text-muted-foreground">
+                        Additional unit information.
+                      </p>
+                    </div>
+
+                    <UnitCustomFields
+                      values={customFields}
+                      onChange={setCustomFields}
+                      onFieldsLoaded={(loadedFields) => {
+                        setCustomFieldDefinitions(loadedFields);
+                        setCustomFieldsReady(true);
+                      }}
+                      disabled={isProcessing}
+                    />
+                  </div>
                 </DialogBody>
-              </ScrollArea>
-              <DialogFooter className="gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleClose}
-                  disabled={isProcessing}
-                >
-                  Cancel
-                </Button>
+                <DialogFooter className="gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleClose}
+                    disabled={isProcessing}
+                  >
+                    Cancel
+                  </Button>
 
-                <Button
-                  type="submit"
-                  disabled={!form.formState.isDirty || isProcessing}
-                >
-                  {isProcessing && <LoaderCircleIcon className="animate-spin" />}
+                  <Button
+                    type="submit"
+                    disabled={!form.formState.isDirty && Object.keys(customFields).length === 0 || isProcessing || !customFieldsReady}
+                  >
+                    {isProcessing && <LoaderCircleIcon className="animate-spin" />}
 
-                  {item ? "Update Unit" : "Add Unit"}
-                </Button>
-              </DialogFooter>
-            </form>
-          </Form>
+                    {item ? "Update Unit" : "Save"}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </Form>
+          </ScrollArea>
         </div>
       </DialogContent>
     </Dialog>

@@ -290,24 +290,22 @@ export function StoreClientFiltersSheet({
                 date={createdDate}
                 setDate={setCreatedDate}
               />
-
-              <DateRangeFilter
-                label="Updated Date"
-                date={updatedDate}
-                setDate={setUpdatedDate}
-              />
-            </div>
-
-            <div className="my-5 border-b border-border" />
-
-            <div className="space-y-5 pb-5">
               <UserFilter
                 label="Created By"
                 value={draftCreatedBy}
                 onChange={setDraftCreatedBy}
                 users={users}
               />
+            </div>
 
+            <div className="my-5 border-b border-border" />
+
+            <div className="space-y-5 pb-5">
+              <DateRangeFilter
+                label="Updated Date"
+                date={updatedDate}
+                setDate={setUpdatedDate}
+              />
               <UserFilter
                 label="Updated By"
                 value={draftUpdatedBy}

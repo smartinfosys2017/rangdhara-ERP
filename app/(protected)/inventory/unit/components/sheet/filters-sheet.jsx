@@ -61,7 +61,7 @@ const toDateString = (date) =>
   date ? format(date, 'yyyy-MM-dd') : '';
 
 const DateRangeFilter = ({ label, date, setDate }) => (
-  <div className="flex flex-col gap-2.5 px-5">
+  <div className="flex flex-col gap-2.5 px-5 pb-2">
     <span className="text-sm font-medium text-mono">{label}</span>
 
     <Popover>
@@ -262,50 +262,50 @@ export function StoreClientFiltersSheet({
             <div className="my-5 border-b border-border" />
 
             {/* Date filters */}
-            <div className="space-y-5 pb-5">
+            <div className="space-y-5 pb-2">
               <DateRangeFilter
                 label="Created Date"
                 date={createdDate}
                 setDate={setCreatedDate}
               />
+              {/* Created By */}
+              <div className="space-y-2 px-5 pb-2">
+                <Label htmlFor="createdByFilter">Created By</Label>
 
-              <DateRangeFilter
-                label="Updated Date"
-                date={updatedDate}
-                setDate={setUpdatedDate}
-              />
+                <Select
+                  value={draftCreatedBy || 'all'}
+                  onValueChange={(value) =>
+                    setDraftCreatedBy(value === 'all' ? '' : value)
+                  }
+                >
+                  <SelectTrigger id="createdByFilter">
+                    <SelectValue placeholder="Select creator" />
+                  </SelectTrigger>
+
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+
+                    {users.map((user) => (
+                      <SelectItem key={user.id} value={user.id}>
+                        {user.name || user.email}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
             </div>
 
             <div className="my-5 border-b border-border" />
 
-            {/* Created By */}
-            <div className="space-y-2 px-5 pb-5">
-              <Label htmlFor="createdByFilter">Created By</Label>
-
-              <Select
-                value={draftCreatedBy || 'all'}
-                onValueChange={(value) =>
-                  setDraftCreatedBy(value === 'all' ? '' : value)
-                }
-              >
-                <SelectTrigger id="createdByFilter">
-                  <SelectValue placeholder="Select creator" />
-                </SelectTrigger>
-
-                <SelectContent>
-                  <SelectItem value="all">All Administrators</SelectItem>
-
-                  {users.map((user) => (
-                    <SelectItem key={user.id} value={user.id}>
-                      {user.name || user.email}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <DateRangeFilter
+              label="Updated Date"
+              date={updatedDate}
+              setDate={setUpdatedDate}
+            />
 
             {/* Updated By */}
-            <div className="space-y-2 px-5 pb-5">
+            <div className="space-y-2 px-5 pb-2">
               <Label htmlFor="updatedByFilter">Updated By</Label>
 
               <Select
@@ -319,7 +319,7 @@ export function StoreClientFiltersSheet({
                 </SelectTrigger>
 
                 <SelectContent>
-                  <SelectItem value="all">All Administrators</SelectItem>
+                  <SelectItem value="all">All</SelectItem>
 
                   {users.map((user) => (
                     <SelectItem key={user.id} value={user.id}>

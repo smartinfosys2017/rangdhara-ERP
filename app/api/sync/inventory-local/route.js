@@ -76,6 +76,8 @@ async function syncItemGroups({ sourceDb, targetDb, sourceName, targetName }) {
 
             deletedAt: itemGroup.deletedAt || null,
 
+            customFields: itemGroup.customFields,
+
             lastSyncAt: new Date(),
           },
         });
@@ -150,6 +152,8 @@ async function syncItemGroups({ sourceDb, targetDb, sourceName, targetName }) {
 
             updatedAt: itemGroup.updatedAt,
 
+            customFields: itemGroup.customFields,
+
             lastSyncAt: new Date(),
           },
         });
@@ -180,6 +184,8 @@ async function syncItemGroups({ sourceDb, targetDb, sourceName, targetName }) {
           deletedAt: null,
 
           updatedAt: itemGroup.updatedAt,
+
+          customFields: itemGroup.customFields,
 
           lastSyncAt: new Date(),
         },
@@ -274,6 +280,8 @@ async function syncUnits({ sourceDb, targetDb, sourceName, targetName }) {
 
             deletedAt: unit.deletedAt || null,
 
+            customFields: unit.customFields,
+
             lastSyncAt: new Date(),
           },
         });
@@ -340,6 +348,8 @@ async function syncUnits({ sourceDb, targetDb, sourceName, targetName }) {
 
             updatedAt: unit.updatedAt,
 
+            customFields: unit.customFields,
+
             lastSyncAt: new Date(),
           },
         });
@@ -366,6 +376,8 @@ async function syncUnits({ sourceDb, targetDb, sourceName, targetName }) {
           deletedAt: null,
 
           updatedAt: unit.updatedAt,
+
+          customFields: unit.customFields,
 
           lastSyncAt: new Date(),
         },
@@ -469,6 +481,8 @@ async function syncProductTypes({
 
             deletedAt: productType.deletedAt || null,
 
+            customFields: productType.customFields,
+
             lastSyncAt: new Date(),
           },
         });
@@ -511,6 +525,8 @@ async function syncProductTypes({
 
             updatedAt: productType.updatedAt,
 
+            customFields: productType.customFields,
+
             lastSyncAt: new Date(),
           },
         });
@@ -542,6 +558,8 @@ async function syncProductTypes({
             deletedAt: null,
 
             updatedAt: productType.updatedAt,
+
+            customFields: productType.customFields,
 
             lastSyncAt: new Date(),
           },

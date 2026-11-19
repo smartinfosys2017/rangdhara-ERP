@@ -629,17 +629,18 @@ model NotificationSync {
 }
 
 model ItemGroup {
-  id          String    @id @default(uuid())
-  groupName   String    @db.VarChar(255)
-  description String?
-  status      Boolean   @default(true)
-  isDefault   Boolean   @default(false)
-  createby    String?
-  updateby    String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  deletedAt   DateTime?
-  lastSyncAt  DateTime?
+  id           String    @id @default(uuid())
+  groupName    String    @db.VarChar(255)
+  description  String?
+  status       Boolean   @default(true)
+  isDefault    Boolean   @default(false)
+  createby     String?
+  updateby     String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+  lastSyncAt   DateTime?
+  customFields Json?     @default("{}")
 
   @@map("item_groups")
 }
@@ -655,22 +656,24 @@ model Unit {
   updatedAt    DateTime  @updatedAt
   deletedAt    DateTime?
   lastSyncAt   DateTime?
+  customFields Json?     @default("{}")
 
   @@map("Unit")
 }
 
 model PtoductType {
-  id          String    @id @default(uuid())
-  ProductType String    @db.VarChar(255)
-  Description String    @db.VarChar(255)
-  status      Boolean   @default(true)
-  isDefault   Boolean   @default(false)
-  createby    String?
-  updateby    String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  deletedAt   DateTime?
-  lastSyncAt  DateTime?
+  id           String    @id @default(uuid())
+  ProductType  String    @db.VarChar(255)
+  Description  String    @db.VarChar(255)
+  status       Boolean   @default(true)
+  isDefault    Boolean   @default(false)
+  createby     String?
+  updateby     String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+  lastSyncAt   DateTime?
+  customFields Json?     @default("{}")
 
   @@map("PtoductType")
 }
@@ -706,8 +709,9 @@ model ItemMaster {
   ApplicableForRelocateLevel Boolean @default(false)
   RelocateLevel              String? @db.VarChar(255)
 
-  Locationid String?
-  Machineid  String?
+  Locationid      String?
+  Machineid       String?
+  ItemConditionid String?
 
   status     Boolean   @default(true)
   isDefault  Boolean   @default(false)
@@ -717,7 +721,8 @@ model ItemMaster {
   updatedAt  DateTime  @updatedAt
   deletedAt  DateTime?
   lastSyncAt DateTime?
-
+  
+  @@unique([ItemName, ItemConditionid])
   @@map("ItemMaster")
 }
 
@@ -1497,6 +1502,7 @@ model MachineMaster {
   updatedAt     DateTime             @updatedAt
   deletedAt     DateTime?
   lastSyncAt    DateTime?
+  customFields  Json?                @default("{}")
   itemDetails   MachineItemDetails[]
   changeLogs    MachineChangeLog[]
 
@@ -1565,6 +1571,7 @@ model Location {
   updatedAt    DateTime  @updatedAt
   deletedAt    DateTime?
   lastSyncAt   DateTime?
+  customFields Json?     @default("{}")
 
   @@map("location")
 }

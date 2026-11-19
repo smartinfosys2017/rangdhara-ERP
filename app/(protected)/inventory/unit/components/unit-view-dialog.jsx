@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect } from "react";
-import { Calendar } from "lucide-react";
+
+import { Calendar, CheckCircle, FileText, Layers, PlusCircle, MinusCircle, XCircle, Settings2,} from "lucide-react";
 
 import {
   Dialog,
@@ -28,17 +29,58 @@ import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 // =======================================================
 
 const formatDate = (value) => {
-  if (!value) return "-";
+  if (!value) {
+    return "-";
+  }
 
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) return "-";
-
-  return date.toLocaleDateString("en-US", {
+  return new Date(value).toLocaleString("en-US", {
     year: "numeric",
     month: "short",
     day: "numeric",
   });
+};
+const formatCustomFieldValue = (value) => {
+  if (value === null || value === undefined || value === "") {
+    return "-";
+  }
+
+  // Boolean
+  if (typeof value === "boolean") {
+    return value ? "Yes" : "No";
+  }
+
+  // Array
+  if (Array.isArray(value)) {
+    if (value.length === 0) {
+      return "-";
+    }
+
+    return value
+      .map((item) => {
+        if (item === null || item === undefined) {
+          return "";
+        }
+
+        if (typeof item === "object") {
+          return JSON.stringify(item);
+        }
+
+        return String(item);
+      })
+      .filter(Boolean)
+      .join(", ");
+  }
+
+  // Object
+  if (typeof value === "object") {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
+
+  return String(value);
 };
 
 // =======================================================
@@ -52,6 +94,9 @@ export default function UnitViewDialog({ open, closeDialog, Unit }) {
     Unit.status === true || Unit.status === "true" || Unit.status === 1
       ? "true"
       : "false";
+
+  const customFields =  Unit.custom_field_values || Unit.customFields || {};
+  const hasCustomFields =  customFields && typeof customFields === "object" && !Array.isArray(customFields) && Object.keys(customFields).length > 0;
 
   return (
     <Dialog
@@ -105,7 +150,39 @@ export default function UnitViewDialog({ open, closeDialog, Unit }) {
                   </SelectContent>
                 </Select>
               </div>
+              {hasCustomFields && (
+                <div className="rounded-lg border mt-3 mb-3">
+                  <div className="flex items-center gap-2 border-b p-4 font-semibold">
+                    <Settings2 className="h-4 w-4" />
+                    Custom Fields
+                  </div>
 
+                  <div className="grid grid-cols-1 gap-4 p-4 sm:grid-cols-2">
+                    {Object.entries(customFields).map(([key, value]) => (
+                      <div key={key} className="rounded-lg border bg-muted/30 p-4">
+                        <div className="mb-2 text-sm font-medium">{key}</div>
+
+                        <div className="break-words text-sm text-muted-foreground">
+                          {formatCustomFieldValue(value)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {!hasCustomFields && (
+                <div className="rounded-lg border p-4">
+                  <div className="mb-2 flex items-center gap-2 font-semibold">
+                    <Settings2 className="h-4 w-4" />
+                    Custom Fields
+                  </div>
+
+                  <p className="text-sm text-muted-foreground">
+                    No custom fields available.
+                  </p>
+                </div>
+              )}
               {/* CREATED AT */}
               <div className="space-y-2">
                 <label className="flex items-center gap-2 text-sm font-medium">

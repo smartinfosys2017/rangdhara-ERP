@@ -714,10 +714,10 @@ const MachineMasterList = () => {
             Comment: item.comment || "",
             Specifications: getItemDetailsSummary(item),
             Operational: item.status ? "Yes" : "No",
-            "Added Date": formatDateTime(item.createdAt),
-            "Last Updated Date": formatDateTime(item.updatedAt),
-            "Added By": getCreatedByName(item),
-            "Last Updated By": getUpdatedByName(item),
+            "Created Date": formatDate(item.createdAt),
+            "Created By": item.createdByName || "-",
+            "Updated Date": formatDate(item.updatedAt),
+            "Updated By": item.updatedByName || "-",
         }));
 
         const worksheet = XLSX.utils.json_to_sheet(rows);
@@ -727,14 +727,12 @@ const MachineMasterList = () => {
             { wch: 25 },
             { wch: 18 },
             { wch: 22 },
-            { wch: 22 },
             { wch: 30 },
             { wch: 65 },
-            { wch: 14 },
             { wch: 22 },
+            { wch: 25 },
             { wch: 22 },
-            { wch: 20 },
-            { wch: 20 },
+            { wch: 25 },
         ];
 
         const workbook = XLSX.utils.book_new();
@@ -877,13 +875,13 @@ const MachineMasterList = () => {
                     <td>${escapeHtml(item.machineNumber)}</td>
                     <td>${escapeHtml(item.machineName)}</td>
                     <td>${escapeHtml(item.machineCode)}</td>
-                    <td>${escapeHtml(item.comment || "-")}</td>
-                    <td>${item.status ? "Yes" : "No"}</td>
-                    <td>${escapeHtml(formatDate(item.createdAt))}</td>
-                    <td>${escapeHtml(formatDate(item.updatedAt))}</td>
-                    <td>${escapeHtml(getCreatedByName(item))}</td>
-                    <td>${escapeHtml(getUpdatedByName(item))}</td>
+                    <td>${escapeHtml(item.comment || "-")}</td>                   
                     <td>${escapeHtml(getItemDetailsSummary(item))}</td>
+                    <td>${item.status ? "Yes" : "No"}</td> 
+                    <td>${escapeHtml(formatDate(item.createdAt))}</td>
+                    <td>${escapeHtml(item.createdByName || "-")}</td>
+                    <td>${escapeHtml(formatDate(item.updatedAt))}</td>              
+                    <td>${escapeHtml(item.updatedByName || "-")}</td>
                 </tr>
             `).join("");
 
@@ -982,13 +980,14 @@ const MachineMasterList = () => {
                                     <th>Machine Number</th>
                                     <th>Machine Name</th>
                                     <th>Machine Code</th>                                
-                                    <th>Comment</th>
-                                    <th>Operational</th>
-                                    <th>Added Date</th>
-                                    <th>Updated Date</th>
-                                    <th>Added By</th>
-                                    <th>Updated By</th>
+                                    <th>Comment</th>                                    
                                     <th>Specifications</th>
+                                    <th>Operational</th>
+                                    <th>Created Date</th>
+                                    <th>Created By</th>
+                                    <th>Updated Date</th>
+                                    <th>Updated By</th>
+                                    
                                 </tr>
                             </thead>
 
@@ -1705,40 +1704,44 @@ const MachineMasterList = () => {
             {
                 accessorKey: "createdAt",
                 id: "createdAt",
-
                 header: ({ column }) => (
-                    <DataGridColumnHeader
-                        title="Added Date"
-                        column={column}
-                        visibility
-                    />
+                    <DataGridColumnHeader title="Created Date" column={column} visibility />
                 ),
-
-                cell: ({ row }) => (
-                    <span>
-                        {formatDate(row.original.createdAt)}
-                    </span>
-                ),
-
+                cell: ({ row }) => (<span>{formatDate(row.original.createdAt)}</span>),
                 size: 140,
                 enableSorting: true,
 
                 meta: {
-                    headerTitle: "Added Date",
+                    headerTitle: "Created Date",
                     skeleton: <Skeleton className="h-7 w-24" />,
                 },
             },
+            {
+                accessorKey: "createdByName",
+                id: "createdByName",
 
+                header: ({ column }) => (
+                    <DataGridColumnHeader title="Created By" column={column} visibility />
+                ),
+
+                cell: ({ row }) => ( <span> {getCreatedByName(row.original)}
+                    </span>
+                ),
+
+                size: 160,
+                enableSorting: false,
+
+                meta: {
+                    headerTitle: "Created By",
+                    skeleton: <Skeleton className="h-7 w-24" />,
+                },
+            },
             {
                 accessorKey: "updatedAt",
                 id: "updatedAt",
 
                 header: ({ column }) => (
-                    <DataGridColumnHeader
-                        title="Last Updated Date"
-                        column={column}
-                        visibility
-                    />
+                    <DataGridColumnHeader title="Updated Date" column={column} visibility />
                 ),
 
                 cell: ({ row }) => (
@@ -1751,37 +1754,10 @@ const MachineMasterList = () => {
                 enableSorting: true,
 
                 meta: {
-                    headerTitle: "Last Updated Date",
+                    headerTitle: "Updated Date",
                     skeleton: <Skeleton className="h-7 w-24" />,
                 },
-            },
-
-            {
-                accessorKey: "createdByName",
-                id: "createdByName",
-
-                header: ({ column }) => (
-                    <DataGridColumnHeader
-                        title="Added By"
-                        column={column}
-                        visibility
-                    />
-                ),
-
-                cell: ({ row }) => (
-                    <span>
-                        {getCreatedByName(row.original)}
-                    </span>
-                ),
-
-                size: 160,
-                enableSorting: false,
-
-                meta: {
-                    headerTitle: "Added By",
-                    skeleton: <Skeleton className="h-7 w-24" />,
-                },
-            },
+            },          
 
             {
                 accessorKey: "updatedByName",
@@ -1789,7 +1765,7 @@ const MachineMasterList = () => {
 
                 header: ({ column }) => (
                     <DataGridColumnHeader
-                        title="Last Updated By"
+                        title="Updated By"
                         column={column}
                         visibility
                     />
@@ -1805,7 +1781,7 @@ const MachineMasterList = () => {
                 enableSorting: false,
 
                 meta: {
-                    headerTitle: "Last Updated By",
+                    headerTitle: "Updated By",
                     skeleton: <Skeleton className="h-7 w-24" />,
                 },
             },
@@ -2093,7 +2069,7 @@ const MachineMasterList = () => {
                         onClick={() => setAddDialogOpen(true)}
                     >
                         <Plus className="mr-2 size-4" />
-                        Add Machine
+                        Add Machinery
                     </Button>
                 )}
 

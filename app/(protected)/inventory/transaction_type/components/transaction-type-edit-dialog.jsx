@@ -30,7 +30,8 @@ import {
 } from "@/components/ui/select";
 import { Alert, AlertIcon, AlertTitle } from "@/components/ui/alert";
 import { RiCheckboxCircleFill, RiErrorWarningFill } from "@remixicon/react";
-import TransactionCustomFields from "./transaction-custom-fields";
+import TransactionCustomFields, { validateRequiredCustomFields, } from "../../custom-fields/import-custom-fields";
+
 const showSuccessToast = (message) => {
   toast.custom(
     () => (
@@ -80,7 +81,13 @@ const EMPTY_FORM = {
 
   isDefault: "false",
 };
-
+const parseSavedCustomFields = (value) => {
+  try {
+    return JSON.parse(value || "{}");
+  } catch {
+    return {};
+  }
+};
 // =======================================================
 // COMPONENT
 // =======================================================
@@ -104,7 +111,7 @@ export default function TransactionTypeEditDialog({
   const [customFields, setCustomFields] = useState({});
 
   const [customFieldsLoading, setCustomFieldsLoading] = useState(false);
-
+  const [customFieldsReady, setCustomFieldsReady] = useState(false);
   // =======================================================
   // LOAD EXISTING DATA + CUSTOM FIELDS
   // =======================================================
@@ -115,31 +122,31 @@ export default function TransactionTypeEditDialog({
     if (TransactionType) {
       setForm({
         id: TransactionType.id || null,
-
         TransactionType: TransactionType.TransactionType || "",
-
         Description: TransactionType.Description || "",
-
-        EffectOnTransaction: TransactionType.EffectOnTransaction || "addition",
-
+        EffectOnTransaction:
+          TransactionType.EffectOnTransaction || "addition",
         status: TransactionType.status ? "true" : "false",
-
         isDefault: TransactionType.isDefault ? "true" : "false",
       });
 
-      // Existing custom field values
-      setCustomFields(TransactionType.customFields || {});
+      const savedCustomFields =
+        TransactionType.customFields ??
+        TransactionType.custom_field_values ??
+        {};
+
+      setCustomFields(
+        typeof savedCustomFields === "string"
+          ? parseSavedCustomFields(savedCustomFields)
+          : savedCustomFields || {},
+      );
     } else {
       setForm(EMPTY_FORM);
-
       setCustomFields({});
     }
 
     setErrors({});
-
   }, [open, TransactionType]);
-
-
 
   // =======================================================
   // UPDATE FIELD
@@ -177,9 +184,7 @@ export default function TransactionTypeEditDialog({
         "Transaction Type must not exceed 255 characters.";
     }
 
-    if (!Description) {
-      newErrors.Description = "Description is required.";
-    } else if (Description.length > 255) {
+    if (Description && Description.length > 255) {
       newErrors.Description = "Description must not exceed 255 characters.";
     }
 
@@ -197,42 +202,52 @@ export default function TransactionTypeEditDialog({
   // =======================================================
   // UPDATE SAVE
   // =======================================================
-
   const handleSave = async () => {
     if (!validate()) return;
 
+    if (!customFieldsReady) {
+      showErrorToast("Please wait while custom fields are loading.");
+      return;
+    }
+
+    // Validate selected required custom fields only.
+    const missingCustomFields = validateRequiredCustomFields(
+      customFieldDefinitions,
+      customFields,
+    );
+
+    if (missingCustomFields.length > 0) {
+      showErrorToast(
+        `Please fill in required fields: ${missingCustomFields.join(", ")}`,
+      );
+      return;
+    }
+
     const data = {
       id: form.id,
-
       TransactionType: form.TransactionType.trim(),
-
       Description: form.Description.trim() || "",
-
       EffectOnTransaction: form.EffectOnTransaction,
-
       status: form.status === "true",
-
       isDefault: form.isDefault === "true",
-
-      // CUSTOM FIELDS
       customFields: customFields || {},
     };
 
     try {
       const response = await fetch("/api/inventory/transaction-type", {
         method: "PUT",
-
         headers: {
           "Content-Type": "application/json",
         },
-
         body: JSON.stringify(data),
       });
 
       const result = await response.json();
 
       if (!response.ok || !result.success) {
-        throw new Error(result.message || "Failed to update Transaction Type.");
+        throw new Error(
+          result.message || "Failed to update Transaction Type.",
+        );
       }
 
       showSuccessToast("Transaction Type updated successfully.");
@@ -243,7 +258,9 @@ export default function TransactionTypeEditDialog({
     } catch (error) {
       console.error("TRANSACTION TYPE UPDATE ERROR", error);
 
-      showErrorToast(error.message || "Unable to update Transaction Type.");
+      showErrorToast(
+        error.message || "Unable to update Transaction Type.",
+      );
     }
   };
 
@@ -253,14 +270,11 @@ export default function TransactionTypeEditDialog({
 
   const handleClose = () => {
     setErrors({});
-
     setForm(EMPTY_FORM);
-
     setCustomFields({});
-
     setCustomFieldDefinitions([]);
-
     setCustomFieldsLoading(false);
+    setCustomFieldsReady(false);
 
     closeDialog?.();
   };
@@ -316,7 +330,7 @@ export default function TransactionTypeEditDialog({
 
               <div>
                 <label className="mb-2 block text-sm font-medium">
-                  Description <span className="text-destructive">*</span>
+                  Description
                 </label>
 
                 <Textarea
@@ -421,19 +435,15 @@ export default function TransactionTypeEditDialog({
                   </p>
                 </div>
 
-                {customFieldsLoading ? (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <LoaderCircle className="h-4 w-4 animate-spin" />
-                    Loading custom fields...
-                  </div>
-                ) : (
-                  <TransactionCustomFields
-                    fields={customFieldDefinitions}
-                    values={customFields}
-                    onChange={setCustomFields}
-                    disabled={customFieldsLoading}
-                  />
-                )}
+                <TransactionCustomFields
+                  values={customFields}
+                  onChange={setCustomFields}
+                  onFieldsLoaded={(loadedFields) => {
+                    setCustomFieldDefinitions(loadedFields);
+                    setCustomFieldsReady(true);
+                  }}
+                  disabled={customFieldsLoading}
+                />
               </div>
             </DialogBody>
           </ScrollArea>
@@ -448,8 +458,11 @@ export default function TransactionTypeEditDialog({
               Close
             </Button>
 
-            <Button onClick={handleSave} disabled={customFieldsLoading}>
-              {customFieldsLoading ? (
+            <Button
+              onClick={handleSave}
+              disabled={customFieldsLoading || !customFieldsReady}
+            >
+              {customFieldsLoading || !customFieldsReady ? (
                 <>
                   <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
                   Loading...

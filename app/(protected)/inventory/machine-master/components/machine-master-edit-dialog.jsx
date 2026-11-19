@@ -24,13 +24,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
-    Alert,
-    AlertIcon,
-    AlertTitle,
+  Alert,
+  AlertIcon,
+  AlertTitle,
 } from "@/components/ui/alert";
-import { RiCheckboxCircleFill } from "@remixicon/react";
+
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+import { RiCheckboxCircleFill, RiErrorWarningFill } from "@remixicon/react";
+import MachineCustomFields, {validateRequiredCustomFields,} from "../../custom-fields/import-custom-fields";
 // ------------------------------------------------------
 // API HELPER
 // ------------------------------------------------------
@@ -40,7 +42,38 @@ const apiFetch = (url, options = {}) =>
     credentials: "same-origin",
     ...options,
   });
+const showSuccessToast = (message) => {
+  toast.custom(
+    () => (
+      <Alert variant="mono" icon="success">
+        <AlertIcon>
+          <RiCheckboxCircleFill />
+        </AlertIcon>
+        <AlertTitle>{message}</AlertTitle>
+      </Alert>
+    ),
+    { position: "top-center" },
+  );
+};
 
+const showErrorToast = (message) => {
+  toast.custom(
+    (t) => (
+      <Alert
+        variant="mono"
+        icon="destructive"
+        close={true}
+        onClose={() => toast.dismiss(t)}
+      >
+        <AlertIcon>
+          <RiErrorWarningFill />
+        </AlertIcon>
+        <AlertTitle>{message}</AlertTitle>
+      </Alert>
+    ),
+    { position: "top-center" },
+  );
+};
 // ------------------------------------------------------
 // HELPERS
 // ------------------------------------------------------
@@ -274,7 +307,6 @@ const EMPTY_FORM = {
   machineNumber: "",
   machineCode: "",
   machineName: "",
-  ipAddress: "",
   GroupName: [],
   OperateId: "",
   comment: "",
@@ -325,6 +357,11 @@ export default function MachineMasterEditDialog({
   const [selectedDetailIds, setSelectedDetailIds] = useState([]);
   const [changeLogs, setChangeLogs] = useState([]);
   const [loadingChangeLogs, setLoadingChangeLogs] = useState(false);
+
+  const [customFieldDefinitions, setCustomFieldDefinitions] = useState([]);
+  const [customFields, setCustomFields] = useState({});
+  const [customFieldsReady, setCustomFieldsReady] = useState(false);
+
   // ------------------------------------------------------
   // LOAD UNITS
   // ------------------------------------------------------
@@ -504,12 +541,6 @@ export default function MachineMasterEditDialog({
         currentMachine.MachineName ??
         "",
 
-      ipAddress:
-        currentMachine.ipAddress ??
-        currentMachine.IPAddress ??
-        currentMachine.ipaddress ??
-        "",
-
       GroupName: machineGroups,
 
       OperateId: String(
@@ -526,6 +557,9 @@ export default function MachineMasterEditDialog({
 
       status: normalizeStatus(currentMachine.status),
     });
+    setCustomFields(currentMachine?.customFields ?? {});
+    setCustomFieldDefinitions([]);
+    setCustomFieldsReady(false);
 
     setSelectedGroups(machineGroups);
     setSelectedItems(machineItems);
@@ -1080,24 +1114,24 @@ export default function MachineMasterEditDialog({
       return;
     }
 
-    if (selectedGroups.length === 0) {
-      toast.custom(
-        () => (
-          <Alert variant="mono" icon="error" close={false}>
-            <AlertIcon>
-              <RiCheckboxCircleFill />
-            </AlertIcon>
-            <AlertTitle>
-              {"Please select at least one Group Name"}
-            </AlertTitle>
-          </Alert>
-        ),
-        {
-          position: "top-center",
-        },
-      );
-      return;
-    }
+    // if (selectedGroups.length === 0) {
+    //   toast.custom(
+    //     () => (
+    //       <Alert variant="mono" icon="error" close={false}>
+    //         <AlertIcon>
+    //           <RiCheckboxCircleFill />
+    //         </AlertIcon>
+    //         <AlertTitle>
+    //           {"Please select at least one Group Name"}
+    //         </AlertTitle>
+    //       </Alert>
+    //     ),
+    //     {
+    //       position: "top-center",
+    //     },
+    //   );
+    //   return;
+    // }
 
     for (const item of selectedItems) {
       if (
@@ -1122,7 +1156,17 @@ export default function MachineMasterEditDialog({
         return;
       }
     }
+    const missingCustomFields = validateRequiredCustomFields(
+      customFieldDefinitions,
+      customFields,
+    );
 
+    if (missingCustomFields.length > 0) {
+      showErrorToast(
+        `Please fill in required custom fields: ${missingCustomFields.join(", ")}`,
+      );
+      return;
+    }
     try {
       setSaving(true);
 
@@ -1131,11 +1175,11 @@ export default function MachineMasterEditDialog({
         machineNumber: form.machineNumber.trim(),
         machineCode: form.machineCode.trim(),
         machineName: form.machineName.trim(),
-        ipAddress: form.ipAddress.trim(),
         GroupName: JSON.stringify(selectedGroups),
         OperateId: form.OperateId || null,
         comment: form.comment.trim(),
         status: form.status,
+        customFields: customFields ?? {},
 
         itemDetails: selectedItems.map((item) => ({
           itemMasterId: item.itemMasterId,
@@ -1220,7 +1264,7 @@ export default function MachineMasterEditDialog({
     >
       <DialogContent className="max-w-4xl max-h-[95vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Edit Machine</DialogTitle>
+          <DialogTitle>Edit Machinery</DialogTitle>
           <DialogDescription>
             Update machine information and assigned items.
           </DialogDescription>
@@ -1237,7 +1281,7 @@ export default function MachineMasterEditDialog({
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 <div className="space-y-2">
-                  <Label>Machine Code</Label>
+                  <Label>Machine Code <span className="text-red-500">*</span></Label>
                   <Input
                     value={form.machineCode}
                     readOnly
@@ -1268,17 +1312,6 @@ export default function MachineMasterEditDialog({
                       handleChange("machineNumber", e.target.value)
                     }
                     placeholder="Enter machine number"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label>IP Address</Label>
-                  <Input
-                    value={form.ipAddress}
-                    onChange={(e) =>
-                      handleChange("ipAddress", e.target.value)
-                    }
-                    placeholder="Enter IP address"
                   />
                 </div>
 
@@ -1321,7 +1354,7 @@ export default function MachineMasterEditDialog({
 
             {/* MACHINE ITEM DETAILS */}
 
-            <div className="space-y-2">
+            <div className="pt-2 space-y-2">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b pb-2">
                 <div>
                   <h3 className="text-sm font-semibold">
@@ -1341,7 +1374,7 @@ export default function MachineMasterEditDialog({
 
               <div className="space-y-2">
                 <Label>
-                 Item Group <span className="text-red-500">*</span>
+                  Item Group
                 </Label>
 
                 <div className="relative">
@@ -1788,6 +1821,27 @@ export default function MachineMasterEditDialog({
                 </div>
               </div>
             </div>
+
+            {/* CUSTOM FIELDS */}
+
+            <div className="space-y-4 border-t pt-5">
+              <div>
+                <h3 className="text-base font-semibold">Custom Fields</h3>
+
+                <p className="text-sm text-muted-foreground">
+                  Additional machine information.
+                </p>
+              </div>
+
+              <MachineCustomFields
+                values={customFields}
+                onChange={setCustomFields}
+                onFieldsLoaded={(loadedFields) => {
+                  setCustomFieldDefinitions(loadedFields);
+                  setCustomFieldsReady(true);
+                }}
+              />
+            </div>
           </DialogBody>
           {/* FOOTER */}
 
@@ -1802,7 +1856,7 @@ export default function MachineMasterEditDialog({
             </Button>
 
             <Button type="submit" disabled={saving}>
-              {saving ? "Updating..." : "Update Machine"}
+              {saving ? "Updating..." : "Update"}
             </Button>
           </DialogFooter>
         </form>

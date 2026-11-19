@@ -42,7 +42,7 @@ export default function MachineMasterDeleteDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-destructive">
             <Trash2 className="h-5 w-5" />
-            Delete Machine
+            Delete Machinery
           </DialogTitle>
 
           <DialogDescription>

@@ -159,12 +159,6 @@ const getMachineWhere = (searchParams) => {
               },
             },
             {
-              ipAddress: {
-                contains: query,
-                mode: "insensitive",
-              },
-            },
-            {
               OperateId: {
                 contains: query,
                 mode: "insensitive",
@@ -315,7 +309,6 @@ export async function GET(request) {
       "machineNumber",
       "machineName",
       "machineCode",
-      "ipAddress",
       "OperateId",
       "status",
       "createdAt",
@@ -448,7 +441,6 @@ export async function POST(request) {
     const machineNumber = String(body.machineNumber || "").trim();
     const machineName = String(body.machineName || "").trim();
     const machineCode = String(body.machineCode || "").trim();
-    const ipAddress = String(body.ipAddress || "").trim();
     const OperateId = "";
     const comment = String(body.comment || "").trim();
 
@@ -478,15 +470,15 @@ export async function POST(request) {
       }
     }
 
-    if (!Array.isArray(groupNames) || groupNames.length === 0) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Please select at least one group.",
-        },
-        { status: 400 }
-      );
-    }
+    // if (!Array.isArray(groupNames) || groupNames.length === 0) {
+    //   return NextResponse.json(
+    //     {
+    //       success: false,
+    //       message: "Please select at least one group.",
+    //     },
+    //     { status: 400 }
+    //   );
+    // }
 
     const groups = [
       ...new Set(
@@ -496,15 +488,15 @@ export async function POST(request) {
       ),
     ];
 
-    if (!groups.length) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Please select valid groups.",
-        },
-        { status: 400 }
-      );
-    }
+    // if (!groups.length) {
+    //   return NextResponse.json(
+    //     {
+    //       success: false,
+    //       message: "Please select valid groups.",
+    //     },
+    //     { status: 400 }
+    //   );
+    // }
 
     // STATUS VALIDATION
     if (typeof body.status !== "boolean") {
@@ -527,17 +519,26 @@ export async function POST(request) {
         { status: 400 }
       );
     }
+    // Validate customFields. 
+    let submittedCustomFields = {};
 
-    if (ipAddress.length > 45) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "IP address cannot exceed 45 characters.",
-        },
-        { status: 400 }
-      );
+    if (body.customFields !== undefined) {
+      if (
+        body.customFields === null ||
+        typeof body.customFields !== "object" ||
+        Array.isArray(body.customFields)
+      ) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "customFields must be a valid object.",
+          },
+          { status: 400 },
+        );
+      }
+
+      submittedCustomFields = body.customFields;
     }
-
     // AUTHENTICATED USER
     const userResult = await getAuthenticatedUserOrResponse();
     if (userResult.error) return userResult.error;
@@ -575,14 +576,13 @@ export async function POST(request) {
           machineNumber,
           machineName,
           machineCode,
-          ipAddress: ipAddress || null,
           GroupName: JSON.stringify(groups),
           OperateId,
           comment: comment || null,
           status: body.status,
           lastSyncAt: new Date(),
+          customFields: submittedCustomFields,
           createby: String(user.id),
-          updateby: String(user.id),
           itemDetails: {
             create: itemDetails.map((item) => ({
               ...item,
@@ -599,23 +599,22 @@ export async function POST(request) {
       });
 
       // ONE CHANGE-LOG ENTRY USING HELPER
-      await createMachineChangeLogs({
-        tx,
-        machineId: createdMachine.id,
-        user,
-        changes: {
-          machineNumber: createdMachine.machineNumber,
-          machineName: createdMachine.machineName,
-          machineCode: createdMachine.machineCode,
-          ipAddress: createdMachine.ipAddress,
-          GroupName: createdMachine.GroupName,
-          OperateId: createdMachine.OperateId,
-          comment: createdMachine.comment,
-          status: createdMachine.status,
-          itemDetails: createdMachine.itemDetails,
-        },
-        action: "CREATE",
-      });
+      // await createMachineChangeLogs({
+      //   tx,
+      //   machineId: createdMachine.id,
+      //   user,
+      //   changes: {
+      //     machineNumber: createdMachine.machineNumber,
+      //     machineName: createdMachine.machineName,
+      //     machineCode: createdMachine.machineCode,
+      //     GroupName: createdMachine.GroupName,
+      //     OperateId: createdMachine.OperateId,
+      //     comment: createdMachine.comment,
+      //     status: createdMachine.status,
+      //     itemDetails: createdMachine.itemDetails,
+      //   },
+      //   action: "CREATE",
+      // });
 
       return createdMachine;
     });
@@ -745,7 +744,23 @@ export async function PUT(request) {
         { status: 404 }
       );
     }
-
+    // Validate customFields.
+    if (
+      body.customFields !== undefined &&
+      (
+        body.customFields === null ||
+        typeof body.customFields !== "object" ||
+        Array.isArray(body.customFields)
+      )
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "customFields must be a valid object.",
+        },
+        { status: 400 },
+      );
+    }
     const updateData = {
       lastSyncAt: new Date(),
       updateby: String(user.id),
@@ -807,19 +822,6 @@ export async function PUT(request) {
       updateData.machineCode = machineCode;
     }
 
-    if (body.ipAddress !== undefined) {
-      const ipAddress = String(body.ipAddress || "").trim();
-
-      if (ipAddress.length > 45) {
-        return NextResponse.json(
-          { success: false, message: "IP address cannot exceed 45 characters." },
-          { status: 400 }
-        );
-      }
-
-      updateData.ipAddress = ipAddress || null;
-    }
-
     if (body.GroupName !== undefined) {
       let groups = body.GroupName;
 
@@ -831,12 +833,12 @@ export async function PUT(request) {
         }
       }
 
-      if (!Array.isArray(groups) || !groups.length) {
-        return NextResponse.json(
-          { success: false, message: "Please select at least one group." },
-          { status: 400 }
-        );
-      }
+      // if (!Array.isArray(groups) || !groups.length) {
+      //   return NextResponse.json(
+      //     { success: false, message: "Please select at least one group." },
+      //     { status: 400 }
+      //   );
+      // }
 
       groups = [
         ...new Set(
@@ -844,12 +846,12 @@ export async function PUT(request) {
         ),
       ];
 
-      if (!groups.length) {
-        return NextResponse.json(
-          { success: false, message: "Please select valid groups." },
-          { status: 400 }
-        );
-      }
+      // if (!groups.length) {
+      //   return NextResponse.json(
+      //     { success: false, message: "Please select valid groups." },
+      //     { status: 400 }
+      //   );
+      // }
 
       updateData.GroupName = JSON.stringify(groups);
     }
@@ -998,7 +1000,13 @@ export async function PUT(request) {
           });
         }
       }
-
+      const updatedCustomFields =
+        body.customFields !== undefined
+          ? body.customFields
+          : existing.customFields ?? {};
+      if (body.customFields !== undefined) {
+        updateData.customFields = updatedCustomFields;
+      }
       const machine = await tx.machineMaster.update({
         where: { id },
         data: updateData,

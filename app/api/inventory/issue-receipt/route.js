@@ -1,5 +1,6 @@
+// app/api/inventory/issue-receipt/route.js
+
 import { NextResponse } from "next/server";
-import * as XLSX from "xlsx";
 import { prisma } from "@/lib/prisma";
 import { checkMenuAccess } from "@/lib/module-access";
 import { systemLog } from "@/services/system-log";
@@ -29,11 +30,33 @@ const ISSUE_RECEIPT_SORT_FIELDS = [
   "updatedAt",
 ];
 
-// Dates arrive as YYYY-MM-DD and are treated as UTC days.
+const getStaffName = (user) => {
+  if (!user) return "-";
+
+  const fullName = [user.firstName, user.lastName]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+
+  return fullName || user.name || user.username || user.email || "-";
+};
+
+const getUserName = (user) => {
+  if (!user) return "-";
+
+  const fullName = [user.firstName, user.lastName]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+
+  return fullName || user.name || user.UserName || user.email || "-";
+};
+
 const parseIssueReceiptDay = (value) => {
   if (!value) return null;
 
   const date = new Date(`${value}T00:00:00.000Z`);
+
   return Number.isNaN(date.getTime()) ? null : date;
 };
 
@@ -62,37 +85,121 @@ const buildIssueReceiptDateRange = (from, to) => {
   };
 };
 
+const formatDate = (value) => {
+  if (!value) return "-";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) return String(value);
+
+  return date.toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+};
+
+const formatPrice = (value) => {
+  if (value === undefined || value === null || value === "") return "-";
+
+  const number = Number(value);
+
+  return Number.isNaN(number) ? String(value) : number.toFixed(2);
+};
+
+const getValue = (value) => {
+  if (value === undefined || value === null || value === "") return "-";
+
+  return String(value);
+};
+
+const getInventoryItemInfo = async (db, itemMasterId, itemTypeId) => {
+  const itemMaster = itemMasterId
+    ? await db.itemMaster.findFirst({
+      where: { id: String(itemMasterId) },
+    })
+    : null;
+
+  const itemName =
+    itemMaster?.ItemName ||
+    itemMaster?.itemName ||
+    itemMaster?.name ||
+    "-";
+
+  let productType = "-";
+
+  if (itemTypeId && db.ptoductType) {
+    const itemType = await db.ptoductType.findFirst({
+      where: { id: String(itemTypeId) },
+    });
+
+    productType =
+      itemType?.ProductType ||
+      itemType?.ItemType ||
+      itemType?.ItemTypeName ||
+      itemType?.TypeName ||
+      itemType?.typeName ||
+      itemType?.name ||
+      "-";
+  }
+
+  return { itemName, productType };
+};
+
+const getTransactionTypeName = (transaction) => {
+  if (!transaction) return "-";
+
+  return (
+    transaction.name ||
+    transaction.Name ||
+    transaction.TransactionType ||
+    transaction.TransactionTypeName ||
+    transaction.TypeName ||
+    "-"
+  );
+};
+
+const getIpAddress = (request) =>
+  request.headers
+    .get("x-forwarded-for")
+    ?.split(",")[0]
+    ?.trim() || null;
+
+// =====================================================
+// GET: SINGLE RECORD AND LIST
+// =====================================================
+
+
 export async function GET(request) {
   try {
     const accessError = await checkMenuAccess("inventory-issue-receipt");
 
-    if (accessError) {
-      return accessError;
-    }
+    if (accessError) return accessError;
 
     const { searchParams } = new URL(request.url);
-
     const id = searchParams.get("id");
-    // =================================================
-    // ADDITIONAL FILTER PARAMETERS
-    // =================================================
 
+    // Quantity and price filters
     const quantityMin = searchParams.get("quantityMin");
     const quantityMax = searchParams.get("quantityMax");
-
     const priceMin = searchParams.get("priceMin");
     const priceMax = searchParams.get("priceMax");
 
+    // Created By / Updated By filters
+    const createdBy = searchParams.get("createdBy");
+    const updatedBy = searchParams.get("updatedBy");
+
+    // Dropdown filters
     const issueByIds = searchParams.getAll("issueById");
     const receivedByIds = searchParams.getAll("receivedById");
-
     const transactionTypeIds = searchParams.getAll("transactionTypeId");
     const groupIds = searchParams.getAll("groupId");
     const itemTypeIds = searchParams.getAll("itemTypeId");
     const itemIds = searchParams.getAll("itemId");
-    // =================================================
-    // GET SINGLE Issue/Receipt
-    // =================================================
+
+    // -------------------------------------------------
+    // SINGLE RECORD
+    // -------------------------------------------------
 
     if (id) {
       const issueReceipt = await prisma.issueReceipt.findFirst({
@@ -108,9 +215,7 @@ export async function GET(request) {
             success: false,
             message: "Issue/Receipt not found",
           },
-          {
-            status: 404,
-          },
+          { status: 404 },
         );
       }
 
@@ -121,6 +226,8 @@ export async function GET(request) {
         transactionType,
         issueBy,
         receivedBy,
+        createdByUser,
+        updatedByUser,
       ] = await Promise.all([
         prisma.itemGroup.findFirst({
           where: { id: issueReceipt.ItemGroupid },
@@ -145,38 +252,54 @@ export async function GET(request) {
         prisma.StaffUser.findFirst({
           where: { id: issueReceipt.RecivedBy },
         }),
+
+        issueReceipt.createby
+          ? prisma.user.findFirst({
+              where: { id: String(issueReceipt.createby) },
+              select: { id: true, name: true },
+            })
+          : Promise.resolve(null),
+
+        issueReceipt.updateby
+          ? prisma.user.findFirst({
+              where: { id: String(issueReceipt.updateby) },
+              select: { id: true, name: true },
+            })
+          : Promise.resolve(null),
       ]);
-
-      const data = {
-        ...issueReceipt,
-
-        ItemGroupName: itemGroup?.groupName || itemGroup?.name || "-",
-
-        ItemMasterName:
-          itemMaster?.ItemName ||
-          itemMaster?.itemName ||
-          itemMaster?.name ||
-          "-",
-
-        ItemTypeName: itemType?.name || itemType?.ProductType || "-",
-
-        TransactionTypeName:
-          transactionType?.name || transactionType?.TransactionType || "-",
-
-        IssueByName: getStaffName(issueBy),
-
-        ReceivedByName: getStaffName(receivedBy),
-      };
 
       return NextResponse.json({
         success: true,
-        data,
+        data: {
+          ...issueReceipt,
+
+          ItemGroupName: itemGroup?.groupName || itemGroup?.name || "-",
+
+          ItemMasterName:
+            itemMaster?.ItemName ||
+            itemMaster?.itemName ||
+            itemMaster?.name ||
+            "-",
+
+          ItemTypeName: itemType?.name || itemType?.ProductType || "-",
+
+          TransactionTypeName:
+            transactionType?.name ||
+            transactionType?.TransactionType ||
+            "-",
+
+          IssueByName: getStaffName(issueBy),
+          ReceivedByName: getStaffName(receivedBy),
+
+          CreatedByName: createdByUser?.name || "-",
+          UpdatedByName: updatedByUser?.name || "-",
+        },
       });
     }
 
-    // =================================================
+    // -------------------------------------------------
     // LIST PARAMETERS
-    // =================================================
+    // -------------------------------------------------
 
     const page = Math.max(
       1,
@@ -222,36 +345,39 @@ export async function GET(request) {
 
     if (rangeError) {
       return NextResponse.json(
-        {
-          success: false,
-          message: rangeError,
-        },
-        {
-          status: 400,
-        },
+        { success: false, message: rangeError },
+        { status: 400 },
       );
     }
 
-    // =================================================
-    // GET RELATED DATA
-    // =================================================
+    // -------------------------------------------------
+    // RELATED DATA
+    // -------------------------------------------------
 
-    const [itemGroups, itemMasters, itemTypes, transactionTypes, staffUsers] =
-      await Promise.all([
-        prisma.itemGroup.findMany(),
+    const [
+      itemGroups,
+      itemMasters,
+      itemTypes,
+      transactionTypes,
+      staffUsers,
+      users,
+    ] = await Promise.all([
+      prisma.itemGroup.findMany(),
+      prisma.itemMaster.findMany(),
+      prisma.ptoductType.findMany(),
+      prisma.transactionType.findMany(),
+      prisma.StaffUser.findMany(),
+      prisma.user.findMany({
+        select: {
+          id: true,
+          name: true,
+        },
+      }),
+    ]);
 
-        prisma.itemMaster.findMany(),
-
-        prisma.ptoductType.findMany(),
-
-        prisma.transactionType.findMany(),
-
-        prisma.StaffUser.findMany(),
-      ]);
-
-    // =================================================
-    // CREATE LOOKUP MAPS (ID -> NAME)
-    // =================================================
+    // -------------------------------------------------
+    // LOOKUP MAPS
+    // -------------------------------------------------
 
     const itemGroupMap = new Map(
       itemGroups.map((item) => [
@@ -271,12 +397,12 @@ export async function GET(request) {
       itemTypes.map((item) => [
         String(item.id),
         item.name ||
-        item.ProductType ||
-        item.ptoductType ||
-        item.ItemTypeName ||
-        item.productTypeName ||
-        item.ProductTypeName ||
-        "-",
+          item.ProductType ||
+          item.ptoductType ||
+          item.ItemTypeName ||
+          item.productTypeName ||
+          item.ProductTypeName ||
+          "-",
       ]),
     );
 
@@ -284,30 +410,38 @@ export async function GET(request) {
       transactionTypes.map((item) => [
         String(item.id),
         item.name ||
-        item.TransactionType ||
-        item.transactionType ||
-        item.TransactionTypeName ||
-        item.typeName ||
-        item.TypeName ||
-        "-",
+          item.TransactionType ||
+          item.transactionType ||
+          item.TransactionTypeName ||
+          item.typeName ||
+          item.TypeName ||
+          "-",
       ]),
     );
 
     const staffMap = new Map(
-      staffUsers.map((user) => [String(user.id), getStaffName(user)]),
+      staffUsers.map((user) => [
+        String(user.id),
+        getStaffName(user),
+      ]),
     );
 
-    // =================================================
-    // BUILD WHERE
-    // =================================================
+    const userMap = new Map(
+      users.map((user) => [
+        String(user.id),
+        user.name || "-",
+      ]),
+    );
+
+    // -------------------------------------------------
+    // WHERE CONDITIONS
+    // -------------------------------------------------
 
     const where = {
       deletedAt: null,
     };
-    // =================================================
-    // QUANTITY FILTER
-    // =================================================
 
+    // Quantity filters
     if (quantityMin !== null && quantityMin.trim() !== "") {
       const min = Number(quantityMin);
 
@@ -340,10 +474,7 @@ export async function GET(request) {
       };
     }
 
-    // =================================================
-    // PRICE FILTER
-    // =================================================
-
+    // Price filters
     if (priceMin !== null && priceMin.trim() !== "") {
       const min = Number(priceMin);
 
@@ -376,10 +507,7 @@ export async function GET(request) {
       };
     }
 
-    // =================================================
-    // DROPDOWN FILTERS
-    // =================================================
-
+    // Dropdown filters
     if (issueByIds.length) {
       where.Issue_by = { in: issueByIds };
     }
@@ -403,88 +531,161 @@ export async function GET(request) {
     if (itemIds.length) {
       where.ItemMasterid = { in: itemIds };
     }
+
+    // Created By / Updated By filters
+    if (createdBy && createdBy.trim() !== "") {
+      where.createby = createdBy.trim();
+    }
+
+    if (updatedBy && updatedBy.trim() !== "") {
+      where.updateby = updatedBy.trim();
+    }
+
+    // Search
     if (query) {
       const needle = query.toLowerCase();
 
-      // IDs whose display name contains the search text.
       const idsMatching = (map) =>
         [...map.entries()]
-          .filter(([, name]) => String(name).toLowerCase().includes(needle))
+          .filter(([, name]) =>
+            String(name).toLowerCase().includes(needle),
+          )
           .map(([key]) => key);
 
       const orConditions = [
-        { ReciptChallanNo: { contains: query, mode: "insensitive" } },
-        { GetPassNo: { contains: query, mode: "insensitive" } },
-        { Particuler: { contains: query, mode: "insensitive" } },
-        { Comment: { contains: query, mode: "insensitive" } },
+        {
+          ReciptChallanNo: {
+            contains: query,
+            mode: "insensitive",
+          },
+        },
+        {
+          GetPassNo: {
+            contains: query,
+            mode: "insensitive",
+          },
+        },
+        {
+          Particuler: {
+            contains: query,
+            mode: "insensitive",
+          },
+        },
+        {
+          Comment: {
+            contains: query,
+            mode: "insensitive",
+          },
+        },
       ];
 
-      const groupIds = idsMatching(itemGroupMap);
-      const masterIds = idsMatching(itemMasterMap);
-      const typeIds = idsMatching(itemTypeMap);
-      const transactionIds = idsMatching(transactionTypeMap);
-      const staffIds = idsMatching(staffMap);
+      const matchingGroupIds = idsMatching(itemGroupMap);
+      const matchingMasterIds = idsMatching(itemMasterMap);
+      const matchingTypeIds = idsMatching(itemTypeMap);
+      const matchingTransactionIds = idsMatching(transactionTypeMap);
+      const matchingStaffIds = idsMatching(staffMap);
 
-      if (groupIds.length) orConditions.push({ ItemGroupid: { in: groupIds } });
-      if (masterIds.length) {
-        orConditions.push({ ItemMasterid: { in: masterIds } });
+      if (matchingGroupIds.length) {
+        orConditions.push({
+          ItemGroupid: { in: matchingGroupIds },
+        });
       }
-      if (typeIds.length) orConditions.push({ ItemTypeid: { in: typeIds } });
-      if (transactionIds.length) {
-        orConditions.push({ TransactionTypeid: { in: transactionIds } });
+
+      if (matchingMasterIds.length) {
+        orConditions.push({
+          ItemMasterid: { in: matchingMasterIds },
+        });
       }
-      if (staffIds.length) {
-        orConditions.push({ Issue_by: { in: staffIds } });
-        orConditions.push({ RecivedBy: { in: staffIds } });
+
+      if (matchingTypeIds.length) {
+        orConditions.push({
+          ItemTypeid: { in: matchingTypeIds },
+        });
+      }
+
+      if (matchingTransactionIds.length) {
+        orConditions.push({
+          TransactionTypeid: { in: matchingTransactionIds },
+        });
+      }
+
+      if (matchingStaffIds.length) {
+        orConditions.push({
+          Issue_by: { in: matchingStaffIds },
+        });
+
+        orConditions.push({
+          RecivedBy: { in: matchingStaffIds },
+        });
       }
 
       where.OR = orConditions;
     }
 
-    if (issueRange.range) where.IssueDate = issueRange.range;
-    if (createdRange.range) where.createdAt = createdRange.range;
-    if (updatedRange.range) where.updatedAt = updatedRange.range;
+    // Date filters
+    if (issueRange.range) {
+      where.IssueDate = issueRange.range;
+    }
 
-    // =================================================
-    // QUERY
-    // =================================================
+    if (createdRange.range) {
+      where.createdAt = createdRange.range;
+    }
+
+    if (updatedRange.range) {
+      where.updatedAt = updatedRange.range;
+    }
+
+    // -------------------------------------------------
+    // FETCH RECORDS
+    // -------------------------------------------------
 
     const [total, issueReceipts] = await Promise.all([
-      prisma.issueReceipt.count({ where }),
+      prisma.issueReceipt.count({
+        where,
+      }),
 
       prisma.issueReceipt.findMany({
         where,
-        orderBy: [{ [sortField]: dir }, { id: "desc" }],
+        orderBy: [
+          { [sortField]: dir },
+          { id: "desc" },
+        ],
         skip: (page - 1) * limit,
         take: limit,
       }),
     ]);
 
-    // =================================================
-    // ADD NAMES TO Issue/ReceiptS
-    // =================================================
+    // -------------------------------------------------
+    // FORMAT RECORDS
+    // -------------------------------------------------
 
     const formattedIssueReceipts = issueReceipts.map((issueReceipt) => ({
       ...issueReceipt,
 
-      ItemGroupName: itemGroupMap.get(String(issueReceipt.ItemGroupid)) || "-",
+      ItemGroupName:
+        itemGroupMap.get(String(issueReceipt.ItemGroupid)) || "-",
 
       ItemMasterName:
         itemMasterMap.get(String(issueReceipt.ItemMasterid)) || "-",
 
-      ItemTypeName: itemTypeMap.get(String(issueReceipt.ItemTypeid)) || "-",
+      ItemTypeName:
+        itemTypeMap.get(String(issueReceipt.ItemTypeid)) || "-",
 
       TransactionTypeName:
         transactionTypeMap.get(String(issueReceipt.TransactionTypeid)) || "-",
 
-      IssueByName: staffMap.get(String(issueReceipt.Issue_by)) || "-",
+      IssueByName:
+        staffMap.get(String(issueReceipt.Issue_by)) || "-",
 
-      ReceivedByName: staffMap.get(String(issueReceipt.RecivedBy)) || "-",
+      ReceivedByName:
+        staffMap.get(String(issueReceipt.RecivedBy)) || "-",
+
+      CreatedByName:
+        userMap.get(String(issueReceipt.createby)) || "-",
+
+      UpdatedByName:
+        userMap.get(String(issueReceipt.updateby)) || "-",
     }));
-
-    // =================================================
-    // RESPONSE
-    // =================================================
 
     return NextResponse.json({
       success: true,
@@ -504,276 +705,89 @@ export async function GET(request) {
         success: false,
         message: error.message || "Failed loading Issue/Receipts",
       },
-      {
-        status: 500,
-      },
+      { status: 500 },
     );
   }
 }
-// =====================================================
-// INVENTORY CHANGE LOG HELPERS
-// =====================================================
-
-const getInventoryItemInfo = async (
-  db,
-  itemMasterId,
-  itemTypeId,
-) => {
-  const itemMaster = itemMasterId
-    ? await db.itemMaster.findFirst({
-      where: {
-        id: String(itemMasterId),
-      },
-    })
-    : null;
-
-  const itemName =
-    itemMaster?.ItemName ||
-    itemMaster?.itemName ||
-    itemMaster?.name ||
-    "-";
-
-  let productType = "-";
-
-  // Only use this if your Prisma schema actually has ItemType model.
-  if (itemTypeId && db.itemType) {
-    const itemType = await db.itemType.findFirst({
-      where: {
-        id: String(itemTypeId),
-      },
-    });
-
-    productType =
-      itemType?.ItemType ||
-      itemType?.ItemTypeName ||
-      itemType?.TypeName ||
-      itemType?.typeName ||
-      itemType?.name ||
-      itemType?.Name ||
-      "-";
-  }
-
-  return {
-    itemName,
-    productType,
-  };
-};
 
 // =====================================================
-// STAFF NAME
+// POST: CREATE ISSUE / RECEIPT
 // =====================================================
 
-const getStaffName = (user) => {
-  if (!user) {
-    return "-";
-  }
-
-  const fullName = [user.firstName, user.lastName]
-    .filter(Boolean)
-    .join(" ")
-    .trim();
-
-  return fullName || user.name || user.username || user.email || "-";
-};
-
-// =====================================================
-// LOG VALUE
-// =====================================================
-
-const getLogValue = (value) => {
-  if (value === undefined || value === null || value === "") {
-    return "-";
-  }
-
-  return String(value);
-};
-
-// =====================================================
-// LOG DATE
-// =====================================================
-
-const formatLogDate = (value) => {
-  if (!value) {
-    return "-";
-  }
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return String(value);
-  }
-
-  return date.toLocaleDateString("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-};
-const formatPrice = (value) => {
-  if (value === undefined || value === null || value === "") {
-    return "-";
-  }
-
-  const number = Number(value);
-
-  if (Number.isNaN(number)) {
-    return String(value);
-  }
-
-  return number.toFixed(2);
-};
-const formatDate = (value) => {
-  if (!value) {
-    return "-";
-  }
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return String(value);
-  }
-
-  return date.toLocaleDateString("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-};
-const getValue = (value) => {
-  if (value === undefined || value === null || value === "") {
-    return "-";
-  }
-
-  return String(value);
-};
-
-const getUserId = (user) => {
-  if (!user) return null;
-
-  return (
-    user.id ||
-    user.userId ||
-    user.userid ||
-    user.user_id ||
-    null
-  );
-};
-
-const getUserName = (user) => {
-  if (!user) return "-";
-
-  const fullName = [user.firstName, user.lastName]
-    .filter(Boolean)
-    .join(" ")
-    .trim();
-
-  return (
-    fullName ||
-    user.name ||
-    user.UserName ||
-    user.email ||
-    "-"
-  );
-};
 export async function POST(request) {
   try {
     const accessError = await checkMenuAccess("inventory-issue-receipt");
 
-    if (accessError) {
-      return accessError;
-    }
+    if (accessError) return accessError;
 
     const body = await request.json();
 
-    // =================================================
-    // VALIDATION
-    // =================================================
-
     if (!body.ItemGroupid) {
       return NextResponse.json(
-        {
-          success: false,
-          message: "Item Group is required",
-        },
+        { success: false, message: "Item Group is required" },
         { status: 400 },
       );
     }
 
     if (!body.ItemMasterid) {
       return NextResponse.json(
-        {
-          success: false,
-          message: "Item is required",
-        },
+        { success: false, message: "Item is required" },
         { status: 400 },
       );
     }
 
     if (!body.ItemTypeid) {
       return NextResponse.json(
-        {
-          success: false,
-          message: "Item Type is required",
-        },
+        { success: false, message: "Item Type is required" },
         { status: 400 },
       );
     }
 
     if (!body.TransactionTypeid) {
       return NextResponse.json(
-        {
-          success: false,
-          message: "Transaction Type is required",
-        },
+        { success: false, message: "Transaction Type is required" },
         { status: 400 },
       );
     }
 
     if (!body.IssueDate) {
       return NextResponse.json(
-        {
-          success: false,
-          message: "Issue Date is required",
-        },
+        { success: false, message: "Issue Date is required" },
         { status: 400 },
       );
     }
 
     const qty = Number(body.Qty);
 
-    if (!body.Qty || Number.isNaN(qty) || qty <= 0) {
+    if (!body.Qty || !Number.isFinite(qty) || qty <= 0) {
       return NextResponse.json(
-        {
-          success: false,
-          message: "Quantity must be greater than 0",
-        },
+        { success: false, message: "Quantity must be greater than 0" },
         { status: 400 },
       );
     }
 
     if (!body.Issue_by) {
       return NextResponse.json(
-        {
-          success: false,
-          message: "Issue By is required",
-        },
+        { success: false, message: "Issue By is required" },
         { status: 400 },
       );
     }
 
     if (!body.RecivedBy) {
       return NextResponse.json(
-        {
-          success: false,
-          message: "Received By is required",
-        },
+        { success: false, message: "Received By is required" },
         { status: 400 },
       );
     }
 
-    // =================================================
-    // NUMERIC VALUES
-    // =================================================
+    const issueDate = new Date(body.IssueDate);
+
+    if (Number.isNaN(issueDate.getTime())) {
+      return NextResponse.json(
+        { success: false, message: "Invalid Issue Date" },
+        { status: 400 },
+      );
+    }
 
     const previousBalance =
       body.PreviousBalance !== undefined &&
@@ -783,83 +797,84 @@ export async function POST(request) {
         : 0;
 
     const price =
-      body.Price !== undefined && body.Price !== null && body.Price !== ""
+      body.Price !== undefined &&
+        body.Price !== null &&
+        body.Price !== ""
         ? Number(body.Price)
         : null;
 
     const balance =
-      body.Balance !== undefined && body.Balance !== null && body.Balance !== ""
+      body.Balance !== undefined &&
+        body.Balance !== null &&
+        body.Balance !== ""
         ? Number(body.Balance)
         : 0;
 
-    // =================================================
-    // GET ITEM INFORMATION
-    // =================================================
+    if (
+      !Number.isFinite(previousBalance) ||
+      (price !== null && !Number.isFinite(price)) ||
+      !Number.isFinite(balance)
+    ) {
+      return NextResponse.json(
+        { success: false, message: "Invalid numeric value" },
+        { status: 400 },
+      );
+    }
+
+    const user = await getAuthenticatedUser();
+
+    if (!user?.id) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Unauthorized. Please log in again.",
+        },
+        { status: 401 },
+      );
+    }
+
+    const userId = String(user.id);
 
     const { itemName, productType } = await getInventoryItemInfo(
       prisma,
       body.ItemMasterid,
       body.ItemTypeid,
     );
-    // =================================================
-    // CREATE RECEIPT + CHANGE LOG
-    // =================================================
 
     const result = await prisma.$transaction(async (tx) => {
       const issueReceipt = await tx.issueReceipt.create({
         data: {
           ItemGroupid: String(body.ItemGroupid),
-
           ItemMasterid: String(body.ItemMasterid),
-
           ItemTypeid: String(body.ItemTypeid),
-
           TransactionTypeid: String(body.TransactionTypeid),
-
-          IssueDate: new Date(body.IssueDate),
-
+          IssueDate: issueDate,
           Qty: qty,
-
           PreviousBalance: previousBalance,
-
           Price: price,
-
-          Particuler: body.Particuler ? String(body.Particuler) : null,
-
+          Particuler: body.Particuler
+            ? String(body.Particuler)
+            : null,
           Balance: balance,
-
           Issue_by: String(body.Issue_by),
-
-          GetPassNo: body.GatePassNo ? String(body.GatePassNo) : null,
-
-          DateOfRecive: body.DateOfRecive ? new Date(body.DateOfRecive) : null,
-
+          GetPassNo: body.GetPassNo
+            ? String(body.GetPassNo)
+            : body.GatePassNo
+              ? String(body.GatePassNo)
+              : null,
+          DateOfRecive: body.DateOfRecive
+            ? new Date(body.DateOfRecive)
+            : null,
           ReciptChallanNo: body.ReciptChallanNo
             ? String(body.ReciptChallanNo)
             : null,
-
           RecivedBy: String(body.RecivedBy),
-
           Comment: body.Comment ? String(body.Comment) : null,
+
+          // Created By
+          createby: userId,
         },
       });
-
-      // =================================================
-      // CREATE ADD LOG
-      // =================================================
-
-      const getValue = (value) =>
-        value !== undefined && value !== null && String(value).trim() !== ''
-          ? String(value)
-          : '-';
-
-      const getUserDisplayName = (user) =>
-        user?.name ||
-        user?.username ||
-        user?.email ||
-        '-';
-
-      // Resolve related records using the IDs submitted by the form.
 
       const [
         productTypeRecord,
@@ -867,57 +882,35 @@ export async function POST(request) {
         newIssueBy,
         newReceivedBy,
       ] = await Promise.all([
-        body.ItemTypeid
-          ? prisma.ptoductType.findUnique({
-            where: { id: String(body.ItemTypeid) },
-            select: { ProductType: true },
-          })
-          : Promise.resolve(null),
+        tx.ptoductType.findFirst({
+          where: { id: String(body.ItemTypeid) },
+        }),
 
-        body.TransactionTypeid
-          ? prisma.transactionType.findUnique({
-            where: { id: String(body.TransactionTypeid) },
-            select: {
-              TransactionType: true,
-              EffectOnTransaction: true,
-            },
-          })
-          : Promise.resolve(null),
+        tx.transactionType.findFirst({
+          where: { id: String(body.TransactionTypeid) },
+        }),
 
-        body.Issue_by
-          ? tx.StaffUser.findFirst({
-            where: { id: String(body.Issue_by) },
-          })
-          : Promise.resolve(null),
+        tx.StaffUser.findFirst({
+          where: { id: String(body.Issue_by) },
+        }),
 
-        body.RecivedBy
-          ? tx.StaffUser.findFirst({
-            where: { id: String(body.RecivedBy) },
-          })
-          : Promise.resolve(null),
+        tx.StaffUser.findFirst({
+          where: { id: String(body.RecivedBy) },
+        }),
       ]);
 
       const productTypeName =
         productTypeRecord?.ProductType ||
+        productTypeRecord?.name ||
         body.ProductType ||
         body.ProductTypeName ||
         body.ItemTypeName ||
-        '-';
+        "-";
 
       const transactionTypeName =
-        transactionTypeRecord?.TransactionType ||
+        getTransactionTypeName(transactionTypeRecord) ||
         body.TransactionTypeName ||
-        body.TransactionType ||
-        '-';
-
-      const ReceivedByName = newReceivedBy
-        ? getStaffName(newReceivedBy)
-        : '-';
-
-      const IssueByName = newIssueBy
-        ? getStaffName(newIssueBy)
-        : '-';
-
+        "-";
 
       const details = [
         `ItemName : ${getValue(itemName)}`,
@@ -927,52 +920,41 @@ export async function POST(request) {
         `Quantity : ${qty}`,
         `Balance : ${balance}`,
         `Date : ${formatDate(body.IssueDate)}`,
-        `Price : ${formatPrice(body.Price)}`,
+        `Price : ${formatPrice(price)}`,
         `Particular : ${getValue(body.Particuler)}`,
-        `Issued By : ${IssueByName}`,
-        `GatePassNo : ${getValue(body.GetPassNo)}`,
+        `Issued By : ${getStaffName(newIssueBy)}`,
+        `GatePassNo : ${getValue(body.GetPassNo || body.GatePassNo)}`,
         `Date Of Receive : ${formatDate(body.DateOfRecive)}`,
         `Receipt Challan No : ${getValue(body.ReciptChallanNo)}`,
-        `Received By : ${ReceivedByName}`,
+        `Received By : ${getStaffName(newReceivedBy)}`,
         `Comment : ${getValue(body.Comment)}`,
-      ].join(' ');
+      ].join(" ");
 
       await tx.inventoryChangeLog.create({
         data: {
           IssueReceiptId: issueReceipt.id,
-
-          UserId: body.UserId ? String(body.UserId) : null,
-
-          UserName: body.UserName ? String(body.UserName) : null,
-
+          UserId: userId,
+          UserName: getUserName(user),
           Action: "Add",
-
           ItemMasterid: String(body.ItemMasterid),
-
           ItemName: itemName,
-
           ItemTypeid: String(body.ItemTypeid),
-
           ItemType: productType,
-
           Details: details,
         },
       });
 
       return issueReceipt;
     });
-    // SYSTEM LOG: CREATE Issue/Receipt
+
     await systemLog({
       event: "create",
-      userId: body.UserId ? String(body.UserId) : null,
+      userId,
       entityId: String(result.id),
       entityType: "inventory.issue-receipt",
       description: `Issue/Receipt created. Receipt ID: ${result.id}`,
-      ipAddress: request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null,
+      ipAddress: getIpAddress(request),
     });
-    // =================================================
-    // RESPONSE
-    // =================================================
 
     return NextResponse.json(
       {
@@ -980,9 +962,7 @@ export async function POST(request) {
         message: "Issue/Receipt created successfully",
         data: result,
       },
-      {
-        status: 201,
-      },
+      { status: 201 },
     );
   } catch (error) {
     console.error("CREATE Issue/Receipt ERROR:", error);
@@ -992,42 +972,32 @@ export async function POST(request) {
         success: false,
         message: error.message || "Failed creating Issue/Receipt",
       },
-      {
-        status: 500,
-      },
+      { status: 500 },
     );
   }
 }
+
+// =====================================================
+// PUT: UPDATE ISSUE / RECEIPT
+// =====================================================
 
 export async function PUT(request) {
   try {
     const accessError = await checkMenuAccess("inventory-issue-receipt");
 
-    if (accessError) {
-      return accessError;
-    }
+    if (accessError) return accessError;
 
     const { searchParams } = new URL(request.url);
-
     const id = searchParams.get("id");
 
     if (!id) {
       return NextResponse.json(
-        {
-          success: false,
-          message: "Issue/Receipt ID is required",
-        },
-        {
-          status: 400,
-        },
+        { success: false, message: "Issue/Receipt ID is required" },
+        { status: 400 },
       );
     }
 
     const body = await request.json();
-
-    // =================================================
-    // CHECK EXISTING RECORD
-    // =================================================
 
     const existingReceipt = await prisma.issueReceipt.findFirst({
       where: {
@@ -1038,65 +1008,25 @@ export async function PUT(request) {
 
     if (!existingReceipt) {
       return NextResponse.json(
-        {
-          success: false,
-          message: "Issue/Receipt not found",
-        },
-        {
-          status: 404,
-        },
+        { success: false, message: "Issue/Receipt not found" },
+        { status: 404 },
       );
     }
 
-    // =================================================
-    // VALIDATION
-    // =================================================
-
-    if (!body.ItemGroupid) {
+    if (
+      !body.ItemGroupid ||
+      !body.ItemMasterid ||
+      !body.ItemTypeid ||
+      !body.TransactionTypeid ||
+      !body.IssueDate ||
+      !body.Issue_by ||
+      !body.RecivedBy
+    ) {
       return NextResponse.json(
         {
           success: false,
-          message: "Item Group is required",
-        },
-        { status: 400 },
-      );
-    }
-
-    if (!body.ItemMasterid) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Item is required",
-        },
-        { status: 400 },
-      );
-    }
-
-    if (!body.ItemTypeid) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Item Type is required",
-        },
-        { status: 400 },
-      );
-    }
-
-    if (!body.TransactionTypeid) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Transaction Type is required",
-        },
-        { status: 400 },
-      );
-    }
-
-    if (!body.IssueDate) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Issue Date is required",
+          message:
+            "Item Group, Item, Item Type, Transaction Type, Issue Date, Issue By and Received By are required",
         },
         { status: 400 },
       );
@@ -1104,39 +1034,21 @@ export async function PUT(request) {
 
     const qty = Number(body.Qty);
 
-    if (!body.Qty || Number.isNaN(qty) || qty <= 0) {
+    if (!body.Qty || !Number.isFinite(qty) || qty <= 0) {
       return NextResponse.json(
-        {
-          success: false,
-          message: "Quantity must be greater than 0",
-        },
+        { success: false, message: "Quantity must be greater than 0" },
         { status: 400 },
       );
     }
 
-    if (!body.Issue_by) {
+    const issueDate = new Date(body.IssueDate);
+
+    if (Number.isNaN(issueDate.getTime())) {
       return NextResponse.json(
-        {
-          success: false,
-          message: "Issue By is required",
-        },
+        { success: false, message: "Invalid Issue Date" },
         { status: 400 },
       );
     }
-
-    if (!body.RecivedBy) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Received By is required",
-        },
-        { status: 400 },
-      );
-    }
-
-    // =================================================
-    // NUMERIC VALUES
-    // =================================================
 
     const previousBalance =
       body.PreviousBalance !== undefined &&
@@ -1146,51 +1058,57 @@ export async function PUT(request) {
         : 0;
 
     const price =
-      body.Price !== undefined && body.Price !== null && body.Price !== ""
+      body.Price !== undefined &&
+        body.Price !== null &&
+        body.Price !== ""
         ? Number(body.Price)
         : null;
 
-    // =================================================
-    // GET TRANSACTION TYPES
-    // =================================================
+    if (
+      !Number.isFinite(previousBalance) ||
+      (price !== null && !Number.isFinite(price))
+    ) {
+      return NextResponse.json(
+        { success: false, message: "Invalid numeric value" },
+        { status: 400 },
+      );
+    }
+
+    const user = await getAuthenticatedUser();
+
+    if (!user?.id) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Unauthorized. Please log in again.",
+        },
+        { status: 401 },
+      );
+    }
+
+    const userId = String(user.id);
 
     const transactionTypes = await prisma.transactionType.findMany({
-      where: {
-        deletedAt: null,
-      },
+      where: { deletedAt: null },
       select: {
         id: true,
         EffectOnTransaction: true,
       },
     });
 
-    // =================================================
-    // GET TRANSACTION EFFECT
-    // =================================================
-
     const getTransactionEffect = (transactionTypeId) => {
       const transactionType = transactionTypes.find(
         (item) => String(item.id) === String(transactionTypeId),
       );
 
-      if (!transactionType) {
-        return "";
-      }
-
-      return String(transactionType.EffectOnTransaction ?? "")
+      return String(transactionType?.EffectOnTransaction ?? "")
         .trim()
         .toLowerCase();
     };
 
-    // =================================================
-    // CALCULATE BALANCE
-    // =================================================
-
     const calculateBalance = (previous, quantity, transactionTypeId) => {
       const pb = Number(previous ?? 0);
-
       const qtyValue = Number(quantity ?? 0);
-
       const effect = getTransactionEffect(transactionTypeId);
 
       if (effect === "addition" || effect === "add") {
@@ -1209,10 +1127,6 @@ export async function PUT(request) {
       return pb;
     };
 
-    // =================================================
-    // VALIDATE CURRENT TRANSACTION TYPE
-    // =================================================
-
     const currentEffect = getTransactionEffect(body.TransactionTypeid);
 
     if (!currentEffect) {
@@ -1222,99 +1136,65 @@ export async function PUT(request) {
           message:
             "Invalid Transaction Type or transaction effect is not configured",
         },
-        {
-          status: 400,
-        },
+        { status: 400 },
       );
     }
-
-    // =================================================
-    // CALCULATE CURRENT BALANCE
-    // =================================================
 
     const currentBalance = calculateBalance(
       previousBalance,
       qty,
       body.TransactionTypeid,
     );
-    // =================================================
-    // UPDATE + RECALCULATE + CHANGE LOG
-    // =================================================
 
     const updatedReceipt = await prisma.$transaction(async (tx) => {
-      // ---------------------------------------------
-      // UPDATE CURRENT RECEIPT
-      // ---------------------------------------------
-
+      // Update current record. Preserve createby.
       await tx.issueReceipt.update({
-        where: {
-          id: String(id),
-        },
-
+        where: { id: String(id) },
         data: {
           ItemGroupid: String(body.ItemGroupid),
-
           ItemMasterid: String(body.ItemMasterid),
-
           ItemTypeid: String(body.ItemTypeid),
-
           TransactionTypeid: String(body.TransactionTypeid),
-
-          IssueDate: new Date(body.IssueDate),
-
+          IssueDate: issueDate,
           Qty: qty,
-
           PreviousBalance: previousBalance,
-
           Price: price,
-
-          Particuler: body.Particuler ? String(body.Particuler) : null,
-
+          Particuler: body.Particuler
+            ? String(body.Particuler)
+            : null,
           Balance: currentBalance,
-
           Issue_by: String(body.Issue_by),
-
-          GetPassNo: body.GetPassNo ? String(body.GetPassNo) : null,
-
-          DateOfRecive: body.DateOfRecive ? new Date(body.DateOfRecive) : null,
-
+          GetPassNo: body.GetPassNo
+            ? String(body.GetPassNo)
+            : body.GatePassNo
+              ? String(body.GatePassNo)
+              : null,
+          DateOfRecive: body.DateOfRecive
+            ? new Date(body.DateOfRecive)
+            : null,
           ReciptChallanNo: body.ReciptChallanNo
             ? String(body.ReciptChallanNo)
             : null,
-
           RecivedBy: String(body.RecivedBy),
-
           Comment: body.Comment ? String(body.Comment) : null,
+
+          // Updated By
+          updateby: userId,
         },
       });
 
-      // ---------------------------------------------
-      // GET ALL ACTIVE RECEIPTS
-      // ---------------------------------------------
-
+      // Get all active records for the selected item.
       const receipts = await tx.issueReceipt.findMany({
         where: {
           ItemMasterid: String(body.ItemMasterid),
-
           deletedAt: null,
         },
-
         orderBy: [
-          {
-            IssueDate: "asc",
-          },
-          {
-            createdAt: "asc",
-          },
-          {
-            id: "asc",
-          },
+          { IssueDate: "asc" },
+          { createdAt: "asc" },
+          { id: "asc" },
         ],
       });
-
-      // ---------------------------------------------
-      // FIND EDITED ROW
-      // ---------------------------------------------
 
       const editedIndex = receipts.findIndex(
         (receipt) => String(receipt.id) === String(id),
@@ -1324,51 +1204,25 @@ export async function PUT(request) {
         throw new Error("Updated Issue/Receipt could not be found");
       }
 
-      // ---------------------------------------------
-      // STARTING BALANCE
-      // ---------------------------------------------
-
       let runningBalance = Number(receipts[0].PreviousBalance ?? 0);
 
-      // ---------------------------------------------
-      // RECALCULATE ALL RECEIPTS
-      // ---------------------------------------------
-
+      // Recalculate balances for this item's transactions.
       for (let index = 0; index < receipts.length; index++) {
         const receipt = receipts[index];
+        const isEdited = String(receipt.id) === String(id);
 
-        let rowQty = Number(receipt.Qty ?? 0);
+        const rowQty = isEdited ? qty : Number(receipt.Qty ?? 0);
 
-        let rowTransactionTypeId = receipt.TransactionTypeid;
+        const rowTransactionTypeId = isEdited
+          ? String(body.TransactionTypeid)
+          : receipt.TransactionTypeid;
 
-        // -------------------------------------------
-        // EDITED ROW USES NEW VALUES
-        // -------------------------------------------
-
-        if (String(receipt.id) === String(id)) {
-          rowQty = qty;
-
-          rowTransactionTypeId = String(body.TransactionTypeid);
-        }
-
-        // -------------------------------------------
-        // PREVIOUS BALANCE
-        // -------------------------------------------
-
-        let rowPreviousBalance;
-
-        if (index === 0) {
-          rowPreviousBalance =
-            String(receipt.id) === String(id)
+        const rowPreviousBalance =
+          index === 0
+            ? isEdited
               ? previousBalance
-              : Number(receipt.PreviousBalance ?? 0);
-        } else {
-          rowPreviousBalance = runningBalance;
-        }
-
-        // -------------------------------------------
-        // CALCULATE BALANCE
-        // -------------------------------------------
+              : Number(receipt.PreviousBalance ?? 0)
+            : runningBalance;
 
         const rowBalance = calculateBalance(
           rowPreviousBalance,
@@ -1376,367 +1230,175 @@ export async function PUT(request) {
           rowTransactionTypeId,
         );
 
-        // -------------------------------------------
-        // CHECK WHETHER UPDATE IS REQUIRED
-        // -------------------------------------------
-
-        const oldPreviousBalance = Number(receipt.PreviousBalance ?? 0);
-
-        const oldBalance = Number(receipt.Balance ?? 0);
-
         const needsUpdate =
-          oldPreviousBalance !== rowPreviousBalance ||
-          oldBalance !== rowBalance ||
-          (String(receipt.id) === String(id) &&
-            Number(receipt.Qty ?? 0) !== rowQty) ||
-          (String(receipt.id) === String(id) &&
-            String(receipt.TransactionTypeid) !==
-            String(body.TransactionTypeid));
+          Number(receipt.PreviousBalance ?? 0) !== rowPreviousBalance ||
+          Number(receipt.Balance ?? 0) !== rowBalance ||
+          (isEdited &&
+            (Number(receipt.Qty ?? 0) !== rowQty ||
+              String(receipt.TransactionTypeid) !==
+              String(body.TransactionTypeid)));
 
         if (needsUpdate) {
           await tx.issueReceipt.update({
-            where: {
-              id: receipt.id,
-            },
-
+            where: { id: receipt.id },
             data: {
               PreviousBalance: rowPreviousBalance,
-
               Balance: rowBalance,
-
-              ...(String(receipt.id) === String(id)
+              ...(isEdited
                 ? {
                   Qty: rowQty,
-
                   TransactionTypeid: String(body.TransactionTypeid),
+                  updateby: userId,
                 }
                 : {}),
             },
           });
         }
 
-        // -------------------------------------------
-        // NEXT ROW
-        // -------------------------------------------
-
         runningBalance = rowBalance;
       }
 
-      // =================================================
-      // GET OLD ITEM INFORMATION
-      // =================================================
+      // Get old and new related records for change log.
+      const [
+        oldItemMaster,
+        newItemMaster,
+        oldTransactionType,
+        newTransactionType,
+        oldIssueBy,
+        newIssueBy,
+        oldReceivedBy,
+        newReceivedBy,
+        oldItemType,
+        newItemType,
+      ] = await Promise.all([
+        tx.itemMaster.findFirst({
+          where: { id: String(existingReceipt.ItemMasterid) },
+        }),
+        tx.itemMaster.findFirst({
+          where: { id: String(body.ItemMasterid) },
+        }),
+        tx.transactionType.findFirst({
+          where: { id: String(existingReceipt.TransactionTypeid) },
+        }),
+        tx.transactionType.findFirst({
+          where: { id: String(body.TransactionTypeid) },
+        }),
+        tx.StaffUser.findFirst({
+          where: { id: String(existingReceipt.Issue_by) },
+        }),
+        tx.StaffUser.findFirst({
+          where: { id: String(body.Issue_by) },
+        }),
+        tx.StaffUser.findFirst({
+          where: { id: String(existingReceipt.RecivedBy) },
+        }),
+        tx.StaffUser.findFirst({
+          where: { id: String(body.RecivedBy) },
+        }),
+        tx.ptoductType.findFirst({
+          where: { id: String(existingReceipt.ItemTypeid) },
+        }),
+        tx.ptoductType.findFirst({
+          where: { id: String(body.ItemTypeid) },
+        }),
+      ]);
 
-      const oldItemMaster = await tx.itemMaster.findFirst({
-        where: {
-          id: String(existingReceipt.ItemMasterid),
-        },
-      });
+      const oldItemName =
+        oldItemMaster?.ItemName || oldItemMaster?.itemName || "-";
 
-      const newItemMaster = await tx.itemMaster.findFirst({
-        where: {
-          id: String(body.ItemMasterid),
-        },
-      });
-
-      // =================================================
-      // GET ITEM TYPES
-      // =================================================
-
-      const oldProductType = String(existingReceipt.ItemTypeid || "-");
-      const newProductType = String(body.ItemTypeid || "-");
-
-      // =================================================
-      // GET TRANSACTION TYPE NAMES
-      // =================================================
-
-      const oldTransactionType = await tx.transactionType.findFirst({
-        where: {
-          id: String(existingReceipt.TransactionTypeid),
-        },
-      });
-
-      const newTransactionType = await tx.transactionType.findFirst({
-        where: {
-          id: String(body.TransactionTypeid),
-        },
-      });
-
-      const getTransactionTypeName = (transaction) => {
-        if (!transaction) {
-          return "-";
-        }
-
-        return (
-          transaction.name ||
-          transaction.Name ||
-          transaction.TransactionType ||
-          transaction.TransactionTypeName ||
-          transaction.TypeName ||
-          "-"
-        );
-      };
+      const newItemName =
+        newItemMaster?.ItemName || newItemMaster?.itemName || "-";
 
       const oldTransactionName = getTransactionTypeName(oldTransactionType);
-
       const newTransactionName = getTransactionTypeName(newTransactionType);
 
-      // =================================================
-      // GET USER / STAFF NAMES
-      // =================================================
+      const oldItemTypeName =
+        oldItemType?.ProductType || oldItemType?.name || "-";
 
-      const oldIssueBy = await tx.StaffUser.findFirst({
-        where: {
-          id: String(existingReceipt.Issue_by),
-        },
-      });
-
-      const newIssueBy = await tx.StaffUser.findFirst({
-        where: {
-          id: String(body.Issue_by),
-        },
-      });
-
-      const oldReceivedBy = await tx.StaffUser.findFirst({
-        where: {
-          id: String(existingReceipt.RecivedBy),
-        },
-      });
-
-      const newReceivedBy = await tx.StaffUser.findFirst({
-        where: {
-          id: String(body.RecivedBy),
-        },
-      });
-
-      const getStaffName = (user) => {
-        if (!user) {
-          return "-";
-        }
-
-        const fullName = [user.firstName, user.lastName]
-          .filter(Boolean)
-          .join(" ")
-          .trim();
-
-        return fullName || user.name || user.username || user.email || "-";
-      };
+      const newItemTypeName =
+        newItemType?.ProductType || newItemType?.name || "-";
 
       const oldIssueByName = getStaffName(oldIssueBy);
-
       const newIssueByName = getStaffName(newIssueBy);
 
       const oldReceivedByName = getStaffName(oldReceivedBy);
-
       const newReceivedByName = getStaffName(newReceivedBy);
-
-      // =================================================
-      // FORMAT DATE
-      // =================================================
-
-      const formatLogDate = (value) => {
-        if (!value) {
-          return "-";
-        }
-
-        const date = new Date(value);
-
-        if (Number.isNaN(date.getTime())) {
-          return String(value);
-        }
-
-        return date.toLocaleDateString("en-GB", {
-          day: "2-digit",
-          month: "short",
-          year: "numeric",
-        });
-      };
-
-      // =================================================
-      // FORMAT VALUE
-      // =================================================
-
-      const logValue = (value) => {
-        if (value === undefined || value === null || value === "") {
-          return "-";
-        }
-
-        return String(value);
-      };
-
-      // =================================================
-      // COLLECT CHANGES
-      // =================================================
 
       const changes = [];
 
-      // Item Name
-      const oldItemName = oldItemMaster?.ItemName || "-";
+      const addChange = (label, oldValue, newValue) => {
+        if (String(oldValue ?? "-") !== String(newValue ?? "-")) {
+          changes.push(
+            `${label} : From - ${getValue(oldValue)} To - ${getValue(newValue)}`,
+          );
+        }
+      };
 
-      const newItemName = newItemMaster?.ItemName || "-";
-
-      if (oldItemName !== newItemName) {
-        changes.push(`ItemName : From - ${oldItemName} To - ${newItemName}`);
-      }
-
-      // Item Type
-      if (String(existingReceipt.ItemTypeid) !== String(body.ItemTypeid)) {
-        changes.push(
-          `Item Type : From - ${oldProductType} To - ${newProductType}`,
-        );
-      }
-
-      // Transaction Type
-      if (
-        String(existingReceipt.TransactionTypeid) !==
-        String(body.TransactionTypeid)
-      ) {
-        changes.push(
-          `Transaction Type : From - ${oldTransactionName} To - ${newTransactionName}`,
-        );
-      }
-
-      // Previous Balance
-      if (
-        Number(existingReceipt.PreviousBalance ?? 0) !== Number(previousBalance)
-      ) {
-        changes.push(
-          `Previous Balance : From - ${existingReceipt.PreviousBalance ?? 0} To - ${previousBalance}`,
-        );
-      }
-
-      // Quantity
-      if (Number(existingReceipt.Qty ?? 0) !== Number(qty)) {
-        changes.push(
-          `Quantity : From - ${existingReceipt.Qty ?? 0} To - ${qty}`,
-        );
-      }
-
-      // Balance
-      if (Number(existingReceipt.Balance ?? 0) !== Number(currentBalance)) {
-        changes.push(
-          `Balance : From - ${existingReceipt.Balance ?? 0} To - ${currentBalance}`,
-        );
-      }
-
-      // Date
-      const oldDate = formatLogDate(existingReceipt.IssueDate);
-
-      const newDate = formatLogDate(body.IssueDate);
-
-      if (oldDate !== newDate) {
-        changes.push(`Date : From - ${oldDate} To - ${newDate}`);
-      }
-
-      // Price
-      const oldPrice =
-        existingReceipt.Price !== null && existingReceipt.Price !== undefined
-          ? String(existingReceipt.Price)
-          : "-";
-
-      const newPrice = price !== null ? String(price) : "-";
-
-      if (oldPrice !== newPrice) {
-        changes.push(`Price : From - ${oldPrice} To - ${newPrice}`);
-      }
-
-      // Particular
-      const oldParticular = existingReceipt.Particuler || "-";
-
-      const newParticular = body.Particuler || "-";
-
-      if (oldParticular !== newParticular) {
-        changes.push(
-          `Particular : From - ${oldParticular} To - ${newParticular}`,
-        );
-      }
-
-      // Issued By
-      if (String(existingReceipt.Issue_by) !== String(body.Issue_by)) {
-        changes.push(
-          `Issued By : From - ${oldIssueByName} To - ${newIssueByName}`,
-        );
-      }
-
-      // // Issued To RecivedBy
-      if (String(existingReceipt.RecivedBy) !== String(body.RecivedBy)) {
-        changes.push(
-          `RecivedBy : From - ${oldReceivedByName} To - ${newReceivedByName}`,
-        );
-      }
-
-      // Gate Pass
-      const oldGatePass = existingReceipt.GetPassNo || "-";
-
-      const newGatePass = body.GetPassNo || "-";
-
-      if (oldGatePass !== newGatePass) {
-        changes.push(`GatePassNo : From - ${oldGatePass} To - ${newGatePass}`);
-      }
-
-      // Date Of Receive
-      const oldReceiveDate = formatLogDate(existingReceipt.DateOfRecive);
-
-      const newReceiveDate = formatLogDate(body.DateOfRecive);
-
-      if (oldReceiveDate !== newReceiveDate) {
-        changes.push(
-          `Date Of Receive : From - ${oldReceiveDate} To - ${newReceiveDate}`,
-        );
-      }
-
-      // Receipt Challan
-      const oldChallan = existingReceipt.ReciptChallanNo || "-";
-
-      const newChallan = body.ReciptChallanNo || "-";
-
-      if (oldChallan !== newChallan) {
-        changes.push(
-          `Receipt Challan No : From - ${oldChallan} To - ${newChallan}`,
-        );
-      }
-
-      // Comment
-      const oldComment = existingReceipt.Comment || "-";
-
-      const newComment = body.Comment || "-";
-
-      if (oldComment !== newComment) {
-        changes.push(`Comment : From - ${oldComment} To - ${newComment}`);
-      }
-
-      // =================================================
-      // CREATE INVENTORY CHANGE LOG
-      // =================================================
+      addChange("Item Name", oldItemName, newItemName);
+      addChange(
+        "Item Type",
+        oldItemTypeName,
+        newItemTypeName,
+      );
+      addChange(
+        "Transaction Type",
+        oldTransactionName,
+        newTransactionName,
+      );
+      addChange(
+        "Previous Balance",
+        existingReceipt.PreviousBalance,
+        previousBalance,
+      );
+      addChange("Quantity", existingReceipt.Qty, qty);
+      addChange("Balance", existingReceipt.Balance, currentBalance);
+      addChange(
+        "Date",
+        formatDate(existingReceipt.IssueDate),
+        formatDate(issueDate),
+      );
+      addChange("Price", formatPrice(existingReceipt.Price), formatPrice(price));
+      addChange(
+        "Particular",
+        existingReceipt.Particuler,
+        body.Particuler,
+      );
+      addChange("Issued By", oldIssueByName, newIssueByName);
+      addChange("Received By", oldReceivedByName, newReceivedByName);
+      addChange(
+        "Gate Pass No",
+        existingReceipt.GetPassNo,
+        body.GetPassNo || body.GatePassNo,
+      );
+      addChange(
+        "Date Of Receive",
+        formatDate(existingReceipt.DateOfRecive),
+        formatDate(body.DateOfRecive),
+      );
+      addChange(
+        "Receipt Challan No",
+        existingReceipt.ReciptChallanNo,
+        body.ReciptChallanNo,
+      );
+      addChange("Comment", existingReceipt.Comment, body.Comment);
 
       if (changes.length > 0) {
         await tx.inventoryChangeLog.create({
           data: {
             IssueReceiptId: String(id),
-
-            UserId: body.UserId ? String(body.UserId) : null,
-
-            UserName: body.UserName ? String(body.UserName) : null,
-
+            UserId: userId,
+            UserName: getUserName(user),
             Action: "Edit",
-
             ItemMasterid: String(body.ItemMasterid),
-
             ItemName: newItemName,
-
             ItemTypeid: String(body.ItemTypeid),
-
-            ItemType: newProductType,
-
+            ItemType: newItemTypeName,
             Details: changes.join(" "),
           },
         });
       }
 
-      // ---------------------------------------------
-      // RETURN UPDATED RECORD
-      // ---------------------------------------------
-
-      return await tx.issueReceipt.findFirst({
+      return tx.issueReceipt.findFirst({
         where: {
           id: String(id),
           deletedAt: null,
@@ -1744,18 +1406,14 @@ export async function PUT(request) {
       });
     });
 
-    // SYSTEM LOG: UPDATE Issue/Receipt
     await systemLog({
       event: "update",
-      userId: body.UserId ? String(body.UserId) : null,
+      userId,
       entityId: String(updatedReceipt.id),
       entityType: "inventory.issue-receipt",
       description: `Issue/Receipt updated. Receipt ID: ${updatedReceipt.id}`,
-      ipAddress: request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null,
+      ipAddress: getIpAddress(request),
     });
-    // =================================================
-    // RESPONSE
-    // =================================================
 
     return NextResponse.json({
       success: true,
@@ -1770,24 +1428,22 @@ export async function PUT(request) {
         success: false,
         message: error.message || "Failed updating Issue/Receipt",
       },
-      {
-        status: 500,
-      },
+      { status: 500 },
     );
   }
 }
+// =====================================================
+// DELETE: SOFT DELETE ISSUE / RECEIPT
+// =====================================================
 
 export async function DELETE(request) {
   try {
     const accessError = await checkMenuAccess("inventory-issue-receipt");
 
-    if (accessError) {
-      return accessError;
-    }
+    if (accessError) return accessError;
 
     const { searchParams } = new URL(request.url);
 
-    // The body is optional: single delete still uses ?id=
     let body = {};
 
     try {
@@ -1811,19 +1467,10 @@ export async function DELETE(request) {
 
     if (!ids.length) {
       return NextResponse.json(
-        {
-          success: false,
-          message: "Issue/Receipt ID is required",
-        },
-        {
-          status: 400,
-        },
+        { success: false, message: "Issue/Receipt ID is required" },
+        { status: 400 },
       );
     }
-
-    // =================================================
-    // CHECK EXISTING RECORDS
-    // =================================================
 
     const existingReceipts = await prisma.issueReceipt.findMany({
       where: {
@@ -1837,34 +1484,25 @@ export async function DELETE(request) {
 
     if (!existingReceipts.length) {
       return NextResponse.json(
-        {
-          success: false,
-          message: "Issue/Receipt not found",
-        },
-        {
-          status: 404,
-        },
+        { success: false, message: "Issue/Receipt not found" },
+        { status: 404 },
       );
     }
 
-    // =================================================
-    // SOFT DELETE
-    // =================================================
+    const user = await getAuthenticatedUser();
 
     const deleteResult = await prisma.issueReceipt.updateMany({
       where: {
-        id: { in: existingReceipts.map((receipt) => receipt.id) },
+        id: {
+          in: existingReceipts.map((receipt) => receipt.id),
+        },
         deletedAt: null,
       },
-
       data: {
         deletedAt: new Date(),
       },
     });
 
-    const user = await getAuthenticatedUser();
-
-    // SYSTEM LOG: DELETE Issue/Receipt(S)
     for (const receipt of existingReceipts) {
       await systemLog({
         event: "delete",
@@ -1872,8 +1510,7 @@ export async function DELETE(request) {
         entityId: String(receipt.id),
         entityType: "inventory.issue-receipt",
         description: `Issue/Receipt deleted. Receipt ID: ${receipt.id}`,
-        ipAddress:
-          request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null,
+        ipAddress: getIpAddress(request),
       });
     }
 
@@ -1893,9 +1530,7 @@ export async function DELETE(request) {
         success: false,
         message: error.message || "Failed deleting Issue/Receipt",
       },
-      {
-        status: 500,
-      },
+      { status: 500 },
     );
   }
 }

@@ -59,6 +59,7 @@ export default function ItemMasterViewDialog({
   const [taxes, setTaxes] = useState([]);
   const [locations, setLocations] = useState([]);
   const [machines, setMachines] = useState([]);
+  const [itemConditions, setItemConditions] = useState([]);
 
   // =======================================================
   // LOAD DROPDOWN DATA
@@ -78,6 +79,7 @@ export default function ItemMasterViewDialog({
         taxResponse,
         locationResponse,
         machineResponse,
+        itemConditionResponse,
       ] = await Promise.all([
         apiFetch("/api/inventory/item-groups?limit=100"),
 
@@ -88,6 +90,8 @@ export default function ItemMasterViewDialog({
         apiFetch("/api/inventory/location?limit=100"),
 
         apiFetch("/api/inventory/machine-master?limit=100"),
+
+        apiFetch("/api/inventory/product-type?limit=100"),
       ]);
 
       const [
@@ -96,12 +100,14 @@ export default function ItemMasterViewDialog({
         taxJson,
         locationJson,
         machineJson,
+        itemConditionJson,
       ] = await Promise.all([
         groupResponse.json(),
         unitResponse.json(),
         taxResponse.json(),
         locationResponse.json(),
         machineResponse.json(),
+        itemConditionResponse.json(),
       ]);
 
       setItemGroups(groupJson.data || []);
@@ -109,6 +115,7 @@ export default function ItemMasterViewDialog({
       setTaxes(taxJson.data || []);
       setLocations(locationJson.data || []);
       setMachines(machineJson.data || []);
+      setItemConditions(itemConditionJson.data || []);
     } catch (error) {
       console.error("Dropdown loading error", error);
     }
@@ -182,6 +189,21 @@ export default function ItemMasterViewDialog({
     return data.machineCode
       ? `${data.machineName} (${data.machineCode})`
       : data.machineName || "-";
+  };
+  // =======================================================
+  // GET ItemCondition NAME
+  // =======================================================
+
+  const getItemConditionName = (id) => {
+    if (!id) return "-";
+
+    const data = itemConditions.find(
+      (item) => String(item.id) === String(id),
+    );
+
+    if (!data) return id;
+
+    return data.ProductType || "-";
   };
 
   if (!ItemMaster) {
@@ -285,6 +307,19 @@ export default function ItemMasterViewDialog({
                   </p>
                 </div>
 
+                {/* ItemCondition */}
+
+                <div className="rounded-lg border p-4">
+                  <div className="mb-2 flex gap-2 font-semibold">
+                    <Cog className="h-4 w-4" />
+                    Item Condition
+                  </div>
+
+                  <p className="text-sm break-words">
+                    {getItemConditionName(ItemMaster.ItemConditionid)}
+                  </p>
+                </div>
+
               </div>
 
               {/* DESCRIPTION */}
@@ -306,6 +341,13 @@ export default function ItemMasterViewDialog({
 
                 <div className="rounded-lg border p-4">
                   <b>Opening Balance</b>
+
+                  <p className="text-sm">
+                    {ItemMaster.openingBalance || "-"}
+                  </p>
+                </div>
+                <div className="rounded-lg border p-4">
+                  <b>Closeing Balance</b>
 
                   <p className="text-sm">
                     {ItemMaster.openingBalance || "-"}
@@ -405,7 +447,7 @@ export default function ItemMasterViewDialog({
                 <div className="rounded-lg border p-4">
                   <div className="mb-2 flex gap-2 font-semibold">
                     <Calendar className="h-4 w-4" />
-                    Created
+                    Created Date
                   </div>
 
                   <p className="text-sm">
@@ -416,7 +458,7 @@ export default function ItemMasterViewDialog({
                 <div className="rounded-lg border p-4">
                   <div className="mb-2 flex gap-2 font-semibold">
                     <Calendar className="h-4 w-4" />
-                    Updated
+                    Updated Date
                   </div>
 
                   <p className="text-sm">

@@ -30,6 +30,39 @@ import {
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { RiCheckboxCircleFill, RiErrorWarningFill } from "@remixicon/react";
 import { Alert, AlertIcon, AlertTitle } from "@/components/ui/alert";
+import ItemGroupCustomFields, {validateRequiredCustomFields,} from "../../custom-fields/import-custom-fields";
+const showSuccessToast = (message) => {
+  toast.custom(
+    () => (
+      <Alert variant="mono" icon="success">
+        <AlertIcon>
+          <RiCheckboxCircleFill />
+        </AlertIcon>
+        <AlertTitle>{message}</AlertTitle>
+      </Alert>
+    ),
+    { position: "top-center" },
+  );
+};
+
+const showErrorToast = (message) => {
+  toast.custom(
+    (t) => (
+      <Alert
+        variant="mono"
+        icon="destructive"
+        close={true}
+        onClose={() => toast.dismiss(t)}
+      >
+        <AlertIcon>
+          <RiErrorWarningFill />
+        </AlertIcon>
+        <AlertTitle>{message}</AlertTitle>
+      </Alert>
+    ),
+    { position: "top-center" },
+  );
+};
 // =======================================================
 // DEFAULT FORM
 // =======================================================
@@ -70,6 +103,9 @@ export default function ItemGroupAddDialog({
       isDefault: item.isDefault ? "true" : "false",
     }),
   });
+  const [customFieldDefinitions, setCustomFieldDefinitions] = useState([]);
+  const [customFields, setCustomFields] = useState({});
+  const [customFieldsReady, setCustomFieldsReady] = useState(false);
 
   const [errors, setErrors] = useState({});
 
@@ -132,7 +168,17 @@ export default function ItemGroupAddDialog({
 
   const handleSave = async () => {
     if (!validate()) return;
+    const missingCustomFields = validateRequiredCustomFields(
+      customFieldDefinitions,
+      customFields,
+    );
 
+    if (missingCustomFields.length > 0) {
+      showErrorToast(
+        `Please fill in required custom fields: ${missingCustomFields.join(", ")}`,
+      );
+      return;
+    }
     const itemGroupData = {
       groupName: form.groupName.trim(),
 
@@ -141,6 +187,8 @@ export default function ItemGroupAddDialog({
       status: form.status === "true",
 
       isDefault: form.isDefault === "true",
+
+      customFields: customFields ?? {},
     };
 
     try {
@@ -312,6 +360,26 @@ export default function ItemGroupAddDialog({
                   </SelectContent>
                 </Select>
               </div>
+              {/* CUSTOM FIELDS */}
+
+              <div className="space-y-4 border-t pt-5">
+                <div>
+                  <h3 className="text-base font-semibold">Custom Fields</h3>
+
+                  <p className="text-sm text-muted-foreground">
+                    Additional item group information.
+                  </p>
+                </div>
+
+                <ItemGroupCustomFields
+                  values={customFields}
+                  onChange={setCustomFields}
+                  onFieldsLoaded={(loadedFields) => {
+                    setCustomFieldDefinitions(loadedFields);
+                    setCustomFieldsReady(true);
+                  }}
+                />
+              </div>
             </DialogBody>
           </ScrollArea>
           <DialogFooter className="gap-2">
@@ -324,6 +392,6 @@ export default function ItemGroupAddDialog({
           </DialogFooter>
         </div>
       </DialogContent>
-    </Dialog>
+    </Dialog >
   );
 }

@@ -84,20 +84,20 @@ function buildWhere(searchParams) {
 
     ...(createdFrom || createdTo
       ? {
-          createdAt: {
-            ...(createdFrom && { gte: createdFrom }),
-            ...(createdTo && { lt: createdTo }),
-          },
-        }
+        createdAt: {
+          ...(createdFrom && { gte: createdFrom }),
+          ...(createdTo && { lt: createdTo }),
+        },
+      }
       : {}),
 
     ...(updatedFrom || updatedTo
       ? {
-          updatedAt: {
-            ...(updatedFrom && { gte: updatedFrom }),
-            ...(updatedTo && { lt: updatedTo }),
-          },
-        }
+        updatedAt: {
+          ...(updatedFrom && { gte: updatedFrom }),
+          ...(updatedTo && { lt: updatedTo }),
+        },
+      }
       : {}),
 
     ...(createdBy && { createby: createdBy }),
@@ -123,16 +123,16 @@ async function attachUserNames(records) {
 
   const users = userIds.length
     ? await prisma.user.findMany({
-        where: {
-          id: {
-            in: userIds,
-          },
+      where: {
+        id: {
+          in: userIds,
         },
-        select: {
-          id: true,
-          name: true,
-        },
-      })
+      },
+      select: {
+        id: true,
+        name: true,
+      },
+    })
     : [];
 
   const userMap = new Map(
@@ -192,9 +192,9 @@ export async function GET(request) {
         ...(isExport
           ? {}
           : {
-              skip: (page - 1) * limit,
-              take: limit,
-            }),
+            skip: (page - 1) * limit,
+            take: limit,
+          }),
       }),
     ]);
 
@@ -696,22 +696,25 @@ export async function PUT(request) {
     }
 
     // Merge custom fields.
-    const existingCustomFields =
-      existing.customFields &&
-      typeof existing.customFields === "object" &&
-      !Array.isArray(existing.customFields)
-        ? existing.customFields
-        : {};
+    // const existingCustomFields =
+    //   existing.customFields &&
+    //     typeof existing.customFields === "object" &&
+    //     !Array.isArray(existing.customFields)
+    //     ? existing.customFields
+    //     : {};
 
-    const submittedCustomFields =
+    // const submittedCustomFields =
+    //   body.customFields !== undefined
+    //     ? body.customFields
+    //     : {};
+    const updatedCustomFields =
       body.customFields !== undefined
         ? body.customFields
-        : {};
-
-    const mergedCustomFields = {
-      ...existingCustomFields,
-      ...submittedCustomFields,
-    };
+        : existing.customFields ?? {};
+    // const mergedCustomFields = {
+    //   ...existingCustomFields,
+    //   ...submittedCustomFields,
+    // };
 
     // Update Transaction Type.
     const updated = await prisma.$transaction(async (tx) => {
@@ -760,7 +763,7 @@ export async function PUT(request) {
       }
 
       if (body.customFields !== undefined) {
-        updateData.customFields = mergedCustomFields;
+        updateData.customFields = updatedCustomFields;
       }
 
       return tx.transactionType.update({
@@ -870,17 +873,15 @@ export async function PATCH(request) {
       userId: String(user.id),
       entityId: ids.join(","),
       entityType: "inventory.transaction-type",
-      description: `Transaction Type status set to ${
-        body.status ? "Active" : "Inactive"
-      } for ${result.count} record(s)`,
+      description: `Transaction Type status set to ${body.status ? "Active" : "Inactive"
+        } for ${result.count} record(s)`,
       ipAddress: getIpAddress(request),
     });
 
     return NextResponse.json({
       success: true,
-      message: `${result.count} transaction type(s) marked ${
-        body.status ? "active" : "inactive"
-      }.`,
+      message: `${result.count} transaction type(s) marked ${body.status ? "active" : "inactive"
+        }.`,
       count: result.count,
       sync: true,
     });

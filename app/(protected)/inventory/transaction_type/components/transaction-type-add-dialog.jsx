@@ -31,7 +31,8 @@ import {
 } from "@/components/ui/select";
 import { Alert, AlertIcon, AlertTitle } from "@/components/ui/alert";
 import { RiCheckboxCircleFill, RiErrorWarningFill } from "@remixicon/react";
-import TransactionCustomFields from "./transaction-custom-fields";
+import TransactionCustomFields, { validateRequiredCustomFields, } from "../../custom-fields/import-custom-fields";
+
 const showSuccessToast = (message) => {
   toast.custom(
     () => (
@@ -83,7 +84,7 @@ export default function TransactionTypeAddDialog({
   const [customFieldDefinitions, setCustomFieldDefinitions] = useState([]);
   const [customFields, setCustomFields] = useState({});
   const [customFieldsLoading, setCustomFieldsLoading] = useState(false);
-
+  const [customFieldsReady, setCustomFieldsReady] = useState(false);
   const updateField = (field, value) => {
     setForm((prev) => ({
       ...prev,
@@ -116,9 +117,7 @@ export default function TransactionTypeAddDialog({
         "Transaction Type must not exceed 255 characters.";
     }
 
-    if (!Description) {
-      newErrors.Description = "Description is required.";
-    } else if (Description.length > 255) {
+    if (Description && Description.length > 255) {
       newErrors.Description = "Description must not exceed 255 characters.";
     }
 
@@ -135,6 +134,19 @@ export default function TransactionTypeAddDialog({
 
   const handleSave = async () => {
     if (!validate()) {
+      return;
+    }
+
+    // Validate only selected required custom fields.
+    const missingCustomFields = validateRequiredCustomFields(
+      customFieldDefinitions,
+      customFields,
+    );
+
+    if (missingCustomFields.length > 0) {
+      showErrorToast(
+        `Please fill in required custom fields: ${missingCustomFields.join(", ")}`,
+      );
       return;
     }
 
@@ -175,12 +187,12 @@ export default function TransactionTypeAddDialog({
       showErrorToast(error?.message || "Failed to add Transaction Type.");
     }
   };
-
   const handleClose = () => {
     setErrors({});
     setForm(DEFAULT_FORM);
     setCustomFields({});
     setCustomFieldDefinitions([]);
+    setCustomFieldsReady(false);
     closeDialog?.();
   };
 
@@ -225,7 +237,7 @@ export default function TransactionTypeAddDialog({
 
               <div>
                 <label className="mb-2 block text-sm font-medium">
-                  Description <span className="text-destructive">*</span>
+                  Description
                 </label>
 
                 <Textarea
@@ -322,19 +334,15 @@ export default function TransactionTypeAddDialog({
                   </p>
                 </div>
 
-                {customFieldsLoading ? (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <LoaderCircle className="h-4 w-4 animate-spin" />
-                    Loading custom fields...
-                  </div>
-                ) : (
-                  <TransactionCustomFields
-                    fields={customFieldDefinitions}
-                    values={customFields}
-                    onChange={setCustomFields}
-                    disabled={customFieldsLoading}
-                  />
-                )}
+                <TransactionCustomFields
+                  fields={customFieldDefinitions}
+                  values={customFields}
+                  onChange={setCustomFields}
+                  onFieldsLoaded={(loadedFields) => {
+                    setCustomFieldDefinitions(loadedFields);
+                    setCustomFieldsReady(true);
+                  }}
+                />
               </div>
             </DialogBody>
           </ScrollArea>
@@ -347,8 +355,8 @@ export default function TransactionTypeAddDialog({
               Close
             </Button>
 
-            <Button onClick={handleSave} disabled={customFieldsLoading}>
-              {customFieldsLoading ? (
+            <Button onClick={handleSave} disabled={!customFieldsReady}>
+              {!customFieldsReady ? (
                 <>
                   <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
                   Loading...

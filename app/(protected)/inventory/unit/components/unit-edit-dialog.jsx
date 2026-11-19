@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { RiCheckboxCircleFill, RiErrorWarningFill } from "@remixicon/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -13,6 +13,7 @@ import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertIcon, AlertTitle } from "@/components/ui/alert";
 
+import UnitCustomFields, {validateRequiredCustomFields,} from "../../custom-fields/import-custom-fields";
 import {
   Dialog,
   DialogContent,
@@ -63,15 +64,25 @@ export default function UnitEditDialog({ open, closeDialog, onSuccess, Unit }) {
   // LOAD UNIT DATA
   // =========================================
 
+  const [customFieldDefinitions, setCustomFieldDefinitions] = useState([]);
+  const [customFields, setCustomFields] = useState({});
+  const [customFieldsReady, setCustomFieldsReady] = useState(false);
+  // Reset form whenever the dialog opens or the selected unit changes.
   useEffect(() => {
-    if (!open) return;
+    if (open) {
+      form.reset({
+        unitName: Unit?.unitName ?? "",
+        abbreviation: Unit?.abbreviation ?? "",
+        status:
+          Unit?.status === false || Unit?.status === "false"
+            ? "false"
+            : "true",
+      });
 
-    form.reset({
-      unitName: Unit?.unitName ?? "",
-      abbreviation: Unit?.abbreviation ?? "",
-      status:
-        Unit?.status === false || Unit?.status === "false" ? "false" : "true",
-    });
+      setCustomFields(Unit?.customFields ?? {});
+      setCustomFieldDefinitions([]);
+      setCustomFieldsReady(false);
+    }
   }, [open, Unit, form]);
 
   // =========================================
@@ -89,6 +100,7 @@ export default function UnitEditDialog({ open, closeDialog, onSuccess, Unit }) {
         unitName: values.unitName.trim(),
         abbreviation: values.abbreviation.trim(),
         status: values.status === "true",
+        customFields: customFields ?? {},
       };
 
       const response = await apiFetch("/api/inventory/unit", {
@@ -158,6 +170,17 @@ export default function UnitEditDialog({ open, closeDialog, onSuccess, Unit }) {
   // =========================================
 
   const handleSave = (values) => {
+    const missingCustomFields = validateRequiredCustomFields(
+      customFieldDefinitions,
+      customFields,
+    );
+
+    if (missingCustomFields.length > 0) {
+      showErrorToast(
+        `Please fill in required custom fields: ${missingCustomFields.join(", ")}`,
+      );
+      return;
+    }
     mutation.mutate(values);
   };
 
@@ -188,10 +211,10 @@ export default function UnitEditDialog({ open, closeDialog, onSuccess, Unit }) {
 
             <DialogDescription>Update unit information.</DialogDescription>
           </DialogHeader>
+          <ScrollArea className="grow min-h-0 flex flex-col h-full max-h-[90vh] overflow-hidden">
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(handleSave)}>
 
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(handleSave)}>
-              <ScrollArea className="grow min-h-0 flex flex-col h-full max-h-[90vh] overflow-hidden">
                 <DialogBody className="space-y-6 pt-0 px-0 min-h-0">
                   {/* UNIT NAME */}
 
@@ -201,8 +224,7 @@ export default function UnitEditDialog({ open, closeDialog, onSuccess, Unit }) {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>
-                          Unit Name
-                          <span className="text-destructive">*</span>
+                          Unit Name <span className="text-destructive">*</span>
                         </FormLabel>
 
                         <FormControl>
@@ -226,8 +248,7 @@ export default function UnitEditDialog({ open, closeDialog, onSuccess, Unit }) {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>
-                          Abbreviation
-                          <span className="text-destructive">*</span>
+                          Abbreviation <span className="text-destructive">*</span>
                         </FormLabel>
 
                         <FormControl>
@@ -250,7 +271,7 @@ export default function UnitEditDialog({ open, closeDialog, onSuccess, Unit }) {
                     name="status"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Status<span className="text-destructive">*</span></FormLabel>
+                        <FormLabel>Status <span className="text-destructive">*</span></FormLabel>
 
                         <FormControl>
                           <Select
@@ -273,28 +294,50 @@ export default function UnitEditDialog({ open, closeDialog, onSuccess, Unit }) {
                       </FormItem>
                     )}
                   />
-                </DialogBody>
-              </ScrollArea>
-              <DialogFooter className="gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleClose}
-                  disabled={isProcessing}
-                >
-                  Cancel
-                </Button>
+                  {/* CUSTOM FIELDS */}
 
-                <Button
-                  type="submit"
-                  disabled={!form.formState.isDirty || isProcessing}
-                >
-                  {isProcessing && <LoaderCircleIcon className="animate-spin" />}
-                  Update Unit
-                </Button>
-              </DialogFooter>
-            </form>
-          </Form>
+                  <div className="space-y-4 border-t pt-5">
+                    <div>
+                      <h3 className="text-base font-semibold">Custom Fields</h3>
+
+                      <p className="text-sm text-muted-foreground">
+                        Additional unit information.
+                      </p>
+                    </div>
+
+                    <UnitCustomFields
+                      values={customFields}
+                      onChange={setCustomFields}
+                      onFieldsLoaded={(loadedFields) => {
+                        setCustomFieldDefinitions(loadedFields);
+                        setCustomFieldsReady(true);
+                      }}
+                      disabled={isProcessing}
+                    />
+                  </div>
+                </DialogBody>
+
+                <DialogFooter className="gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleClose}
+                    disabled={isProcessing}
+                  >
+                    Cancel
+                  </Button>
+
+                  <Button
+                    type="submit"
+                    disabled={!form.formState.isDirty && Object.keys(customFields).length === 0 || isProcessing || !customFieldsReady}
+                  >
+                    {isProcessing && <LoaderCircleIcon className="animate-spin" />}
+                    Update
+                  </Button>
+                </DialogFooter>
+              </form>
+            </Form>
+          </ScrollArea>
         </div>
       </DialogContent>
     </Dialog>

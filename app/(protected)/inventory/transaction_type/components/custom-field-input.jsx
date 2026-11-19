@@ -1,29 +1,16 @@
-'use client';
+"use client";
 
-import {
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { useMemo, useRef, useState } from "react";
 
-import {
-  FileIcon,
-  ImageIcon,
-  LoaderCircle,
-  Upload,
-  X,
-} from 'lucide-react';
+import { FileIcon, ImageIcon, LoaderCircle, Upload, X } from "lucide-react";
 
-import { toast } from 'sonner';
+import { toast } from "sonner";
 
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-
-import {
-  Checkbox,
-} from '@/components/ui/checkbox';
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 
 import {
   Select,
@@ -31,75 +18,95 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
+} from "@/components/ui/select";
 
-import { apiFetch } from '@/lib/api';
+import { apiFetch } from "@/lib/api";
 
 /*
 |--------------------------------------------------------------------------
-| Image MIME types
+| VALID FIELD TYPES
 |--------------------------------------------------------------------------
 */
 
-const IMAGE_TYPES = [
-  'image/jpeg',
-  'image/png',
-  'image/gif',
-  'image/webp',
-  'image/svg+xml',
+export const VALID_TYPES = [
+  "input",
+  "number",
+  "textarea",
+  "email",
+  "phone",
+  "url",
+  "select",
+  "multiselect",
+  "radio",
+  "checkbox",
+  "date_picker",
+  "time_picker",
+  "date_picker_time",
+  "colorpicker",
+  "link",
+  "file",
+  "multi_file",
+  "multi_attachment",
+  "image",
+  "multi_image",
 ];
 
 /*
 |--------------------------------------------------------------------------
-| Normalize field type
+| IMAGE MIME TYPES
+|--------------------------------------------------------------------------
+*/
+
+const IMAGE_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/gif",
+  "image/webp",
+  "image/svg+xml",
+];
+
+/*
+|--------------------------------------------------------------------------
+| NORMALIZE FIELD TYPE
 |--------------------------------------------------------------------------
 */
 
 function normalizeFieldType(type) {
-  return String(type || '')
+  return String(type || "")
     .trim()
     .toLowerCase()
-    .replace(/[-\s]/g, '_');
+    .replace(/[-\s]/g, "_");
 }
 
 /*
 |--------------------------------------------------------------------------
-| Helpers
+| FIELD TYPE HELPERS
 |--------------------------------------------------------------------------
 */
 
 function isImageField(type) {
-  const normalized = normalizeFieldType(type);
-
-  return (
-    normalized === 'image' ||
-    normalized === 'multi_image'
-  );
+  return ["image", "multi_image"].includes(normalizeFieldType(type));
 }
 
 function isMultipleField(type) {
-  const normalized = normalizeFieldType(type);
-
-  return (
-    normalized === 'multi_file' ||
-    normalized === 'multi_image'
+  return ["multi_file", "multi_image", "multi_attachment"].includes(
+    normalizeFieldType(type),
   );
 }
 
 function isFileField(type) {
-  const normalized = normalizeFieldType(type);
-
-  return (
-    normalized === 'file' ||
-    normalized === 'image' ||
-    normalized === 'multi_file' ||
-    normalized === 'multi_image'
-  );
+  return [
+    "file",
+    "image",
+    "multi_file",
+    "multi_image",
+    "multi_attachment",
+  ].includes(normalizeFieldType(type));
 }
 
 /*
 |--------------------------------------------------------------------------
-| Normalize value to array
+| NORMALIZE ARRAY
 |--------------------------------------------------------------------------
 */
 
@@ -112,7 +119,7 @@ function normalizeArray(value) {
     return [];
   }
 
-  if (typeof value === 'string') {
+  if (typeof value === "string") {
     try {
       const parsed = JSON.parse(value);
 
@@ -123,7 +130,7 @@ function normalizeArray(value) {
       return [value];
     } catch {
       return value
-        .split(',')
+        .split(",")
         .map((item) => item.trim())
         .filter(Boolean);
     }
@@ -134,46 +141,78 @@ function normalizeArray(value) {
 
 /*
 |--------------------------------------------------------------------------
-| Get file name from URL
+| GET FIELD OPTIONS
+|--------------------------------------------------------------------------
+*/
+
+function getFieldOptions(field) {
+  let options = field?.options;
+
+  if (typeof options === "string") {
+    try {
+      options = JSON.parse(options);
+    } catch {
+      options = options
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+    }
+  }
+
+  if (!Array.isArray(options)) {
+    return [];
+  }
+
+  return options
+    .map((option) => {
+      if (typeof option === "string") {
+        return {
+          value: option,
+          label: option,
+        };
+      }
+
+      return {
+        value: String(option?.value ?? option?.label ?? ""),
+        label: String(option?.label ?? option?.value ?? ""),
+      };
+    })
+    .filter((option) => option.value);
+}
+
+/*
+|--------------------------------------------------------------------------
+| GET FILE NAME
 |--------------------------------------------------------------------------
 */
 
 function getFileName(url) {
   try {
     return decodeURIComponent(
-      String(url)
-        .split('/')
-        .pop()
-        ?.split('?')[0] || url
+      String(url).split("/").pop()?.split("?")[0] || url,
     );
   } catch {
-    return String(url || '');
+    return String(url || "");
   }
 }
 
 /*
 |--------------------------------------------------------------------------
-| Check image URL
+| CHECK IMAGE URL
 |--------------------------------------------------------------------------
 */
 
 function isImageUrl(url) {
-  if (!url) {
-    return false;
-  }
+  if (!url) return false;
 
-  const cleanUrl = String(url)
-    .split('?')[0]
-    .toLowerCase();
+  const cleanUrl = String(url).split("?")[0].toLowerCase();
 
-  return /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(
-    cleanUrl
-  );
+  return /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(cleanUrl);
 }
 
 /*
 |--------------------------------------------------------------------------
-| Component
+| COMPONENT
 |--------------------------------------------------------------------------
 */
 
@@ -185,35 +224,27 @@ export default function CustomFieldInput({
 }) {
   const inputRef = useRef(null);
 
-  const [uploading, setUploading] =
-    useState(false);
-
-  const [localFiles, setLocalFiles] =
-    useState([]);
+  const [uploading, setUploading] = useState(false);
+  const [localFiles, setLocalFiles] = useState([]);
 
   /*
   |--------------------------------------------------------------------------
-  | Field information
+  | FIELD INFORMATION
   |--------------------------------------------------------------------------
   */
 
-  const type = normalizeFieldType(
-    field?.type
-  );
+  const type = normalizeFieldType(field?.type);
 
-  const label =
-    field?.label ||
-    field?.name ||
-    field?.slug ||
-    'Custom Field';
+  const label = field?.label || field?.name || field?.slug || "Custom Field";
 
   const multiple = isMultipleField(type);
-
   const imageField = isImageField(type);
+
+  const required = Boolean(field?.required);
 
   /*
   |--------------------------------------------------------------------------
-  | Existing uploaded files
+  | EXISTING UPLOADED FILES
   |--------------------------------------------------------------------------
   */
 
@@ -227,341 +258,90 @@ export default function CustomFieldInput({
 
   /*
   |--------------------------------------------------------------------------
-  | Upload files
+  | UPLOAD FILES
   |--------------------------------------------------------------------------
   */
 
   const uploadFiles = async (files) => {
     if (!files?.length) {
-      toast.error(
-        'Please select at least one file.'
-      );
+      toast.error("Please select at least one file.");
       return;
     }
 
     try {
       setUploading(true);
 
-      /*
-      |--------------------------------------------------------------------------
-      | Create FormData
-      |--------------------------------------------------------------------------
-      */
-
       const formData = new FormData();
 
-      /*
-      |--------------------------------------------------------------------------
-      | IMPORTANT
-      |--------------------------------------------------------------------------
-      |
-      | Every file MUST use the same "files" key.
-      |
-      | files = file1
-      | files = file2
-      | files = file3
-      |
-      | Backend should use:
-      |
-      | formData.getAll('files')
-      |
-      |--------------------------------------------------------------------------
-      */
-
       files.forEach((file) => {
-        formData.append(
-          'files',
-          file,
-          file.name
-        );
+        formData.append("files", file, file.name);
       });
 
-      /*
-      |--------------------------------------------------------------------------
-      | Send field information
-      |--------------------------------------------------------------------------
-      */
+      formData.append("fieldType", type);
+      formData.append("fieldSlug", field?.slug || "");
 
-      formData.append(
-        'fieldType',
-        type
-      );
+      const response = await apiFetch("/api/customers/upload", {
+        method: "POST",
+        body: formData,
+      });
 
-      formData.append(
-        'fieldSlug',
-        field?.slug || ''
-      );
+      const result = await response.json().catch(() => ({}));
 
-      /*
-      |--------------------------------------------------------------------------
-      | Debug
-      |--------------------------------------------------------------------------
-      */
-
-      console.log(
-        'CUSTOM FIELD UPLOAD'
-      );
-
-      console.log(
-        'Field type:',
-        type
-      );
-
-      console.log(
-        'Field slug:',
-        field?.slug
-      );
-
-      console.log(
-        'Multiple:',
-        multiple
-      );
-
-      console.log(
-        'Files count:',
-        files.length
-      );
-
-      console.log(
-        'Files:',
-        files.map((file) => ({
-          name: file.name,
-          size: file.size,
-          type: file.type,
-        }))
-      );
-
-      /*
-      |--------------------------------------------------------------------------
-      | API request
-      |--------------------------------------------------------------------------
-      */
-
-      const response = await apiFetch(
-        '/api/customers/upload',
-        {
-          method: 'POST',
-          body: formData,
-        }
-      );
-
-      /*
-      |--------------------------------------------------------------------------
-      | API response
-      |--------------------------------------------------------------------------
-      */
-
-      const result =
-        await response
-          .json()
-          .catch(() => ({}));
-
-      console.log(
-        'UPLOAD API RESPONSE:',
-        result
-      );
-
-      /*
-      |--------------------------------------------------------------------------
-      | Validate response
-      |--------------------------------------------------------------------------
-      */
-
-      if (
-        !response.ok ||
-        !result?.success
-      ) {
-        throw new Error(
-          result?.message ||
-            'Upload failed.'
-        );
+      if (!response.ok || !result?.success) {
+        throw new Error(result?.message || "Upload failed.");
       }
-
-      /*
-      |--------------------------------------------------------------------------
-      | Get uploaded files
-      |--------------------------------------------------------------------------
-      */
 
       let uploaded = [];
 
-      /*
-      |--------------------------------------------------------------------------
-      | API returns:
-      |
-      | {
-      |   success: true,
-      |   files: [...]
-      | }
-      |--------------------------------------------------------------------------
-      */
-
-      if (
-        Array.isArray(
-          result?.files
-        )
-      ) {
-        uploaded =
-          result.files;
+      if (Array.isArray(result?.files)) {
+        uploaded = result.files;
       }
 
-      /*
-      |--------------------------------------------------------------------------
-      | Fallback:
-      |
-      | {
-      |   success: true,
-      |   file: {...}
-      | }
-      |--------------------------------------------------------------------------
-      */
-
-      if (
-        !uploaded.length &&
-        result?.file
-      ) {
-        uploaded = [
-          result.file,
-        ];
+      if (!uploaded.length && result?.file) {
+        uploaded = [result.file];
       }
-
-      /*
-      |--------------------------------------------------------------------------
-      | Normalize uploaded values
-      |--------------------------------------------------------------------------
-      */
 
       uploaded = uploaded
         .map((item) => {
-          if (
-            typeof item ===
-            'string'
-          ) {
+          if (typeof item === "string") {
             return item;
           }
 
-          return (
-            item?.url ||
-            item?.path ||
-            item?.file ||
-            item?.location ||
-            ''
-          );
+          return item?.url || item?.path || item?.file || item?.location || "";
         })
         .filter(Boolean);
 
-      /*
-      |--------------------------------------------------------------------------
-      | No URL returned
-      |--------------------------------------------------------------------------
-      */
-
       if (!uploaded.length) {
-        throw new Error(
-          'Upload completed but no uploaded file URL was returned by the server.'
-        );
+        throw new Error("Upload completed but no file URL was returned.");
       }
-
-      /*
-      |--------------------------------------------------------------------------
-      | MULTIPLE FILE
-      |--------------------------------------------------------------------------
-      */
 
       if (multiple) {
-        const current =
-          normalizeArray(value);
+        const current = normalizeArray(value);
 
-        /*
-        |--------------------------------------------------------------------------
-        | Merge old + newly uploaded
-        |--------------------------------------------------------------------------
-        */
-
-        const merged = [
-          ...current,
-          ...uploaded,
-        ].filter(
-          (item, index, array) =>
-            array.indexOf(item) ===
-            index
+        const merged = [...current, ...uploaded].filter(
+          (item, index, array) => array.indexOf(item) === index,
         );
-
-        console.log(
-          'Existing files:',
-          current
-        );
-
-        console.log(
-          'New uploaded files:',
-          uploaded
-        );
-
-        console.log(
-          'Final files:',
-          merged
-        );
-
-        /*
-        |--------------------------------------------------------------------------
-        | Update parent form
-        |--------------------------------------------------------------------------
-        */
 
         onChange(merged);
+      } else {
+        onChange(uploaded[0] || "");
       }
-
-      /*
-      |--------------------------------------------------------------------------
-      | SINGLE FILE
-      |--------------------------------------------------------------------------
-      */
-
-      else {
-        onChange(
-          uploaded[0] || ''
-        );
-      }
-
-      /*
-      |--------------------------------------------------------------------------
-      | Clear local selected files
-      |--------------------------------------------------------------------------
-      */
 
       setLocalFiles([]);
 
-      /*
-      |--------------------------------------------------------------------------
-      | Reset input
-      |--------------------------------------------------------------------------
-      */
-
       if (inputRef.current) {
-        inputRef.current.value = '';
+        inputRef.current.value = "";
       }
-
-      /*
-      |--------------------------------------------------------------------------
-      | Success message
-      |--------------------------------------------------------------------------
-      */
 
       toast.success(
         multiple
           ? `${uploaded.length} file(s) uploaded successfully.`
-          : 'File uploaded successfully.'
+          : "File uploaded successfully.",
       );
     } catch (error) {
-      console.error(
-        'CUSTOM FIELD UPLOAD ERROR:',
-        error
-      );
+      console.error("CUSTOM FIELD UPLOAD ERROR:", error);
 
-      toast.error(
-        error?.message ||
-          'Failed to upload file.'
-      );
+      toast.error(error?.message || "Failed to upload file.");
     } finally {
       setUploading(false);
     }
@@ -569,310 +349,195 @@ export default function CustomFieldInput({
 
   /*
   |--------------------------------------------------------------------------
-  | Select files
+  | SELECT FILES
   |--------------------------------------------------------------------------
   */
 
-  const handleFileChange = (
-    event
-  ) => {
-    const selected =
-      Array.from(
-        event.target.files || []
-      );
+  const handleFileChange = (event) => {
+    const selected = Array.from(event.target.files || []);
 
-    console.log(
-      'SELECTED FILES:',
-      selected
-    );
-
-    console.log(
-      'SELECTED FILE COUNT:',
-      selected.length
-    );
-
-    if (!selected.length) {
-      return;
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Validate images
-    |--------------------------------------------------------------------------
-    */
+    if (!selected.length) return;
 
     if (imageField) {
-      const invalid =
-        selected.find(
-          (file) =>
-            !IMAGE_TYPES.includes(
-              file.type
-            )
-        );
+      const invalid = selected.find((file) => !IMAGE_TYPES.includes(file.type));
 
       if (invalid) {
-        toast.error(
-          `${invalid.name} is not a valid image.`
-        );
+        toast.error(`${invalid.name} is not a valid image.`);
 
         if (inputRef.current) {
-          inputRef.current.value =
-            '';
+          inputRef.current.value = "";
         }
 
         return;
       }
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Single file
-    |--------------------------------------------------------------------------
-    */
-
     if (!multiple) {
-      uploadFiles([
-        selected[0],
-      ]);
-
+      uploadFiles([selected[0]]);
       return;
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Multiple files
-    |--------------------------------------------------------------------------
-    |
-    | Add selected files to local queue.
-    |
-    */
+    setLocalFiles((previous) => {
+      const combined = [...previous, ...selected];
 
-    setLocalFiles(
-      (previous) => {
-        const combined = [
-          ...previous,
-          ...selected,
-        ];
-
-        /*
-        |--------------------------------------------------------------------------
-        | Remove duplicate files
-        |--------------------------------------------------------------------------
-        */
-
-        return combined.filter(
-          (file, index, array) =>
-            index ===
-            array.findIndex(
-              (item) =>
-                item.name ===
-                  file.name &&
-                item.size ===
-                  file.size &&
-                item.lastModified ===
-                  file.lastModified
-            )
-        );
-      }
-    );
-
-    /*
-    |--------------------------------------------------------------------------
-    | Reset input so same file can be selected again
-    |--------------------------------------------------------------------------
-    */
+      return combined.filter(
+        (file, index, array) =>
+          index ===
+          array.findIndex(
+            (item) =>
+              item.name === file.name &&
+              item.size === file.size &&
+              item.lastModified === file.lastModified,
+          ),
+      );
+    });
 
     if (inputRef.current) {
-      inputRef.current.value = '';
+      inputRef.current.value = "";
     }
   };
 
   /*
   |--------------------------------------------------------------------------
-  | Upload selected multiple files
+  | UPLOAD SELECTED FILES
   |--------------------------------------------------------------------------
   */
 
   const uploadSelectedFiles = () => {
     if (!localFiles.length) {
-      toast.error(
-        'Please select at least one file.'
-      );
-
+      toast.error("Please select at least one file.");
       return;
     }
 
-    uploadFiles(
-      localFiles
-    );
+    uploadFiles(localFiles);
   };
 
   /*
   |--------------------------------------------------------------------------
-  | Remove existing file
+  | REMOVE EXISTING FILE
   |--------------------------------------------------------------------------
   */
 
-  const removeExisting = (
-    url
-  ) => {
+  const removeExisting = (url) => {
     if (multiple) {
-      const updated =
-        normalizeArray(value)
-          .filter(
-            (item) =>
-              item !== url
-          );
-
-      onChange(updated);
+      onChange(normalizeArray(value).filter((item) => item !== url));
 
       return;
     }
 
-    onChange('');
+    onChange("");
   };
 
   /*
   |--------------------------------------------------------------------------
-  | Remove local file
+  | REMOVE LOCAL FILE
   |--------------------------------------------------------------------------
   */
 
-  const removeLocalFile = (
-    index
-  ) => {
-    setLocalFiles(
-      (previous) =>
-        previous.filter(
-          (_, i) =>
-            i !== index
-        )
+  const removeLocalFile = (index) => {
+    setLocalFiles((previous) => previous.filter((_, i) => i !== index));
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | FIELD LABEL
+  |--------------------------------------------------------------------------
+  */
+
+  const renderLabel = () => (
+    <Label>
+      {label}
+
+      {required && <span className="ml-1 text-destructive">*</span>}
+    </Label>
+  );
+
+  /*
+  |--------------------------------------------------------------------------
+  | EXISTING FILES
+  |--------------------------------------------------------------------------
+  */
+
+  const renderExistingFiles = () => {
+    if (!existingFiles.length) {
+      return null;
+    }
+
+    return (
+      <div className="space-y-2">
+        <Label>Uploaded Files</Label>
+
+        <div className="grid gap-3 md:grid-cols-2">
+          {existingFiles.map((url, index) => {
+            const image = imageField || isImageUrl(url);
+
+            return (
+              <div
+                key={`${url}-${index}`}
+                className="relative overflow-hidden rounded-lg border"
+              >
+                {image ? (
+                  <a
+                    href={url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block"
+                  >
+                    <img
+                      src={url}
+                      alt={getFileName(url)}
+                      className="h-32 w-full object-cover"
+                    />
+                  </a>
+                ) : (
+                  <a
+                    href={url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-3 p-4"
+                  >
+                    <FileIcon className="size-8 shrink-0 text-muted-foreground" />
+
+                    <span className="truncate text-sm">{getFileName(url)}</span>
+                  </a>
+                )}
+
+                <Button
+                  type="button"
+                  mode="icon"
+                  variant="destructive"
+                  size="sm"
+                  className="absolute right-2 top-2"
+                  onClick={() => removeExisting(url)}
+                  disabled={disabled || uploading}
+                >
+                  <X />
+                </Button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
     );
   };
 
   /*
   |--------------------------------------------------------------------------
-  | Render existing files
-  |--------------------------------------------------------------------------
-  */
-
-  const renderExistingFiles =
-    () => {
-      if (
-        !existingFiles.length
-      ) {
-        return null;
-      }
-
-      return (
-        <div className="space-y-2">
-          <Label>
-            Uploaded Files
-          </Label>
-
-          <div className="grid gap-3 md:grid-cols-2">
-            {existingFiles.map(
-              (url, index) => {
-                const image =
-                  imageField ||
-                  isImageUrl(url);
-
-                return (
-                  <div
-                    key={`${url}-${index}`}
-                    className="relative overflow-hidden rounded-lg border"
-                  >
-                    {image ? (
-                      <a
-                        href={url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="block"
-                      >
-                        <img
-                          src={url}
-                          alt={getFileName(
-                            url
-                          )}
-                          className="h-32 w-full object-cover"
-                        />
-                      </a>
-                    ) : (
-                      <a
-                        href={url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex items-center gap-3 p-4"
-                      >
-                        <FileIcon className="size-8 shrink-0 text-muted-foreground" />
-
-                        <span className="truncate text-sm">
-                          {getFileName(
-                            url
-                          )}
-                        </span>
-                      </a>
-                    )}
-
-                    <Button
-                      type="button"
-                      mode="icon"
-                      variant="destructive"
-                      size="sm"
-                      className="absolute right-2 top-2"
-                      onClick={() =>
-                        removeExisting(
-                          url
-                        )
-                      }
-                      disabled={
-                        disabled ||
-                        uploading
-                      }
-                    >
-                      <X />
-                    </Button>
-                  </div>
-                );
-              }
-            )}
-          </div>
-        </div>
-      );
-    };
-
-  /*
-  |--------------------------------------------------------------------------
-  | Render upload section
+  | UPLOAD SECTION
   |--------------------------------------------------------------------------
   */
 
   const renderUpload = () => (
     <div className="space-y-3">
-
-      {/* Upload area */}
-
       <div
-        className="
-          flex
-          min-h-28
-          cursor-pointer
-          flex-col
-          items-center
-          justify-center
-          rounded-lg
-          border
-          border-dashed
-          p-5
-          text-center
-          transition
-          hover:bg-muted/50
-        "
+        className={`
+          flex min-h-28 flex-col items-center justify-center
+          rounded-lg border border-dashed p-5 text-center
+          transition hover:bg-muted/50
+          ${disabled || uploading ? "cursor-not-allowed opacity-60" : "cursor-pointer"}
+        `}
         onClick={() => {
-          if (
-            !disabled &&
-            !uploading
-          ) {
+          if (!disabled && !uploading) {
             inputRef.current?.click();
           }
         }}
@@ -883,14 +548,10 @@ export default function CustomFieldInput({
           <Upload className="mb-2 size-8 text-muted-foreground" />
         )}
 
-        <p className="text-sm font-medium">
-          Click to upload
-        </p>
+        <p className="text-sm font-medium">Click to upload</p>
 
         <p className="mt-1 text-xs text-muted-foreground">
-          {multiple
-            ? 'You can select multiple files'
-            : 'Select one file'}
+          {multiple ? "You can select multiple files" : "Select one file"}
         </p>
 
         <Input
@@ -898,154 +559,91 @@ export default function CustomFieldInput({
           type="file"
           className="hidden"
           multiple={multiple}
-          accept={
-            imageField
-              ? 'image/*'
-              : undefined
-          }
-          disabled={
-            disabled ||
-            uploading
-          }
-          onChange={
-            handleFileChange
-          }
+          accept={imageField ? "image/*" : undefined}
+          disabled={disabled || uploading}
+          onChange={handleFileChange}
         />
       </div>
 
-      {/* Pending multiple files */}
+      {multiple && localFiles.length > 0 && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <Label>Files Ready To Upload</Label>
 
-      {multiple &&
-        localFiles.length > 0 && (
-          <div className="space-y-2">
-
-            <div className="flex items-center justify-between">
-              <Label>
-                Files Ready To Upload
-              </Label>
-
-              <span className="text-xs text-muted-foreground">
-                {localFiles.length}{' '}
-                file
-                {localFiles.length !== 1
-                  ? 's'
-                  : ''}
-              </span>
-            </div>
-
-            <div className="space-y-2">
-              {localFiles.map(
-                (
-                  file,
-                  index
-                ) => (
-                  <div
-                    key={`${file.name}-${file.size}-${file.lastModified}-${index}`}
-                    className="flex items-center justify-between rounded-md border p-2"
-                  >
-                    <div className="flex min-w-0 items-center gap-2">
-
-                      {imageField ? (
-                        <ImageIcon className="size-4 shrink-0" />
-                      ) : (
-                        <FileIcon className="size-4 shrink-0" />
-                      )}
-
-                      <div className="min-w-0">
-                        <span className="block truncate text-sm">
-                          {file.name}
-                        </span>
-
-                        <span className="block text-xs text-muted-foreground">
-                          {(
-                            file.size /
-                            1024 /
-                            1024
-                          ).toFixed(2)}{' '}
-                          MB
-                        </span>
-                      </div>
-                    </div>
-
-                    <Button
-                      type="button"
-                      mode="icon"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() =>
-                        removeLocalFile(
-                          index
-                        )
-                      }
-                      disabled={
-                        uploading
-                      }
-                    >
-                      <X />
-                    </Button>
-                  </div>
-                )
-              )}
-            </div>
-
-            {/* Upload button */}
-
-            <Button
-              type="button"
-              disabled={
-                uploading ||
-                disabled ||
-                !localFiles.length
-              }
-              onClick={
-                uploadSelectedFiles
-              }
-            >
-              {uploading ? (
-                <>
-                  <LoaderCircle className="animate-spin" />
-                  Uploading...
-                </>
-              ) : (
-                <>
-                  <Upload />
-                  Upload{' '}
-                  {localFiles.length}{' '}
-                  File
-                  {localFiles.length !==
-                  1
-                    ? 's'
-                    : ''}
-                </>
-              )}
-            </Button>
+            <span className="text-xs text-muted-foreground">
+              {localFiles.length} file(s)
+            </span>
           </div>
-        )}
+
+          <div className="space-y-2">
+            {localFiles.map((file, index) => (
+              <div
+                key={`${file.name}-${file.size}-${file.lastModified}-${index}`}
+                className="flex items-center justify-between rounded-md border p-2"
+              >
+                <div className="flex min-w-0 items-center gap-2">
+                  {imageField ? (
+                    <ImageIcon className="size-4 shrink-0" />
+                  ) : (
+                    <FileIcon className="size-4 shrink-0" />
+                  )}
+
+                  <div className="min-w-0">
+                    <span className="block truncate text-sm">{file.name}</span>
+
+                    <span className="block text-xs text-muted-foreground">
+                      {(file.size / 1024 / 1024).toFixed(2)} MB
+                    </span>
+                  </div>
+                </div>
+
+                <Button
+                  type="button"
+                  mode="icon"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => removeLocalFile(index)}
+                  disabled={uploading || disabled}
+                >
+                  <X />
+                </Button>
+              </div>
+            ))}
+          </div>
+
+          <Button
+            type="button"
+            disabled={uploading || disabled || !localFiles.length}
+            onClick={uploadSelectedFiles}
+          >
+            {uploading ? (
+              <>
+                <LoaderCircle className="animate-spin" />
+                Uploading...
+              </>
+            ) : (
+              <>
+                <Upload />
+                Upload {localFiles.length} File(s)
+              </>
+            )}
+          </Button>
+        </div>
+      )}
     </div>
   );
 
   /*
   |--------------------------------------------------------------------------
-  | File / Image fields
+  | FILE / IMAGE / ATTACHMENT
   |--------------------------------------------------------------------------
   */
 
   if (isFileField(type)) {
     return (
       <div className="space-y-4">
-
-        <Label>
-          {label}
-
-          {field?.required && (
-            <span className="ml-1 text-destructive">
-              *
-            </span>
-          )}
-        </Label>
-
+        {renderLabel()}
         {renderExistingFiles()}
-
         {renderUpload()}
       </div>
     );
@@ -1053,70 +651,42 @@ export default function CustomFieldInput({
 
   /*
   |--------------------------------------------------------------------------
-  | Checkbox
+  | CHECKBOX
   |--------------------------------------------------------------------------
   */
 
-  if (type === 'checkbox') {
+  if (type === "checkbox") {
     return (
       <div className="flex items-center gap-2">
-
         <Checkbox
-          checked={
-            value === true ||
-            value === 'true' ||
-            value === '1'
-          }
-          onCheckedChange={
-            onChange
-          }
+          checked={value === true || value === "true" || value === "1"}
+          onCheckedChange={onChange}
           disabled={disabled}
+          required={required}
         />
 
-        <Label>
-          {label}
-
-          {field?.required && (
-            <span className="ml-1 text-destructive">
-              *
-            </span>
-          )}
-        </Label>
+        {renderLabel()}
       </div>
     );
   }
 
   /*
   |--------------------------------------------------------------------------
-  | Textarea
+  | TEXTAREA
   |--------------------------------------------------------------------------
   */
 
-  if (type === 'textarea') {
+  if (type === "textarea") {
     return (
       <div className="space-y-2">
-
-        <Label>
-          {label}
-
-          {field?.required && (
-            <span className="ml-1 text-destructive">
-              *
-            </span>
-          )}
-        </Label>
+        {renderLabel()}
 
         <Textarea
-          value={value ?? ''}
-          onChange={(event) =>
-            onChange(
-              event.target.value
-            )
-          }
+          value={value ?? ""}
+          onChange={(event) => onChange(event.target.value)}
           disabled={disabled}
-          placeholder={
-            field?.placeholder || ''
-          }
+          required={required}
+          placeholder={field?.placeholder || ""}
         />
       </div>
     );
@@ -1124,118 +694,33 @@ export default function CustomFieldInput({
 
   /*
   |--------------------------------------------------------------------------
-  | Select / Dropdown
+  | SELECT
   |--------------------------------------------------------------------------
   */
 
-  if (
-    type === 'select' ||
-    type === 'dropdown'
-  ) {
-    let options =
-      field?.options;
-
-    /*
-    |--------------------------------------------------------------------------
-    | Parse options
-    |--------------------------------------------------------------------------
-    */
-
-    if (
-      typeof options ===
-      'string'
-    ) {
-      try {
-        options =
-          JSON.parse(
-            options
-          );
-      } catch {
-        options =
-          options
-            .split(',')
-            .map(
-              (item) =>
-                item.trim()
-            )
-            .filter(Boolean);
-      }
-    }
-
-    if (
-      !Array.isArray(
-        options
-      )
-    ) {
-      options = [];
-    }
+  if (type === "select") {
+    const options = getFieldOptions(field);
 
     return (
       <div className="space-y-2">
-
-        <Label>
-          {label}
-
-          {field?.required && (
-            <span className="ml-1 text-destructive">
-              *
-            </span>
-          )}
-        </Label>
+        {renderLabel()}
 
         <Select
-          value={value || ''}
-          onValueChange={
-            onChange
-          }
+          value={value ? String(value) : ""}
+          onValueChange={onChange}
           disabled={disabled}
+          required={required}
         >
           <SelectTrigger>
-            <SelectValue
-              placeholder={
-                field?.placeholder ||
-                'Select'
-              }
-            />
+            <SelectValue placeholder={field?.placeholder || "Select"} />
           </SelectTrigger>
 
           <SelectContent>
-            {options.map(
-              (
-                option,
-                index
-              ) => {
-                const optionValue =
-                  typeof option ===
-                  'string'
-                    ? option
-                    : option?.value;
-
-                const optionLabel =
-                  typeof option ===
-                  'string'
-                    ? option
-                    : option?.label;
-
-                if (
-                  !optionValue
-                ) {
-                  return null;
-                }
-
-                return (
-                  <SelectItem
-                    key={`${optionValue}-${index}`}
-                    value={String(
-                      optionValue
-                    )}
-                  >
-                    {optionLabel ||
-                      optionValue}
-                  </SelectItem>
-                );
-              }
-            )}
+            {options.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>
@@ -1244,43 +729,250 @@ export default function CustomFieldInput({
 
   /*
   |--------------------------------------------------------------------------
-  | Default input
+  | MULTISELECT
   |--------------------------------------------------------------------------
   */
 
+  if (type === "multiselect") {
+    const options = getFieldOptions(field);
+    const selectedValues = normalizeArray(value).map(String);
+
+    return (
+      <div className="space-y-2">
+        {renderLabel()}
+
+        <select
+          multiple
+          value={selectedValues}
+          disabled={disabled}
+          required={required}
+          onChange={(event) => {
+            const selected = Array.from(
+              event.target.selectedOptions,
+              (option) => option.value,
+            );
+
+            onChange(selected);
+          }}
+          className="flex min-h-28 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+        >
+          {options.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+
+        <p className="text-xs text-muted-foreground">
+          Hold Ctrl (Windows) or Command (Mac) to select multiple options.
+        </p>
+      </div>
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | RADIO
+  |--------------------------------------------------------------------------
+  */
+
+  if (type === "radio") {
+    const options = getFieldOptions(field);
+
+    return (
+      <div className="space-y-2">
+        {renderLabel()}
+
+        <div className="flex flex-wrap gap-4">
+          {options.map((option) => (
+            <label
+              key={option.value}
+              className="flex cursor-pointer items-center gap-2 text-sm"
+            >
+              <input
+                type="radio"
+                name={`custom-field-${field.id}`}
+                value={option.value}
+                checked={String(value ?? "") === option.value}
+                onChange={() => onChange(option.value)}
+                disabled={disabled}
+                required={required}
+              />
+
+              {option.label}
+            </label>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | DATE PICKER
+  |--------------------------------------------------------------------------
+  */
+
+  if (type === "date_picker") {
+    return (
+      <div className="space-y-2">
+        {renderLabel()}
+
+        <Input
+          type="date"
+          value={value ?? ""}
+          onChange={(event) => onChange(event.target.value)}
+          disabled={disabled}
+          required={required}
+        />
+      </div>
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | TIME PICKER
+  |--------------------------------------------------------------------------
+  */
+
+  if (type === "time_picker") {
+    return (
+      <div className="space-y-2">
+        {renderLabel()}
+
+        <Input
+          type="time"
+          value={value ?? ""}
+          onChange={(event) => onChange(event.target.value)}
+          disabled={disabled}
+          required={required}
+        />
+      </div>
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | DATE + TIME PICKER
+  |--------------------------------------------------------------------------
+  */
+
+  if (type === "date_picker_time") {
+    return (
+      <div className="space-y-2">
+        {renderLabel()}
+
+        <Input
+          type="datetime-local"
+          value={value ?? ""}
+          onChange={(event) => onChange(event.target.value)}
+          disabled={disabled}
+          required={required}
+        />
+      </div>
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | COLOR PICKER
+  |--------------------------------------------------------------------------
+  */
+
+  if (type === "colorpicker") {
+    const colorValue = /^#[0-9a-f]{6}$/i.test(String(value || ""))
+      ? value
+      : "#000000";
+
+    return (
+      <div className="space-y-2">
+        {renderLabel()}
+
+        <div className="flex items-center gap-3">
+          <Input
+            type="color"
+            value={colorValue}
+            onChange={(event) => onChange(event.target.value)}
+            disabled={disabled}
+            className="h-10 w-16 cursor-pointer p-1"
+          />
+
+          <Input
+            type="text"
+            value={value ?? ""}
+            onChange={(event) => onChange(event.target.value)}
+            disabled={disabled}
+            required={required}
+            placeholder="#000000"
+          />
+        </div>
+      </div>
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | LINK
+  |--------------------------------------------------------------------------
+  */
+
+  if (type === "link") {
+    return (
+      <div className="space-y-2">
+        {renderLabel()}
+
+        <Input
+          type="url"
+          value={value ?? ""}
+          onChange={(event) => onChange(event.target.value)}
+          disabled={disabled}
+          required={required}
+          placeholder={field?.placeholder || "https://example.com"}
+        />
+
+        {value && (
+          <a
+            href={value}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block truncate text-sm text-primary underline"
+          >
+            Open Link
+          </a>
+        )}
+      </div>
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | DEFAULT INPUT TYPES
+  |--------------------------------------------------------------------------
+  */
+
+  const inputTypes = {
+    input: "text",
+    number: "number",
+    email: "email",
+    phone: "tel",
+    url: "url",
+  };
+
+  const inputType = inputTypes[type] || "text";
+
   return (
     <div className="space-y-2">
-
-      <Label>
-        {label}
-
-        {field?.required && (
-          <span className="ml-1 text-destructive">
-            *
-          </span>
-        )}
-      </Label>
+      {renderLabel()}
 
       <Input
-        type={
-          type === 'number'
-            ? 'number'
-            : type === 'email'
-              ? 'email'
-              : type === 'url'
-                ? 'url'
-                : 'text'
-        }
-        value={value ?? ''}
-        onChange={(event) =>
-          onChange(
-            event.target.value
-          )
-        }
+        type={inputType}
+        value={value ?? ""}
+        onChange={(event) => onChange(event.target.value)}
         disabled={disabled}
-        placeholder={
-          field?.placeholder || ''
-        }
+        required={required}
+        placeholder={field?.placeholder || ""}
+        min={type === "number" ? field?.min : undefined}
+        max={type === "number" ? field?.max : undefined}
       />
     </div>
   );

@@ -482,7 +482,7 @@ export const MENU_SIDEBAR = [
         permission: "issue_receipt.list",
       },
       {
-        title: "Machine",
+        title: "Machinery",
         path: "/inventory/machine-master",
         permission: "machinemaster.list",
       },
@@ -1286,7 +1286,7 @@ export const MENU_SIDEBAR_COMPACT = [
         permission: "issue_receipt.list",
       },
       {
-        title: "Machine",
+        title: "Machinery",
         path: "/inventory/machine-master",
         permission: "machinemaster.list",
       },

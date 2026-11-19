@@ -112,7 +112,7 @@ const UserFilter = ({
       className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
     >
       <option value="all">
-        {loading ? 'Loading users...' : 'All Users'}
+        {loading ? 'Loading users...' : 'All'}
       </option>
 
       {users.map((user) => (
@@ -332,13 +332,6 @@ export function StoreClientFiltersSheet({
                 date={createdDate}
                 setDate={setCreatedDate}
               />
-
-              <DateRangeFilter
-                label="Updated Date"
-                date={updatedDate}
-                setDate={setUpdatedDate}
-              />
-
               {/* Created By Filter */}
               <UserFilter
                 label="Created By"
@@ -347,7 +340,11 @@ export function StoreClientFiltersSheet({
                 users={users}
                 loading={usersLoading}
               />
-
+              <DateRangeFilter
+                label="Updated Date"
+                date={updatedDate}
+                setDate={setUpdatedDate}
+              />
               {/* Updated By Filter */}
               <UserFilter
                 label="Updated By"

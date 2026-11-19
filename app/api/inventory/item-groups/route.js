@@ -75,21 +75,21 @@ const getItemGroupWhere = (searchParams) => {
 
       ...(query
         ? {
-            OR: [
-              {
-                groupName: {
-                  contains: query,
-                  mode: "insensitive",
-                },
+          OR: [
+            {
+              groupName: {
+                contains: query,
+                mode: "insensitive",
               },
-              {
-                description: {
-                  contains: query,
-                  mode: "insensitive",
-                },
+            },
+            {
+              description: {
+                contains: query,
+                mode: "insensitive",
               },
-            ],
-          }
+            },
+          ],
+        }
         : {}),
 
       ...(status === "active"
@@ -217,14 +217,14 @@ export async function GET(request) {
     // Fetch corresponding user names.
     const users = userIds.length
       ? await prisma.user.findMany({
-          where: {
-            id: { in: userIds },
-          },
-          select: {
-            id: true,
-            name: true,
-          },
-        })
+        where: {
+          id: { in: userIds },
+        },
+        select: {
+          id: true,
+          name: true,
+        },
+      })
       : [];
 
     const userMap = new Map(
@@ -294,6 +294,26 @@ export async function POST(request) {
         { status: 400 }
       );
     }
+    // Validate customFields. 
+    let submittedCustomFields = {};
+
+    if (body.customFields !== undefined) {
+      if (
+        body.customFields === null ||
+        typeof body.customFields !== "object" ||
+        Array.isArray(body.customFields)
+      ) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "customFields must be a valid object.",
+          },
+          { status: 400 },
+        );
+      }
+
+      submittedCustomFields = body.customFields;
+    }
     const user = await getAuthenticatedUser();
 
     if (!user) {
@@ -351,6 +371,7 @@ export async function POST(request) {
           description: body.description?.trim() || null,
           status: body.status ?? true,
           isDefault: body.isDefault ?? false,
+          customFields: submittedCustomFields,
           lastSyncAt: new Date(),
           createby: String(user.id),
           updateby: String(user.id),
@@ -456,6 +477,23 @@ export async function PUT(request) {
         { status: 409 }
       );
     }
+    // Validate customFields.
+    if (
+      body.customFields !== undefined &&
+      (
+        body.customFields === null ||
+        typeof body.customFields !== "object" ||
+        Array.isArray(body.customFields)
+      )
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "customFields must be a valid object.",
+        },
+        { status: 400 },
+      );
+    }
 
     const updated = await prisma.$transaction(async (tx) => {
       if (body.isDefault === true) {
@@ -494,7 +532,13 @@ export async function PUT(request) {
       if (body.isDefault !== undefined) {
         updateData.isDefault = body.isDefault;
       }
-
+      const updatedCustomFields =
+        body.customFields !== undefined
+          ? body.customFields
+          : existing.customFields ?? {};
+      if (body.customFields !== undefined) {
+        updateData.customFields = updatedCustomFields;
+      }
       const user = await getAuthenticatedUser();
 
       if (!user?.id) {

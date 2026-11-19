@@ -2377,7 +2377,7 @@ const ProductTypeList = () => {
                 disabled={copyLoading || !copyProductType.trim()}
               >
                 <Copy className="mr-2 size-4" />
-                {copyLoading ? "Copying..." : "Copy Item Condition"}
+                {copyLoading ? "Copying..." : "Copy"}
               </Button>
             </DialogFooter>
           </form>

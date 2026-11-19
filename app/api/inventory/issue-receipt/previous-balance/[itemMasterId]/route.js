@@ -15,21 +15,14 @@ export async function GET(request, { params }) {
       );
     }
 
-    const id = itemMasterId;
-
-    // Get the latest Issue/Receipt for this Item
     const latestReceipt = await prisma.issueReceipt.findFirst({
       where: {
-        ItemMasterid: id,
+        ItemMasterid: itemMasterId,
         deletedAt: null,
       },
       orderBy: [
-        {
-          createdAt: "desc",
-        },
-        {
-          id: "desc",
-        },
+        { createdAt: "desc" },
+        { id: "desc" },
       ],
       select: {
         id: true,
@@ -42,12 +35,11 @@ export async function GET(request, { params }) {
       },
     });
 
-    // No previous transaction means opening balance is 0
     if (!latestReceipt) {
       return NextResponse.json({
         success: true,
         data: {
-          ItemMasterid: id,
+          ItemMasterid: itemMasterId,
           PreviousBalance: 0,
           Balance: 0,
         },
@@ -57,7 +49,7 @@ export async function GET(request, { params }) {
     return NextResponse.json({
       success: true,
       data: {
-        ItemMasterid: id,
+        ItemMasterid: itemMasterId,
         PreviousBalance: Number(latestReceipt.Balance) || 0,
         Balance: Number(latestReceipt.Balance) || 0,
         LastTransactionId: latestReceipt.id,

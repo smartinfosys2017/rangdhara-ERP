@@ -22,14 +22,46 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { RiCheckboxCircleFill, RiErrorWarningFill } from "@remixicon/react";
 
 import { Alert, AlertIcon, AlertTitle } from "@/components/ui/alert";
-
+import LocationCustomFields, { validateRequiredCustomFields, } from "../../custom-fields/import-custom-fields";
 // ======================================================
 // HELPERS
 // ======================================================
+const showSuccessToast = (message) => {
+  toast.custom(
+    () => (
+      <Alert variant="mono" icon="success">
+        <AlertIcon>
+          <RiCheckboxCircleFill />
+        </AlertIcon>
+        <AlertTitle>{message}</AlertTitle>
+      </Alert>
+    ),
+    { position: "top-center" },
+  );
+};
 
+const showErrorToast = (message) => {
+  toast.custom(
+    (t) => (
+      <Alert
+        variant="mono"
+        icon="destructive"
+        close={true}
+        onClose={() => toast.dismiss(t)}
+      >
+        <AlertIcon>
+          <RiErrorWarningFill />
+        </AlertIcon>
+        <AlertTitle>{message}</AlertTitle>
+      </Alert>
+    ),
+    { position: "top-center" },
+  );
+};
 const generateLocationCode = () => {
   return `LOC-${crypto
     .randomUUID()
@@ -79,7 +111,9 @@ export default function LocationAddDialog({
   const [form, setForm] = useState(getDefaultForm);
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
-
+  const [customFieldDefinitions, setCustomFieldDefinitions] = useState([]);
+  const [customFields, setCustomFields] = useState({});
+  const [customFieldsReady, setCustomFieldsReady] = useState(false);
   // ======================================================
   // INITIALIZE FORM
   // ======================================================
@@ -154,11 +188,22 @@ export default function LocationAddDialog({
 
   const handleSave = async () => {
     if (saving || !validate()) return;
+    const missingCustomFields = validateRequiredCustomFields(
+      customFieldDefinitions,
+      customFields,
+    );
 
+    if (missingCustomFields.length > 0) {
+      showErrorToast(
+        `Please fill in required custom fields: ${missingCustomFields.join(", ")}`,
+      );
+      return;
+    }
     const locationData = {
       locationName: form.locationName.trim(),
       locationCode: form.locationCode.trim(),
       status: form.status === "true",
+      customFields: customFields ?? {},
     };
 
     try {
@@ -172,9 +217,9 @@ export default function LocationAddDialog({
         body: JSON.stringify(
           item
             ? {
-                id: item.id,
-                ...locationData,
-              }
+              id: item.id,
+              ...locationData,
+            }
             : locationData,
         ),
       });
@@ -239,70 +284,91 @@ export default function LocationAddDialog({
             </DialogDescription>
           </DialogHeader>
 
-          <DialogBody className="space-y-5 pt-0">
-            {/* LOCATION CODE */}
-            <div>
-              <label className="mb-2 block text-sm font-medium">
-                Location Code <span className="text-destructive">*</span>
-              </label>
+          <ScrollArea className="grow min-h-0 flex flex-col h-full max-h-[90vh] overflow-hidden">
+            <DialogBody className="space-y-6 pt-0 px-0 min-h-0">
+              {/* LOCATION CODE */}
+              <div>
+                <label className="mb-2 block text-sm font-medium">
+                  Location Code <span className="text-destructive">*</span>
+                </label>
 
-              <Input
-                value={form.locationCode}
-                placeholder="Auto Generated"
-                readOnly
-                maxLength={25}
-              />
+                <Input
+                  value={form.locationCode}
+                  placeholder="Auto Generated"
+                  readOnly
+                  maxLength={25}
+                />
 
-              {errors.locationCode && (
-                <p className="mt-1 text-xs text-destructive">
-                  {errors.locationCode}
-                </p>
-              )}
-            </div>
+                {errors.locationCode && (
+                  <p className="mt-1 text-xs text-destructive">
+                    {errors.locationCode}
+                  </p>
+                )}
+              </div>
 
-            {/* LOCATION NAME */}
-            <div>
-              <label className="mb-2 block text-sm font-medium">
-                Location Name <span className="text-destructive">*</span>
-              </label>
+              {/* LOCATION NAME */}
+              <div>
+                <label className="mb-2 block text-sm font-medium">
+                  Location Name <span className="text-destructive">*</span>
+                </label>
 
-              <Input
-                value={form.locationName}
-                placeholder="Enter location name"
-                maxLength={255}
-                onChange={(e) => updateField("locationName", e.target.value)}
-              />
+                <Input
+                  value={form.locationName}
+                  placeholder="Enter location name"
+                  maxLength={255}
+                  onChange={(e) => updateField("locationName", e.target.value)}
+                />
 
-              {errors.locationName && (
-                <p className="mt-1 text-xs text-destructive">
-                  {errors.locationName}
-                </p>
-              )}
-            </div>
+                {errors.locationName && (
+                  <p className="mt-1 text-xs text-destructive">
+                    {errors.locationName}
+                  </p>
+                )}
+              </div>
 
-            {/* STATUS */}
-            <div>
-              <label className="mb-2 block text-sm font-medium">
-                Status <span className="text-destructive">*</span>
-              </label>
+              {/* STATUS */}
+              <div>
+                <label className="mb-2 block text-sm font-medium">
+                  Status <span className="text-destructive">*</span>
+                </label>
 
-              <Select
-                value={form.status}
-                onValueChange={(value) => updateField("status", value)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select status" />
-                </SelectTrigger>
+                <Select
+                  value={form.status}
+                  onValueChange={(value) => updateField("status", value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
 
-                <SelectContent>
-                  <SelectItem value="true">Active</SelectItem>
+                  <SelectContent>
+                    <SelectItem value="true">Active</SelectItem>
 
-                  <SelectItem value="false">Inactive</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </DialogBody>
+                    <SelectItem value="false">Inactive</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {/* CUSTOM FIELDS */}
 
+              <div className="space-y-4 border-t pt-5">
+                <div>
+                  <h3 className="text-base font-semibold">Custom Fields</h3>
+
+                  <p className="text-sm text-muted-foreground">
+                    Additional location information.
+                  </p>
+                </div>
+
+                <LocationCustomFields
+                  values={customFields}
+                  onChange={setCustomFields}
+                  onFieldsLoaded={(loadedFields) => {
+                    setCustomFieldDefinitions(loadedFields);
+                    setCustomFieldsReady(true);
+                  }}
+                />
+              </div>
+            </DialogBody>
+          </ScrollArea>
           <DialogFooter className="gap-2">
             <Button
               type="button"

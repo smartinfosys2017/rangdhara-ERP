@@ -28,6 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import ProductTypeCustomFields, { validateRequiredCustomFields, } from "../../custom-fields/import-custom-fields";
 const showSuccessToast = (message) => {
   toast.custom(
     () => (
@@ -91,6 +92,9 @@ export default function ProductTypeAddDialog({
 
   const [errors, setErrors] = useState({});
 
+  const [customFieldDefinitions, setCustomFieldDefinitions] = useState([]);
+  const [customFields, setCustomFields] = useState({});
+  const [customFieldsReady, setCustomFieldsReady] = useState(false);
   // =======================================================
   // LOAD EDIT DATA
   // =======================================================
@@ -105,6 +109,8 @@ export default function ProductTypeAddDialog({
         status: item.status ? "true" : "false",
 
         isDefault: item.isDefault ? "true" : "false",
+
+        customFields: customFields ?? {},
       });
     } else {
       setForm(DEFAULT_FORM);
@@ -144,11 +150,8 @@ export default function ProductTypeAddDialog({
       newErrors.ProductType = "Item Condition must not exceed 255 characters.";
     }
 
-    if (!Description) {
-      newErrors.Description = "item description is required.";
-    } else if (Description.length > 255) {
-      newErrors.Description =
-        "Item Description must not exceed 255 characters.";
+    if (Description && Description.length > 255) {
+      newErrors.Description = "Description must not exceed 255 characters.";
     }
 
     setErrors(newErrors);
@@ -167,7 +170,17 @@ export default function ProductTypeAddDialog({
 
   const handleSave = async () => {
     if (!validate()) return;
+    const missingCustomFields = validateRequiredCustomFields(
+      customFieldDefinitions,
+      customFields,
+    );
 
+    if (missingCustomFields.length > 0) {
+      showErrorToast(
+        `Please fill in required custom fields: ${missingCustomFields.join(", ")}`,
+      );
+      return;
+    }
     const ProductTypeData = {
       id: item?.id || null,
 
@@ -178,6 +191,8 @@ export default function ProductTypeAddDialog({
       status: form.status === "true",
 
       isDefault: form.isDefault === "true",
+
+      customFields: customFields ?? {},
     };
 
     try {
@@ -277,7 +292,6 @@ export default function ProductTypeAddDialog({
               <div>
                 <label className="mb-2 block text-sm font-medium">
                   Description
-                  <span className="text-destructive">*</span>
                 </label>
 
                 <Textarea
@@ -350,6 +364,26 @@ export default function ProductTypeAddDialog({
                     <SelectItem value="false">No</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+              {/* CUSTOM FIELDS */}
+
+              <div className="space-y-4 border-t pt-5">
+                <div>
+                  <h3 className="text-base font-semibold">Custom Fields</h3>
+
+                  <p className="text-sm text-muted-foreground">
+                    Additional item condition information.
+                  </p>
+                </div>
+
+                <ProductTypeCustomFields
+                  values={customFields}
+                  onChange={setCustomFields}
+                  onFieldsLoaded={(loadedFields) => {
+                    setCustomFieldDefinitions(loadedFields);
+                    setCustomFieldsReady(true);
+                  }}
+                />
               </div>
             </DialogBody>
           </ScrollArea>

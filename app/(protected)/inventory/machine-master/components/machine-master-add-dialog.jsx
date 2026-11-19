@@ -24,14 +24,48 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ScrollArea } from "@/components/ui/scroll-area";
-
 import {
-    Alert,
-    AlertIcon,
-    AlertTitle,
+  Alert,
+  AlertIcon,
+  AlertTitle,
 } from "@/components/ui/alert";
+
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { RiCheckboxCircleFill } from "@remixicon/react";
+
+import MachineCustomFields, { validateRequiredCustomFields, } from "../../custom-fields/import-custom-fields";
+const showSuccessToast = (message) => {
+  toast.custom(
+    () => (
+      <Alert variant="mono" icon="success">
+        <AlertIcon>
+          <RiCheckboxCircleFill />
+        </AlertIcon>
+        <AlertTitle>{message}</AlertTitle>
+      </Alert>
+    ),
+    { position: "top-center" },
+  );
+};
+
+const showErrorToast = (message) => {
+  toast.custom(
+    (t) => (
+      <Alert
+        variant="mono"
+        icon="destructive"
+        close={true}
+        onClose={() => toast.dismiss(t)}
+      >
+        <AlertIcon>
+          <RiErrorWarningFill />
+        </AlertIcon>
+        <AlertTitle>{message}</AlertTitle>
+      </Alert>
+    ),
+    { position: "top-center" },
+  );
+};
 // ------------------------------------------------------
 // API HELPER
 // ------------------------------------------------------
@@ -165,7 +199,6 @@ const initialForm = {
   machineNumber: "",
   machineCode: generateMachineCode(),
   machineName: "",
-  ipAddress: "",
   GroupName: [],
   OperateId: "",
   comment: "",
@@ -200,6 +233,11 @@ export default function MachineMasterAddDialog({
   const [loadingUnits, setLoadingUnits] = useState(false);
   const [selectedAvailableIds, setSelectedAvailableIds] = useState([]);
   const [selectedDetailIds, setSelectedDetailIds] = useState([]);
+
+  const [customFieldDefinitions, setCustomFieldDefinitions] = useState([]);
+  const [customFields, setCustomFields] = useState({});
+  const [customFieldsReady, setCustomFieldsReady] = useState(false);
+
   const handleItemListKeyDown = (
     e,
     items,
@@ -860,22 +898,22 @@ export default function MachineMasterAddDialog({
       return;
     }
 
-    if (selectedGroups.length === 0) {
-      toast.custom(
-        () => (
-          <Alert variant="mono" icon="error" close={false}>
-            <AlertIcon>
-              <RiCheckboxCircleFill />
-            </AlertIcon>
-            <AlertTitle>Please select at least one Group Name</AlertTitle>
-          </Alert>
-        ),
-        {
-          position: "top-center",
-        },
-      );
-      return;
-    }
+    // if (selectedGroups.length === 0) {
+    //   toast.custom(
+    //     () => (
+    //       <Alert variant="mono" icon="error" close={false}>
+    //         <AlertIcon>
+    //           <RiCheckboxCircleFill />
+    //         </AlertIcon>
+    //         <AlertTitle>Please select at least one Group Name</AlertTitle>
+    //       </Alert>
+    //     ),
+    //     {
+    //       position: "top-center",
+    //     },
+    //   );
+    //   return;
+    // }
 
     for (const item of selectedItems) {
       if (
@@ -899,21 +937,29 @@ export default function MachineMasterAddDialog({
         return;
       }
     }
+    const missingCustomFields = validateRequiredCustomFields(
+      customFieldDefinitions,
+      customFields,
+    );
 
+    if (missingCustomFields.length > 0) {
+      showErrorToast(
+        `Please fill in required custom fields: ${missingCustomFields.join(", ")}`,
+      );
+      return;
+    }
     try {
       setSaving(true);
       const machineData = {
         machineNumber: form.machineNumber.trim(),
         machineCode: form.machineCode.trim(),
         machineName: form.machineName.trim(),
-        ipAddress: form.ipAddress.trim(),
-
         // Prisma schema defines GroupName as String.
         // Multiple groups are stored as a JSON string.
         GroupName: JSON.stringify(selectedGroups),
         comment: form.comment.trim(),
         status: form.status,
-
+        customFields: customFields ?? {},
         itemDetails: selectedItems.map((item) => ({
           itemMasterId: item.itemMasterId,
           SelectedGroupName: item.SelectedGroupName,
@@ -999,7 +1045,7 @@ export default function MachineMasterAddDialog({
     >
       <DialogContent className="max-w-4xl max-h-[95vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Add Machine</DialogTitle>
+          <DialogTitle>Add Machinery</DialogTitle>
           <DialogDescription>
             Enter machine information and select the items assigned to
             this machine.
@@ -1017,7 +1063,7 @@ export default function MachineMasterAddDialog({
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-1">
                 <div className="space-y-2">
-                  <Label>Machine Code</Label>
+                  <Label>Machine Code <span className="text-red-500">*</span></Label>
 
                   <Input
                     value={form.machineCode || "Auto Generated"}
@@ -1054,20 +1100,6 @@ export default function MachineMasterAddDialog({
                       handleChange("machineNumber", e.target.value)
                     }
                     placeholder="Enter machine number"
-                  />
-                </div>
-
-                {/* IP ADDRESS */}
-
-                <div className="space-y-2">
-                  <Label>IP Address</Label>
-
-                  <Input
-                    value={form.ipAddress}
-                    onChange={(e) =>
-                      handleChange("ipAddress", e.target.value)
-                    }
-                    placeholder="Enter IP address"
                   />
                 </div>
 
@@ -1113,7 +1145,7 @@ export default function MachineMasterAddDialog({
 
             {/* ITEM SELECTION */}
 
-            <div className="space-y-1">
+            <div className="pt-2 space-y-1">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b pb-2">
                 <div>
                   <h3 className="text-sm font-semibold">
@@ -1132,7 +1164,7 @@ export default function MachineMasterAddDialog({
 
               <div className="space-y-2">
                 <Label>
-                  Item Group <span className="text-red-500">*</span>
+                  Item Group
                 </Label>
 
                 <div className="relative">
@@ -1567,6 +1599,27 @@ export default function MachineMasterAddDialog({
                 </div>
               </div>
             </div>
+
+            {/* CUSTOM FIELDS */}
+
+            <div className="space-y-4 border-t pt-5">
+              <div>
+                <h3 className="text-base font-semibold">Custom Fields</h3>
+
+                <p className="text-sm text-muted-foreground">
+                  Additional machine information.
+                </p>
+              </div>
+
+              <MachineCustomFields
+                values={customFields}
+                onChange={setCustomFields}
+                onFieldsLoaded={(loadedFields) => {
+                  setCustomFieldDefinitions(loadedFields);
+                  setCustomFieldsReady(true);
+                }}
+              />
+            </div>
           </DialogBody>
           {/* FOOTER */}
 
@@ -1581,7 +1634,7 @@ export default function MachineMasterAddDialog({
             </Button>
 
             <Button type="submit" disabled={saving}>
-              {saving ? "Saving." : "Save Machine"}
+              {saving ? "Saving." : "Save"}
             </Button>
           </DialogFooter>
         </form>

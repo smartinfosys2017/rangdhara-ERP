@@ -51,21 +51,13 @@ import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 
 const FIELD_TO_OPTIONS = [
   { value: 'company', label: 'Company' },
-  { value: 'leads', label: 'Leads' },
-  { value: 'customers', label: 'Customers' },
-  { value: 'tasks', label: 'Tasks' },
-  { value: 'tickets', label: 'Tickets' },
-  { value: 'contacts', label: 'Contacts' },
-  { value: 'staff', label: 'Staff' },
-  { value: 'contracts', label: 'Contracts' },
-  { value: 'expenses', label: 'Expenses' },
-  { value: 'invoice', label: 'Invoice' },
-  { value: 'items', label: 'Items' },
-  { value: 'credit_note', label: 'Credit Note' },
-  { value: 'estimate', label: 'Estimate' },
-  { value: 'proposal', label: 'Proposal' },
-  { value: 'projects', label: 'Projects' },
   { value: 'transaction', label: 'Transaction' },
+  { value: 'inventory', label: 'Inventory' },
+  { value: 'users', label: 'Users' },
+  { value: 'customers', label: 'Customers' },
+  { value: 'candidate', label: 'Candidate' },
+  { value: 'employee', label: 'Employee' },
+  { value: 'tasks', label: 'Tasks' },  
 ];
 
 const FIELD_TYPES = [

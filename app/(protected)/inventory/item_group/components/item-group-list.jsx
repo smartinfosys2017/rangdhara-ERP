@@ -116,7 +116,15 @@ const createItemGroupNotification = async ({
         return null;
     }
 };
+const formatDate = (value) => {
+    if (!value) return "-";
 
+    const date = new Date(value);
+
+    return Number.isNaN(date.getTime())
+        ? "-"
+        : date.toLocaleDateString();
+};
 const ItemGroupList = () => {
     const queryClient = useQueryClient();
     const { data: session } = useSession();
@@ -408,12 +416,10 @@ const ItemGroupList = () => {
             Description: item.description || "",
             Status: item.status ? "Active" : "Inactive",
             Default: item.isDefault ? "Yes" : "No",
-            "Created Date": item.createdAt
-                ? new Date(item.createdAt).toLocaleString()
-                : "",
-            "Updated Date": item.updatedAt
-                ? new Date(item.updatedAt).toLocaleString()
-                : "",
+            "Created Date": formatDate(item.createdAt),
+            "Created By": item.createdByName || "-",
+            "Updated Date": formatDate(item.updatedAt),
+            "Updated By": item.updatedByName || "-",
         }));
 
         const worksheet = XLSX.utils.json_to_sheet(rows);
@@ -424,7 +430,9 @@ const ItemGroupList = () => {
             { wch: 14 },
             { wch: 12 },
             { wch: 22 },
+            { wch: 25 },
             { wch: 22 },
+            { wch: 25 },
         ];
 
         const workbook = XLSX.utils.book_new();
@@ -527,16 +535,10 @@ const ItemGroupList = () => {
               <td>${escapeHtml(item.description || "-")}</td>
               <td>${item.status ? "Active" : "Inactive"}</td>
               <td>${item.isDefault ? "Yes" : "No"}</td>
-              <td>${escapeHtml(
-                        item.createdAt
-                            ? new Date(item.createdAt).toLocaleDateString()
-                            : "-",
-                    )}</td>
-              <td>${escapeHtml(
-                        item.updatedAt
-                            ? new Date(item.updatedAt).toLocaleDateString()
-                            : "-",
-                    )}</td>
+              <td>${escapeHtml(formatDate(item.createdAt))}</td>
+              <td>${escapeHtml(item.createdByName || "-")}</td>
+              <td>${escapeHtml(formatDate(item.updatedAt))}</td>              
+              <td>${escapeHtml(item.updatedByName || "-")}</td>
             </tr>
           `,
                 )
@@ -603,8 +605,10 @@ const ItemGroupList = () => {
                   <th>Description</th>
                   <th>Status</th>
                   <th>Default</th>
-                  <th>Added Date</th>
+                  <th>Created Date</th>
+                  <th>Created By</th>
                   <th>Updated Date</th>
+                  <th>Updated By</th>
                 </tr>
               </thead>
               <tbody>${rows}</tbody>
@@ -1526,43 +1530,13 @@ const ItemGroupList = () => {
                 accessorKey: "createdAt",
                 id: "createdAt",
                 header: ({ column }) => (
-                    <DataGridColumnHeader title="Added Date" column={column} visibility />
+                    <DataGridColumnHeader title="Created Date" column={column} visibility />
                 ),
-                cell: ({ row }) => {
-                    const value = row.original?.createdAt;
-                    if (!value) return "-";
-
-                    const date = new Date(value);
-                    return Number.isNaN(date.getTime()) ? "-" : date.toLocaleDateString();
-                },
+                cell: ({ row }) => formatDate(row.original?.createdAt),
                 size: 150,
                 enableSorting: true,
                 meta: {
-                    headerTitle: "Added Date",
-                    skeleton: <Skeleton className="h-7 w-24" />,
-                },
-            },
-            {
-                accessorKey: "updatedAt",
-                id: "updatedAt",
-                header: ({ column }) => (
-                    <DataGridColumnHeader
-                        title="Updated Date"
-                        column={column}
-                        visibility
-                    />
-                ),
-                cell: ({ row }) => {
-                    const value = row.original?.updatedAt;
-                    if (!value) return "-";
-
-                    const date = new Date(value);
-                    return Number.isNaN(date.getTime()) ? "-" : date.toLocaleDateString();
-                },
-                size: 150,
-                enableSorting: true,
-                meta: {
-                    headerTitle: "Updated Date",
+                    headerTitle: "Created Date",
                     skeleton: <Skeleton className="h-7 w-24" />,
                 },
             },
@@ -1570,11 +1544,7 @@ const ItemGroupList = () => {
                 accessorKey: "createdByName",
                 id: "createdByName",
                 header: ({ column }) => (
-                    <DataGridColumnHeader
-                        title="Created By"
-                        column={column}
-                        visibility
-                    />
+                    <DataGridColumnHeader title="Created By" column={column} visibility />
                 ),
                 cell: ({ row }) => (
                     <span>{row.original.createdByName || "-"}</span>
@@ -1587,14 +1557,24 @@ const ItemGroupList = () => {
                 },
             },
             {
+                accessorKey: "updatedAt",
+                id: "updatedAt",
+                header: ({ column }) => (
+                    <DataGridColumnHeader title="Updated Date" column={column} visibility />
+                ),
+                cell: ({ row }) => formatDate(row.original?.updatedAt),
+                size: 150,
+                enableSorting: true,
+                meta: {
+                    headerTitle: "Updated Date",
+                    skeleton: <Skeleton className="h-7 w-24" />,
+                },
+            },
+            {
                 accessorKey: "updatedByName",
                 id: "updatedByName",
                 header: ({ column }) => (
-                    <DataGridColumnHeader
-                        title="Updated By"
-                        column={column}
-                        visibility
-                    />
+                    <DataGridColumnHeader title="Updated By" column={column} visibility />
                 ),
                 cell: ({ row }) => (
                     <span>{row.original.updatedByName || "-"}</span>
@@ -2358,7 +2338,7 @@ const ItemGroupList = () => {
                                 disabled={copyLoading || !copyGroupName.trim()}
                             >
                                 <Copy className="mr-2 size-4" />
-                                {copyLoading ? "Copying..." : "Copy Group"}
+                                {copyLoading ? "Copying..." : "Copy"}
                             </Button>
                         </DialogFooter>
                     </form>

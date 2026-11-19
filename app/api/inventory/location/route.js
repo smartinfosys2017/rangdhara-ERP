@@ -307,7 +307,26 @@ export async function POST(request) {
         { status: 400 },
       );
     }
+    // Validate customFields. 
+    let submittedCustomFields = {};
 
+    if (body.customFields !== undefined) {
+      if (
+        body.customFields === null ||
+        typeof body.customFields !== "object" ||
+        Array.isArray(body.customFields)
+      ) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "customFields must be a valid object.",
+          },
+          { status: 400 },
+        );
+      }
+
+      submittedCustomFields = body.customFields;
+    }
     const user = await getAuthenticatedUser();
 
     if (!user?.id) {
@@ -348,6 +367,7 @@ export async function POST(request) {
         locationCode,
         status: body.status ?? true,
         lastSyncAt: new Date(),
+        customFields: submittedCustomFields,
         createby: String(user.id),
         updateby: String(user.id),
       },
@@ -569,7 +589,30 @@ export async function PUT(request) {
 
       updateData.status = body.status;
     }
-
+    // Validate customFields.
+    if (
+      body.customFields !== undefined &&
+      (
+        body.customFields === null ||
+        typeof body.customFields !== "object" ||
+        Array.isArray(body.customFields)
+      )
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "customFields must be a valid object.",
+        },
+        { status: 400 },
+      );
+    }
+    const updatedCustomFields =
+        body.customFields !== undefined
+          ? body.customFields
+          : existing.customFields ?? {};
+      if (body.customFields !== undefined) {
+        updateData.customFields = updatedCustomFields;
+      }
     // Update Location
     const updated = await prisma.location.update({
       where: {

@@ -280,7 +280,26 @@ export async function POST(request) {
         { status: 400 }
       );
     }
+    // Validate customFields. 
+    let submittedCustomFields = {};
 
+    if (body.customFields !== undefined) {
+      if (
+        body.customFields === null ||
+        typeof body.customFields !== "object" ||
+        Array.isArray(body.customFields)
+      ) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "customFields must be a valid object.",
+          },
+          { status: 400 },
+        );
+      }
+
+      submittedCustomFields = body.customFields;
+    }
     const user = await getAuthenticatedUser();
 
     if (!user?.id) {
@@ -355,6 +374,7 @@ export async function POST(request) {
             : true,
         createby: String(user.id),
         updateby: String(user.id),
+        customFields: submittedCustomFields,
         lastSyncAt: new Date(),
       },
     });
@@ -532,7 +552,27 @@ export async function PUT(request) {
         { status: 409 }
       );
     }
-
+    // Validate customFields.
+    if (
+      body.customFields !== undefined &&
+      (
+        body.customFields === null ||
+        typeof body.customFields !== "object" ||
+        Array.isArray(body.customFields)
+      )
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "customFields must be a valid object.",
+        },
+        { status: 400 },
+      );
+    }
+    const updatedCustomFields =
+      body.customFields !== undefined
+        ? body.customFields
+        : existing.customFields ?? {};
     const updateData = {
       unitName,
       abbreviation,
@@ -542,6 +582,9 @@ export async function PUT(request) {
 
     if (typeof body.status === "boolean") {
       updateData.status = body.status;
+    }
+    if (body.customFields !== undefined) {
+      updateData.customFields = updatedCustomFields;
     }
 
     const updated = await prisma.unit.update({
@@ -717,13 +760,23 @@ export async function DELETE(request) {
 
     const body = await request.json();
 
-    const unitId = String(body?.id || "").trim();
+    // Support both single and bulk delete.
+    const unitIds = [
+      ...new Set(
+        [
+          ...(Array.isArray(body?.ids) ? body.ids : []),
+          ...(body?.id ? [body.id] : []),
+        ]
+          .map((id) => String(id).trim())
+          .filter(Boolean)
+      ),
+    ];
 
-    if (!unitId) {
+    if (unitIds.length === 0) {
       return NextResponse.json(
         {
           success: false,
-          message: "Unit ID is required.",
+          message: "At least one Unit ID is required.",
         },
         { status: 400 }
       );
@@ -741,58 +794,99 @@ export async function DELETE(request) {
       );
     }
 
-    const existingUnit = await prisma.unit.findUnique({
+    // Find all requested units.
+    const existingUnits = await prisma.unit.findMany({
       where: {
-        id: unitId,
+        id: {
+          in: unitIds,
+        },
+      },
+      select: {
+        id: true,
+        unitName: true,
+        deletedAt: true,
       },
     });
 
-    if (!existingUnit) {
+    const existingIds = new Set(existingUnits.map((unit) => unit.id));
+
+    const notFoundIds = unitIds.filter((id) => !existingIds.has(id));
+
+    if (notFoundIds.length > 0) {
       return NextResponse.json(
         {
           success: false,
-          message: "Unit not found. Please check the Unit ID.",
+          message: "One or more units were not found.",
+          notFoundIds,
         },
         { status: 404 }
       );
     }
 
-    if (existingUnit.deletedAt !== null) {
+    const alreadyDeletedUnits = existingUnits.filter(
+      (unit) => unit.deletedAt !== null
+    );
+
+    if (alreadyDeletedUnits.length > 0) {
       return NextResponse.json(
         {
           success: false,
-          message: "This unit has already been deleted.",
+          message: "One or more units have already been deleted.",
+          alreadyDeletedIds: alreadyDeletedUnits.map((unit) => unit.id),
         },
-        { status: 404 }
+        { status: 409 }
       );
     }
 
     const now = new Date();
 
-    const deletedUnit = await prisma.unit.update({
-      where: {
-        id: unitId,
-      },
-      data: {
-        deletedAt: now,
-        updateby: String(user.id),
-        lastSyncAt: now,
-      },
+    // Delete all units together.
+    const deletedCount = await prisma.$transaction(async (tx) => {
+      const result = await tx.unit.updateMany({
+        where: {
+          id: {
+            in: unitIds,
+          },
+          deletedAt: null,
+        },
+        data: {
+          deletedAt: now,
+          updateby: String(user.id),
+          lastSyncAt: now,
+        },
+      });
+
+      if (result.count !== unitIds.length) {
+        throw new Error(
+          "Some units could not be deleted. Please refresh and try again."
+        );
+      }
+
+      return result.count;
     });
 
-    // SYSTEM LOG
-    await systemLog({
-      event: "delete",
-      userId: String(user.id),
-      entityId: String(deletedUnit.id),
-      entityType: "inventory.unit",
-      description: `Unit deleted: ${deletedUnit.unitName}`,
-      ipAddress: getIpAddress(request),
-    });
+    // SYSTEM LOG: Create a log for each deleted unit.
+    await Promise.all(
+      existingUnits.map((unit) =>
+        systemLog({
+          event: "delete",
+          userId: String(user.id),
+          entityId: String(unit.id),
+          entityType: "inventory.unit",
+          description: `Unit deleted: ${unit.unitName}`,
+          ipAddress: getIpAddress(request),
+        })
+      )
+    );
 
     return NextResponse.json({
       success: true,
-      message: "Unit deleted successfully.",
+      message:
+        deletedCount === 1
+          ? "Unit deleted successfully."
+          : `${deletedCount} units deleted successfully.`,
+      deletedCount,
+      deletedIds: unitIds,
       sync: true,
     });
   } catch (error) {

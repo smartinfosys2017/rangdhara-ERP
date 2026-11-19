@@ -47,6 +47,7 @@ export default function ItemMasterEditDialog({
   const [taxes, setTaxes] = useState([]);
   const [locations, setLocations] = useState([]);
   const [machines, setMachines] = useState([]);
+  const [itemCondition, setitemCondition] = useState([]);
 
   const [errors, setErrors] = useState({});
 
@@ -62,6 +63,7 @@ export default function ItemMasterEditDialog({
     Tax2: "",
     Locationid: "",
     Machineid: "",
+    ItemConditionid: "",
     ApplicableForRelocateLevel: false,
     RelocateLevel: "",
     status: true,
@@ -121,22 +123,24 @@ export default function ItemMasterEditDialog({
 
   const loadDropdowns = async () => {
     try {
-      const [groupRes, unitRes, taxRes, locationRes, machineRes] =
+      const [groupRes, unitRes, taxRes, locationRes, machineRes, itemConditionRes] =
         await Promise.all([
           apiFetch("/api/inventory/item-groups?limit=100&status=active"),
           apiFetch("/api/inventory/unit?limit=100&status=active"),
           apiFetch("/api/finance/tax_rates?status=active"),
           apiFetch("/api/inventory/location?limit=100&status=active"),
           apiFetch("/api/inventory/machine-master?limit=100&status=active"),
+          apiFetch("/api/inventory/product-type?limit=100&status=active"),
         ]);
 
-      const [groupsData, unitsData, taxData, locationsData, machinesData] =
+      const [groupsData, unitsData, taxData, locationsData, machinesData, itemConditionData] =
         await Promise.all([
           groupRes.json(),
           unitRes.json(),
           taxRes.json(),
           locationRes.json(),
           machineRes.json(),
+          itemConditionRes.json(),
         ]);
 
       setItemGroups(groupsData.data || []);
@@ -145,13 +149,31 @@ export default function ItemMasterEditDialog({
 
       setLocations(
         (locationsData.data || []).filter(
-          (location) => location.status === true && !location.deletedAt,
+          (location) =>
+            (location.status === true ||
+              location.status === "true" ||
+              location.status === 1) &&
+            !location.deletedAt,
         ),
       );
 
       setMachines(
         (machinesData.data || []).filter(
-          (machine) => machine.status === true && !machine.deletedAt,
+          (machine) =>
+            (machine.status === true ||
+              machine.status === "true" ||
+              machine.status === 1) &&
+            !machine.deletedAt,
+        ),
+      );
+
+      setitemCondition(
+        (itemConditionData.data || []).filter(
+          (item) =>
+            (item.status === true ||
+              item.status === "true" ||
+              item.status === 1) &&
+            !item.deletedAt,
         ),
       );
     } catch (error) {
@@ -177,8 +199,9 @@ export default function ItemMasterEditDialog({
         Tax1: String(ItemMaster.Tax1 || ""),
         Tax2: String(ItemMaster.Tax2 || ""),
 
-        Locationid: String(ItemMaster.Locationid || ""),
-        Machineid: String(ItemMaster.Machineid || ""),
+        Locationid: String(ItemMaster.Locationid ?? ""),
+        Machineid: String(ItemMaster.Machineid ?? ""),
+        ItemConditionid: String(ItemMaster.ItemConditionid ?? ""),
 
         ApplicableForRelocateLevel:
           ItemMaster.ApplicableForRelocateLevel ?? false,
@@ -217,11 +240,13 @@ export default function ItemMasterEditDialog({
 
     const ItemName = form.ItemName?.trim() || "";
     const Description = form.Description?.trim() || "";
-
+    const openingBalance = Number(form.openingBalance || 0);
     if (!form.ItemGroupid) {
       newErrors.ItemGroupid = "Item Group is required.";
     }
-
+    if (!form.ItemConditionid) {
+      newErrors.ItemConditionid = "Item Condition is required.";
+    }
     if (!ItemName) {
       newErrors.ItemName = "Item Name is required.";
     } else if (ItemName.length > 255) {
@@ -231,7 +256,13 @@ export default function ItemMasterEditDialog({
     if (!form.Unitid) {
       newErrors.Unitid = "Unit is required.";
     }
+    if (openingBalance > 0 && !form.Locationid && !form.Machineid) {
+      newErrors.Locationid =
+        "Please select either Location or Machine.";
 
+      newErrors.Machineid =
+        "Please select either Location or Machine.";
+    }
     if (form.ApplicableForRelocateLevel && !form.RelocateLevel?.trim()) {
       newErrors.RelocateLevel = "Restock Level is required.";
     }
@@ -285,6 +316,8 @@ export default function ItemMasterEditDialog({
           Locationid: form.Locationid || null,
 
           Machineid: form.Machineid || null,
+
+          ItemConditionid: form.ItemConditionid || null,
 
           status: form.status ?? true,
 
@@ -422,10 +455,37 @@ export default function ItemMasterEditDialog({
                 )}
               </div>
 
+              {/* OPENING BALANCE */}
+              <div>
+                <label>Opening Balance <span className="text-destructive">*</span></label>
+
+                <Input
+                  type="number"
+                  value={form.openingBalance}
+                  onChange={(e) =>
+                    updateField("openingBalance", e.target.value)
+                  }
+                />
+              </div>
+              {/* Closing BALANCE */}
+              <div>
+                <label>Closing Balance <span className="text-destructive">*</span></label>
+
+                <Input
+                  type="number"
+                  value={form.openingBalance}
+                  readonly
+                />
+              </div>
               {/* LOCATION */}
 
               <div>
-                <label>Location</label>
+                <label className="text-sm font-medium">
+                  Location
+                  {Number(form.openingBalance || 0) > 0 && (
+                    <span className="text-destructive"> *</span>
+                  )}
+                </label>
 
                 <Select
                   value={form.Locationid || "none"}
@@ -433,7 +493,9 @@ export default function ItemMasterEditDialog({
                     updateField("Locationid", value === "none" ? "" : value)
                   }
                 >
-                  <SelectTrigger>
+                  <SelectTrigger
+                    className={errors.Locationid ? "border-destructive" : ""}
+                  >
                     <SelectValue placeholder="Select Location" />
                   </SelectTrigger>
 
@@ -447,12 +509,22 @@ export default function ItemMasterEditDialog({
                     ))}
                   </SelectContent>
                 </Select>
+
+                {errors.Locationid && (
+                  <p className="mt-1 text-sm text-destructive">
+                    {errors.Locationid}
+                  </p>
+                )}
               </div>
 
               {/* MACHINE */}
 
               <div>
-                <label>Machine</label>
+                <label>Machine
+                  {Number(form.openingBalance || 0) > 0 && (
+                    <span className="text-destructive"> *</span>
+                  )}
+                </label>
 
                 <Select
                   value={form.Machineid || "none"}
@@ -460,7 +532,9 @@ export default function ItemMasterEditDialog({
                     updateField("Machineid", value === "none" ? "" : value)
                   }
                 >
-                  <SelectTrigger>
+                  <SelectTrigger
+                    className={errors.Machineid ? "border-destructive" : ""}
+                  >
                     <SelectValue placeholder="Select Machine" />
                   </SelectTrigger>
 
@@ -474,26 +548,53 @@ export default function ItemMasterEditDialog({
                     ))}
                   </SelectContent>
                 </Select>
+
+                {errors.Machineid && (
+                  <p className="mt-1 text-sm text-destructive">
+                    {errors.Machineid}
+                  </p>
+                )}
               </div>
 
-              {/* OPENING BALANCE */}
+              {/* Item Condition */}
 
               <div>
-                <label>Opening Balance</label>
+                <label>Item Condition <span className="text-destructive"> *</span></label>
 
-                <Input
-                  type="number"
-                  value={form.openingBalance}
-                  onChange={(e) =>
-                    updateField("openingBalance", e.target.value)
+                <Select
+                  value={form.ItemConditionid || "none"}
+                  onValueChange={(value) =>
+                    updateField("ItemConditionid", value === "none" ? "" : value)
                   }
-                />
+                >
+                  <SelectTrigger
+                    className={errors.ItemConditionid ? "border-destructive" : ""}
+                  >
+                    <SelectValue placeholder="Select Item Condition" />
+                  </SelectTrigger>
+
+                  <SelectContent>
+                    <SelectItem value="none">Select Item Condition</SelectItem>
+                    {itemCondition.map((item) => (
+                      <SelectItem key={item.id} value={String(item.id)}>
+                        {item.ProductType}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {errors.ItemConditionid && (
+                  <p className="text-sm text-destructive">
+                    {errors.ItemConditionid}
+                  </p>
+                )}
               </div>
+
 
               {/* RATE */}
 
               <div>
-                <label>Rate (₹)</label>
+                <label>Rate (₹) <span className="text-destructive">*</span></label>
 
                 <Input
                   type="number"
@@ -642,7 +743,7 @@ export default function ItemMasterEditDialog({
 
               <div>
                 <label>
-                  Default Item <span className="text-destructive">*</span>
+                  Is Default <span className="text-destructive">*</span>
                 </label>
 
                 <Select

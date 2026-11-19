@@ -833,13 +833,12 @@ const TransactionTypeList = () => {
         if (!response.ok || !result.success) {
           throw new Error(
             result.message ||
-              "Bulk status update failed. Your API route must support ids.",
+            "Bulk status update failed. Your API route must support ids.",
           );
         }
 
         showSuccessToast(
-          `${result.count ?? idsToUpdate.length} transaction type(s) marked ${
-            status ? "active" : "inactive"
+          `${result.count ?? idsToUpdate.length} transaction type(s) marked ${status ? "active" : "inactive"
           }`,
         );
 
@@ -899,7 +898,7 @@ const TransactionTypeList = () => {
       if (!response.ok || !result.success) {
         throw new Error(
           result.message ||
-            "Bulk delete failed. Your API route must support ids.",
+          "Bulk delete failed. Your API route must support ids.",
         );
       }
 
@@ -1270,11 +1269,7 @@ const TransactionTypeList = () => {
         accessorKey: "createdAt",
         id: "createdAt",
         header: ({ column }) => (
-          <DataGridColumnHeader
-            title="Created Date"
-            column={column}
-            visibility
-          />
+          <DataGridColumnHeader title="Created Date" column={column} visibility />
         ),
         cell: ({ row }) => {
           const value = row.original?.createdAt;
@@ -1290,33 +1285,6 @@ const TransactionTypeList = () => {
         enableHiding: true,
         meta: {
           headerTitle: "Created Date",
-          skeleton: <Skeleton className="h-7 w-24" />,
-        },
-      },
-      {
-        accessorKey: "updatedAt",
-        id: "updatedAt",
-        header: ({ column }) => (
-          <DataGridColumnHeader
-            title="Updated Date"
-            column={column}
-            visibility
-          />
-        ),
-        cell: ({ row }) => {
-          const value = row.original?.updatedAt;
-
-          if (!value) return "-";
-
-          const date = new Date(value);
-
-          return Number.isNaN(date.getTime()) ? "-" : date.toLocaleDateString();
-        },
-        size: 150,
-        enableSorting: true,
-        enableHiding: true,
-        meta: {
-          headerTitle: "Updated Date",
           skeleton: <Skeleton className="h-7 w-24" />,
         },
       },
@@ -1338,7 +1306,29 @@ const TransactionTypeList = () => {
           skeleton: <Skeleton className="h-7 w-24" />,
         },
       },
+      {
+        accessorKey: "updatedAt",
+        id: "updatedAt",
+        header: ({ column }) => (
+          <DataGridColumnHeader title="Updated Date" column={column} visibility />
+        ),
+        cell: ({ row }) => {
+          const value = row.original?.updatedAt;
 
+          if (!value) return "-";
+
+          const date = new Date(value);
+
+          return Number.isNaN(date.getTime()) ? "-" : date.toLocaleDateString();
+        },
+        size: 150,
+        enableSorting: true,
+        enableHiding: true,
+        meta: {
+          headerTitle: "Updated Date",
+          skeleton: <Skeleton className="h-7 w-24" />,
+        },
+      },
       {
         accessorKey: "updatedByName",
         id: "updatedByName",
@@ -1422,9 +1412,9 @@ const TransactionTypeList = () => {
                     >
                       <CheckCircle className="mr-2 size-4" /> Mark{" "}
                       {item.status === true ||
-                      item.status === 1 ||
-                      item.status === "1" ||
-                      item.status === "true"
+                        item.status === 1 ||
+                        item.status === "1" ||
+                        item.status === "true"
                         ? "Inactive"
                         : "Active"}
                     </DropdownMenuItem>
@@ -1596,13 +1586,12 @@ const TransactionTypeList = () => {
             aria-live="polite"
           >
             <span
-              className={`size-2.5 shrink-0 rounded-full ${
-                dbStatus.loading
-                  ? "animate-pulse bg-yellow-500"
-                  : dbStatus.online && isOnline
-                    ? "bg-green-500"
-                    : "bg-red-500"
-              }`}
+              className={`size-2.5 shrink-0 rounded-full ${dbStatus.loading
+                ? "animate-pulse bg-yellow-500"
+                : dbStatus.online && isOnline
+                  ? "bg-green-500"
+                  : "bg-red-500"
+                }`}
             />
 
             <span className="text-xs font-medium">
@@ -1610,8 +1599,8 @@ const TransactionTypeList = () => {
                 ? "Checking..."
                 : dbStatus.online && isOnline
                   ? String(dbStatus.env || "Database")
-                      .toLowerCase()
-                      .replace(/\b\w/g, (char) => char.toUpperCase())
+                    .toLowerCase()
+                    .replace(/\b\w/g, (char) => char.toUpperCase())
                   : "Offline"}
             </span>
 
@@ -1770,10 +1759,9 @@ const TransactionTypeList = () => {
           await createTransactionTypeNotification({
             action: "updated",
             title: "Transaction Type Updated",
-            message: `${
-              updatedData?.TransactionType ||
+            message: `${updatedData?.TransactionType ||
               selectedTransactionType?.TransactionType
-            } has been updated.`,
+              } has been updated.`,
             transactionTypeId: updatedData?.id || selectedTransactionType?.id,
             transactionTypeName:
               updatedData?.TransactionType ||
@@ -1894,17 +1882,17 @@ const TransactionTypeList = () => {
                           setSelectedRecipientEmails((previous) =>
                             checked === true
                               ? [
-                                  ...new Set([
-                                    ...previous,
-                                    ...staffList.map((person) => person.email),
-                                  ]),
-                                ]
+                                ...new Set([
+                                  ...previous,
+                                  ...staffList.map((person) => person.email),
+                                ]),
+                              ]
                               : previous.filter(
-                                  (email) =>
-                                    !staffList.some(
-                                      (person) => person.email === email,
-                                    ),
-                                ),
+                                (email) =>
+                                  !staffList.some(
+                                    (person) => person.email === email,
+                                  ),
+                              ),
                           );
                         }}
                       />
@@ -1944,14 +1932,14 @@ const TransactionTypeList = () => {
                                     setSelectedRecipientEmails((previous) =>
                                       checked === true
                                         ? [
-                                            ...new Set([
-                                              ...previous,
-                                              person.email,
-                                            ]),
-                                          ]
+                                          ...new Set([
+                                            ...previous,
+                                            person.email,
+                                          ]),
+                                        ]
                                         : previous.filter(
-                                            (email) => email !== person.email,
-                                          ),
+                                          (email) => email !== person.email,
+                                        ),
                                     );
                                   }}
                                 />

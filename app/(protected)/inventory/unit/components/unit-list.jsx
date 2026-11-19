@@ -329,6 +329,13 @@ const UnitList = () => {
   const refreshUnits = useCallback(async () => {
     await queryClient.invalidateQueries({
       queryKey: ["unit"],
+      exact: false,
+    });
+
+    await queryClient.refetchQueries({
+      queryKey: ["unit"],
+      exact: false,
+      type: "active",
     });
   }, [queryClient]);
 
@@ -582,27 +589,21 @@ const UnitList = () => {
     sorting,
   ]);
 
-  // ===================================================
-  // EXCEL
-  // ===================================================
 
-  const buildUnitExcel = useCallback((items) => {
+  // =======================================================
+  // EXCEL
+  // =======================================================
+
+  const buildUnitExcel = useCallback((items = []) => {
     const rows = items.map((item) => ({
-      ID: item.id,
+      ID: item.id || "",
       "Unit Name": item.unitName || "",
       Abbreviation: item.abbreviation || "",
       Status: item.status ? "Active" : "Inactive",
-
-      "Created Date": item.createdAt
-        ? new Date(item.createdAt).toLocaleString()
-        : "",
-
-      "Updated Date": item.updatedAt
-        ? new Date(item.updatedAt).toLocaleString()
-        : "",
-
-      "Created By": item.createdByName || "",
-      "Updated By": item.updatedByName || "",
+      "Created Date": formatDate(item.createdAt),
+      "Created By": item.createdByName || "-",
+      "Updated Date": formatDate(item.updatedAt),
+      "Updated By": item.updatedByName || "-",
     }));
 
     const worksheet = XLSX.utils.json_to_sheet(rows);
@@ -613,8 +614,8 @@ const UnitList = () => {
       { wch: 20 },
       { wch: 14 },
       { wch: 22 },
-      { wch: 22 },
       { wch: 25 },
+      { wch: 22 },
       { wch: 25 },
     ];
 
@@ -624,6 +625,7 @@ const UnitList = () => {
 
     return workbook;
   }, []);
+
 
   const downloadUnitExcel = useCallback(
     (items, filename = "units.xlsx") => {
@@ -686,8 +688,8 @@ const UnitList = () => {
               <td>${escapeHtml(item.abbreviation)}</td>
               <td>${item.status ? "Active" : "Inactive"}</td>
               <td>${escapeHtml(formatDate(item.createdAt))}</td>
-              <td>${escapeHtml(formatDate(item.updatedAt))}</td>
               <td>${escapeHtml(item.createdByName || "-")}</td>
+              <td>${escapeHtml(formatDate(item.updatedAt))}</td>              
               <td>${escapeHtml(item.updatedByName || "-")}</td>
             </tr>
           `,
@@ -751,8 +753,8 @@ const UnitList = () => {
                   <th>Abbreviation</th>
                   <th>Status</th>
                   <th>Created Date</th>
-                  <th>Updated Date</th>
                   <th>Created By</th>
+                  <th>Updated Date</th>                  
                   <th>Updated By</th>
                 </tr>
               </thead>
@@ -876,16 +878,23 @@ const UnitList = () => {
       );
 
       setSelectedUnit(null);
-
+      // move to the previous page.
+      if (units.length === 1 && pagination.pageIndex > 0) {
+        setPagination((prev) => ({
+          ...prev,
+          pageIndex: prev.pageIndex - 1,
+        }));
+      }
       await refreshUnits();
       await syncInventoryUnit();
+      await refreshUnits();
     } catch (error) {
       console.error("UNIT DELETE ERROR:", error);
       showError(error.message || "Delete failed");
     } finally {
       setDeleteLoading(false);
     }
-  }, [selectedUnit, refreshUnits, syncInventoryUnit]);
+  }, [selectedUnit, units.length, pagination.pageIndex, refreshUnits, syncInventoryUnit,]);
 
   // ===================================================
   // EXISTING UNIT NAMES AND ABBREVIATIONS
@@ -1616,7 +1625,7 @@ const UnitList = () => {
         id: "createdAt",
 
         header: ({ column }) => (
-          <DataGridColumnHeader title="Created" column={column} visibility />
+          <DataGridColumnHeader title="Created Date" column={column} visibility />
         ),
 
         cell: ({ row }) => formatDate(row.original?.createdAt),
@@ -1625,30 +1634,10 @@ const UnitList = () => {
         enableSorting: true,
 
         meta: {
-          headerTitle: "Created",
+          headerTitle: "Created Date",
           skeleton: <Skeleton className="h-7 w-24" />,
         },
       },
-
-      {
-        accessorKey: "updatedAt",
-        id: "updatedAt",
-
-        header: ({ column }) => (
-          <DataGridColumnHeader title="Updated" column={column} visibility />
-        ),
-
-        cell: ({ row }) => formatDate(row.original?.updatedAt),
-
-        size: 150,
-        enableSorting: true,
-
-        meta: {
-          headerTitle: "Updated",
-          skeleton: <Skeleton className="h-7 w-24" />,
-        },
-      },
-
       {
         accessorKey: "createby",
         id: "createby",
@@ -1666,6 +1655,24 @@ const UnitList = () => {
 
         meta: {
           headerTitle: "Created By",
+          skeleton: <Skeleton className="h-7 w-24" />,
+        },
+      },
+      {
+        accessorKey: "updatedAt",
+        id: "updatedAt",
+
+        header: ({ column }) => (
+          <DataGridColumnHeader title="Updated Date" column={column} visibility />
+        ),
+
+        cell: ({ row }) => formatDate(row.original?.updatedAt),
+
+        size: 150,
+        enableSorting: true,
+
+        meta: {
+          headerTitle: "Updated Date",
           skeleton: <Skeleton className="h-7 w-24" />,
         },
       },
@@ -2168,8 +2175,7 @@ const UnitList = () => {
                 htmlFor="copy-unit-name"
                 className="text-sm font-medium"
               >
-                Unit Name
-                <span className="text-destructive"> *</span>
+                Unit Name <span className="text-destructive"> *</span>
               </label>
 
               <Input
@@ -2194,8 +2200,7 @@ const UnitList = () => {
                 htmlFor="copy-unit-abbreviation"
                 className="text-sm font-medium"
               >
-                Abbreviation
-                <span className="text-destructive"> *</span>
+                Abbreviation <span className="text-destructive"> *</span>
               </label>
 
               <Input
@@ -2228,7 +2233,7 @@ const UnitList = () => {
                 }
               >
                 <Copy className="mr-2 size-4" />
-                {copyLoading ? "Copying..." : "Copy Unit"}
+                {copyLoading ? "Copying..." : "Copy"}
               </Button>
             </DialogFooter>
           </form>

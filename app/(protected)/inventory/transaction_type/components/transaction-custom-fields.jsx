@@ -1,486 +1,428 @@
-'use client';
 
-import {
-  useEffect,
-  useState,
-} from 'react';
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
 
 import {
   Card,
   CardContent,
   CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+} from "@/components/ui/card";
 
-import {
-  Skeleton,
-} from '@/components/ui/skeleton';
+import { Skeleton } from "@/components/ui/skeleton";
+import { apiFetch } from "@/lib/api";
 
-import {
-  apiFetch,
-} from '@/lib/api';
+import CustomFieldInput from "./custom-field-input";
 
-import CustomFieldInput from './custom-field-input';
+const EMPTY_FIELDS = [];
 
 /*
 |--------------------------------------------------------------------------
-| Normalize Field Type
+| Helpers
 |--------------------------------------------------------------------------
 */
 
-const normalizeFieldType = (
-  type
-) => {
-  return String(type || '')
+const normalizeFieldType = (type) =>
+  String(type || "")
     .toLowerCase()
     .trim()
-    .replace(/-/g, '_');
-};
+    .replace(/-/g, "_");
+const isRequiredField = (field) =>
+  field?.required === true ||
+  field?.required === 1 ||
+  field?.required === "1" ||
+  field?.required === "true";
 
-/*
-|--------------------------------------------------------------------------
-| Default Value
-|--------------------------------------------------------------------------
-*/
+const isEmptyCustomFieldValue = (value, type) => {
+  const normalizedType = normalizeFieldType(type);
 
-const getDefaultValue = (
-  field
-) => {
-  if (!field) {
-    return '';
+  if (normalizedType === "checkbox") {
+    return !(
+      value === true ||
+      value === "true" ||
+      value === "1" ||
+      value === 1
+    );
   }
 
-  const type =
-    normalizeFieldType(
-      field.type
-    );
+  if (Array.isArray(value)) {
+    return value.length === 0;
+  }
 
-  /*
-  |--------------------------------------------------------------------------
-  | Multi File / Multi Image
-  |--------------------------------------------------------------------------
-  */
+  return value === null || value === undefined || String(value).trim() === "";
+};
+
+/**
+ * Returns the labels of required fields that are empty.
+ * Use this function in the parent form before saving.
+ */
+export const validateRequiredCustomFields = (fields = [], values = {}) => {
+  const savedValues = parseSavedValues(values);
+
+  return fields
+    .filter((field) => isRequiredField(field))
+    .filter((field) =>
+      isEmptyCustomFieldValue(savedValues[field.slug], field.type),
+    )
+    .map((field) => field.label || field.name || field.slug);
+};
+const parseSavedValues = (savedValues) => {
+  if (!savedValues) return {};
 
   if (
-    type === 'multi_file' ||
-    type === 'multi_image'
+    typeof savedValues === "object" &&
+    !Array.isArray(savedValues)
+  ) {
+    return savedValues;
+  }
+
+  if (typeof savedValues === "string") {
+    try {
+      const parsed = JSON.parse(savedValues);
+
+      if (
+        parsed &&
+        typeof parsed === "object" &&
+        !Array.isArray(parsed)
+      ) {
+        return parsed;
+      }
+    } catch (error) {
+      console.error("CUSTOM FIELD JSON PARSE ERROR:", error);
+    }
+  }
+
+  return {};
+};
+
+const getDefaultValue = (field) => {
+  if (!field) return "";
+
+  const type = normalizeFieldType(field.type);
+  const defaultValue = field.defaultValue;
+
+  if (
+    ["multi_file", "multi_image", "multi_attachment"].includes(type)
   ) {
     return [];
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | File / Image
-  |--------------------------------------------------------------------------
-  */
+  if (type === "multiselect") {
+    if (!defaultValue) return [];
 
-  if (
-    type === 'file' ||
-    type === 'image'
-  ) {
-    return '';
-  }
+    if (Array.isArray(defaultValue)) return defaultValue;
 
-  /*
-  |--------------------------------------------------------------------------
-  | Checkbox
-  |--------------------------------------------------------------------------
-  */
+    try {
+      const parsed = JSON.parse(defaultValue);
 
-  if (type === 'checkbox') {
-    return (
-      field.defaultValue ===
-        true ||
-      field.defaultValue ===
-        'true' ||
-      field.defaultValue ===
-        '1'
-    );
-  }
-
-  /*
-  |--------------------------------------------------------------------------
-  | Multiselect
-  |--------------------------------------------------------------------------
-  */
-
-  if (
-    type === 'multiselect'
-  ) {
-    if (
-      field.defaultValue
-    ) {
-      if (
-        typeof field.defaultValue ===
-          'string' &&
-        field.defaultValue
-          .trim()
-          .startsWith('[')
-      ) {
-        try {
-          const parsed =
-            JSON.parse(
-              field.defaultValue
-            );
-
-          if (
-            Array.isArray(
-              parsed
-            )
-          ) {
-            return parsed;
-          }
-        } catch {
-          // Continue
-        }
-      }
-
-      return String(
-        field.defaultValue
-      )
-        .split(',')
-        .map(
-          (item) =>
-            item.trim()
-        )
+      if (Array.isArray(parsed)) return parsed;
+    } catch {
+      return String(defaultValue)
+        .split(",")
+        .map((item) => item.trim())
         .filter(Boolean);
     }
 
     return [];
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | Normal Field
-  |--------------------------------------------------------------------------
-  */
+  if (["file", "image"].includes(type)) {
+    return defaultValue ?? "";
+  }
 
-  return (
-    field.defaultValue ??
-    ''
-  );
+  if (type === "checkbox") {
+    return (
+      defaultValue === true ||
+      defaultValue === "true" ||
+      defaultValue === "1" ||
+      defaultValue === 1
+    );
+  }
+
+  if (type === "colorpicker") {
+    return defaultValue || "#000000";
+  }
+
+  return defaultValue ?? "";
 };
 
+/*
+|--------------------------------------------------------------------------
+| Normalize Saved Value According To Field Type
+|--------------------------------------------------------------------------
+*/
+
+const normalizeSavedValue = (field, value) => {
+  const type = normalizeFieldType(field.type);
+
+  if (
+    ["multi_file", "multi_image", "multi_attachment", "multiselect"].includes(
+      type,
+    )
+  ) {
+    if (Array.isArray(value)) return value;
+
+    if (typeof value === "string") {
+      try {
+        const parsed = JSON.parse(value);
+
+        if (Array.isArray(parsed)) return parsed;
+      } catch {
+        if (!value.trim()) return [];
+
+        return type === "multiselect"
+          ? value
+            .split(",")
+            .map((item) => item.trim())
+            .filter(Boolean)
+          : [value];
+      }
+    }
+
+    return [];
+  }
+
+  if (type === "checkbox") {
+    return (
+      value === true ||
+      value === "true" ||
+      value === "1" ||
+      value === 1
+    );
+  }
+
+  return value ?? "";
+};
+
+/*
+|--------------------------------------------------------------------------
+| Bootstrap Column
+|--------------------------------------------------------------------------
+*/
+
+const getColumnClass = (bsColumn) => {
+  const value = String(bsColumn || "12").trim();
+  const match = value.match(/(?:col-md-)?(\d+)/);
+  const column = Number(match?.[1] || 12);
+
+  return `col-md-${column >= 1 && column <= 12 ? column : 12}`;
+};
+
+/*
+|--------------------------------------------------------------------------
+| Component
+|--------------------------------------------------------------------------
+*/
+
 export default function TransactionCustomFields({
-  transactionId,
-  values,
+  fields: providedFields = EMPTY_FIELDS,
+  values = {},
   onChange,
   disabled = false,
 }) {
-  const [
-    fields,
-    setFields,
-  ] = useState([]);
+  const [fields, setFields] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
 
-  const [
-    loading,
-    setLoading,
-  ] = useState(true);
+  /*
+  |--------------------------------------------------------------------------
+  | Normalize Parent Values
+  |--------------------------------------------------------------------------
+  |
+  | Supports both:
+  | 1. JavaScript object
+  | 2. JSON string from database
+  |
+  */
+
+  const normalizedValues = useMemo(
+    () => parseSavedValues(values),
+    [values],
+  );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Load Custom Field Definitions
+  |--------------------------------------------------------------------------
+  */
 
   useEffect(() => {
     let mounted = true;
 
-    const loadCustomFields =
-      async () => {
-        try {
-          setLoading(true);
+    const loadCustomFields = async () => {
+      try {
+        setLoading(true);
 
-          /*
-          |--------------------------------------------------------------------------
-          | Load Field Definitions
-          |--------------------------------------------------------------------------
-          */
+        let customFieldList = [];
 
-          const fieldsResponse =
-            await apiFetch(
-              '/api/custom_fields?fieldto=transaction',
-              {
-                method: 'GET',
-              }
-            );
+        if (
+          Array.isArray(providedFields) &&
+          providedFields.length > 0
+        ) {
+          customFieldList = providedFields;
+        } else {
+          const response = await apiFetch(
+            "/api/custom_fields?fieldto=inventory&disabled=false",
+            { method: "GET" },
+          );
 
-          const fieldsResult =
-            await fieldsResponse.json();
+          const result = await response.json();
 
-          if (
-            !fieldsResponse.ok ||
-            !fieldsResult?.success
-          ) {
+          if (!response.ok || !result?.success) {
             throw new Error(
-              fieldsResult?.message ||
-                'Failed to load custom fields.'
+              result?.message || "Failed to load custom fields.",
             );
           }
 
-          if (!mounted) {
-            return;
-          }
-
-          const customFieldList =
-            Array.isArray(
-              fieldsResult.data
-            )
-              ? fieldsResult.data
-              : [];
-
-          setFields(
-            customFieldList
-          );
-
-          /*
-          |--------------------------------------------------------------------------
-          | Existing Transaction
-          |--------------------------------------------------------------------------
-          */
-
-          if (transactionId) {
-            const transactionResponse =
-              await apiFetch(
-                `/api/transaction?id=${transactionId}`,
-                {
-                  method: 'GET',
-                }
-              );
-
-            const transactionResult =
-              await transactionResponse.json();
-
-            if (
-              !transactionResponse.ok ||
-              !transactionResult?.success
-            ) {
-              throw new Error(
-                transactionResult?.message ||
-                  'Failed to load Transaction.'
-              );
-            }
-
-            if (!mounted) {
-              return;
-            }
-
-            /*
-            |--------------------------------------------------------------------------
-            | API returns data as an array
-            |--------------------------------------------------------------------------
-            |
-            | Example:
-            |
-            | data: [
-            |   {
-            |     id: 5,
-            |     custom_field_values: {...}
-            |   }
-            | ]
-            |
-            */
-
-            const transaction =
-              Array.isArray(
-                transactionResult.data
-              )
-                ? transactionResult.data.find(
-                    (item) =>
-                      String(
-                        item?.id
-                      ) ===
-                      String(
-                        transactionId
-                      )
-                  ) ||
-                  transactionResult
-                    .data[0]
-                : transactionResult.data;
-
-            const savedValues =
-              transaction
-                ?.custom_field_values;
-
-            /*
-            |--------------------------------------------------------------------------
-            | Build complete values object
-            |--------------------------------------------------------------------------
-            |
-            | This is important because the API may only save fields
-            | that have values.
-            |
-            */
-
-            const completeValues =
-              {};
-
-            customFieldList.forEach(
-              (field) => {
-                if (!field?.slug) {
-                  return;
-                }
-
-                if (
-                  savedValues &&
-                  Object.prototype.hasOwnProperty.call(
-                    savedValues,
-                    field.slug
-                  )
-                ) {
-                  let saved =
-                    savedValues[
-                      field.slug
-                    ];
-
-                  const type =
-                    normalizeFieldType(
-                      field.type
-                    );
-
-                  /*
-                  |--------------------------------------------------------------------------
-                  | Multi fields
-                  |--------------------------------------------------------------------------
-                  |
-                  | If backend has stored JSON as string,
-                  | convert it back to array.
-                  |
-                  */
-
-                  if (
-                    type ===
-                      'multi_file' ||
-                    type ===
-                      'multi_image'
-                  ) {
-                    if (
-                      typeof saved ===
-                        'string'
-                    ) {
-                      try {
-                        const parsed =
-                          JSON.parse(
-                            saved
-                          );
-
-                        if (
-                          Array.isArray(
-                            parsed
-                          )
-                        ) {
-                          saved =
-                            parsed;
-                        }
-                      } catch {
-                        /*
-                         * Empty string means no files.
-                         */
-                        if (
-                          !saved.trim()
-                        ) {
-                          saved = [];
-                        }
-                      }
-                    }
-
-                    if (
-                      !Array.isArray(
-                        saved
-                      )
-                    ) {
-                      saved = [];
-                    }
-                  }
-
-                  completeValues[
-                    field.slug
-                  ] = saved;
-                } else {
-                  completeValues[
-                    field.slug
-                  ] =
-                    getDefaultValue(
-                      field
-                    );
-                }
-              }
-            );
-
-            /*
-            |--------------------------------------------------------------------------
-            | Only update parent when mounted
-            |--------------------------------------------------------------------------
-            */
-
-            onChange(
-              completeValues
-            );
-
-            return;
-          }
-
-          /*
-          |--------------------------------------------------------------------------
-          | New Transaction
-          |--------------------------------------------------------------------------
-          */
-
-          const defaultValues =
-            {};
-
-          customFieldList.forEach(
-            (field) => {
-              if (!field?.slug) {
-                return;
-              }
-
-              defaultValues[
-                field.slug
-              ] =
-                getDefaultValue(
-                  field
-                );
-            }
-          );
-
-          /*
-          |--------------------------------------------------------------------------
-          | Don't overwrite values already entered by user
-          |--------------------------------------------------------------------------
-          */
-
-          if (
-            !values ||
-            Object.keys(values)
-              .length === 0
-          ) {
-            onChange(
-              defaultValues
-            );
-          }
-        } catch (error) {
-          console.error(
-            'CUSTOM FIELD LOAD ERROR:',
-            error
-          );
-        } finally {
-          if (mounted) {
-            setLoading(false);
-          }
+          customFieldList = Array.isArray(result.data)
+            ? result.data
+            : [];
         }
-      };
+
+        if (!mounted) return;
+
+        setFields(customFieldList);
+      } catch (error) {
+        console.error("CUSTOM FIELD LOAD ERROR:", error);
+
+        if (mounted) {
+          setFields([]);
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    };
 
     loadCustomFields();
 
     return () => {
       mounted = false;
     };
+  }, [providedFields]);
 
-    /*
-    |--------------------------------------------------------------------------
-    | IMPORTANT
-    |--------------------------------------------------------------------------
-    |
-    | Do not add values/onChange here.
-    |
-    */
+  /*
+  |--------------------------------------------------------------------------
+  | Automatically Select Saved Fields
+  |--------------------------------------------------------------------------
+  |
+  | Example saved object:
+  |
+  | {
+  |   shape: "square",
+  |   inpoutin: "UyTrdt123",
+  |   gratcolor: "black"
+  | }
+  |
+  | These three fields will automatically be selected.
+  |
+  */
 
-  }, [transactionId]);
+  const selectedFieldSlugs = useMemo(() => {
+    const savedSlugs = Object.keys(normalizedValues);
+
+    const requiredSlugs = fields
+      .filter((field) => field?.slug && isRequiredField(field))
+      .map((field) => field.slug);
+
+    return [...new Set([...savedSlugs, ...requiredSlugs])];
+  }, [normalizedValues, fields]);
+
+  /*
+  |--------------------------------------------------------------------------
+  | Select / Deselect Field
+  |--------------------------------------------------------------------------
+  */
+
+  const handleFieldSelection = (field, checked) => {
+    if (disabled || !field?.slug) return;
+
+    if (!checked && isRequiredField(field)) {
+      return;
+    }
+
+    const updatedValues = {
+      ...normalizedValues,
+    };
+
+    if (checked) {
+      if (
+        !Object.prototype.hasOwnProperty.call(updatedValues, field.slug)
+      ) {
+        updatedValues[field.slug] = getDefaultValue(field);
+      }
+    } else {
+      delete updatedValues[field.slug];
+    }
+
+    onChange?.(updatedValues);
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Select All
+  |--------------------------------------------------------------------------
+  */
+
+  const handleSelectAll = () => {
+    if (disabled) return;
+
+    const updatedValues = {
+      ...normalizedValues,
+    };
+
+    fields.forEach((field) => {
+      if (!field?.slug) return;
+
+      if (
+        !Object.prototype.hasOwnProperty.call(
+          updatedValues,
+          field.slug,
+        )
+      ) {
+        updatedValues[field.slug] = getDefaultValue(field);
+      }
+    });
+
+    onChange?.(updatedValues);
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Clear All
+  |--------------------------------------------------------------------------
+  */
+
+  const handleClearAll = () => {
+    if (disabled) return;
+
+    const requiredValues = {};
+
+    fields.forEach((field) => {
+      if (field?.slug && isRequiredField(field)) {
+        requiredValues[field.slug] =
+          Object.prototype.hasOwnProperty.call(normalizedValues, field.slug)
+            ? normalizedValues[field.slug]
+            : getDefaultValue(field);
+      }
+    });
+
+    onChange?.(requiredValues);
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Update Individual Field Value
+  |--------------------------------------------------------------------------
+  */
+
+  const handleValueChange = (slug, newValue) => {
+    onChange?.({
+      ...normalizedValues,
+      [slug]: newValue,
+    });
+  };
 
   /*
   |--------------------------------------------------------------------------
@@ -523,89 +465,116 @@ export default function TransactionCustomFields({
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>
-          Custom Fields
-        </CardTitle>
-      </CardHeader>
+      <CardContent className="space-y-5 pt-5">
 
-      <CardContent>
-        <div className="grid gap-5 md:grid-cols-2">
-          {fields.map(
-            (field) => {
-              const type =
-                normalizeFieldType(
-                  field.type
-                );
+        {/* Field Selection Dropdown */}
 
-              /*
-              |--------------------------------------------------------------------------
-              | Full Width
-              |--------------------------------------------------------------------------
-              */
+        <div className="relative">
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => setDropdownOpen((prev) => !prev)}
+            className="flex w-full items-center justify-between rounded-md border px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <span>
+              {selectedFieldSlugs.length
+                ? `${selectedFieldSlugs.length} fields selected`
+                : "Select Custom Fields"}
+            </span>
 
-              const fullWidth =
-                type ===
-                  'textarea' ||
-                type === 'file' ||
-                type === 'image' ||
-                type ===
-                  'multi_file' ||
-                type ===
-                  'multi_image';
+            <span>{dropdownOpen ? "▲" : "▼"}</span>
+          </button>
 
-              /*
-              |--------------------------------------------------------------------------
-              | Current Value
-              |--------------------------------------------------------------------------
-              */
+          {dropdownOpen && (
+            <div className="absolute z-50 mt-1 max-h-60 w-full overflow-y-auto rounded-md border bg-background p-2 shadow-md">
+              {/* Select All / Clear All */}
+              <div className="sticky bottom-0 flex justify-right gap-3 border-t bg-background px-2 py-3">
+                <button
+                  type="button"
+                  disabled={disabled}
+                  className="text-xs font-medium text-primary hover:underline disabled:opacity-50"
+                  onClick={handleSelectAll}
+                >
+                  Select All
+                </button>
 
-              let currentValue =
-                values?.[
-                  field.slug
-                ];
+                <button
+                  type="button"
+                  disabled={disabled}
+                  className="text-xs font-medium text-destructive hover:underline disabled:opacity-50"
+                  onClick={handleClearAll}
+                >
+                  Clear All
+                </button>
+              </div>
+              {/* Field Options */}
+              {fields.map((field) => (
+                <label
+                  key={field.id}
+                  className="flex cursor-pointer items-center gap-2 rounded px-2 py-2 hover:bg-muted"
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedFieldSlugs.includes(field.slug)}
+                    disabled={disabled}
+                    onChange={(event) =>
+                      handleFieldSelection(field, event.target.checked)
+                    }
+                  />
 
-              /*
-              |--------------------------------------------------------------------------
-              | Default Value
-              |--------------------------------------------------------------------------
-              */
+                  <span className="text-sm">
+                    {field.name}
 
-              if (
-                currentValue ===
-                  undefined ||
-                currentValue === null
-              ) {
-                currentValue =
-                  getDefaultValue(
-                    field
-                  );
-              }
+                    <span className="ml-2 text-xs text-muted-foreground">
+                      ({field.type})
+                    </span>
+
+                    {field.required && (
+                      <span className="ml-1 text-destructive">*</span>
+                    )}
+                  </span>
+                </label>
+              ))}
+
+
+            </div>
+          )}
+        </div>
+
+        {/* Selected Custom Fields */}
+
+        <div className="row g-3">
+          {fields
+            .filter(
+              (field) =>
+                field?.slug &&
+                selectedFieldSlugs.includes(field.slug),
+            )
+            .map((field) => {
+              const savedValue = Object.prototype.hasOwnProperty.call(
+                normalizedValues,
+                field.slug,
+              )
+                ? normalizeSavedValue(
+                  field,
+                  normalizedValues[field.slug],
+                )
+                : getDefaultValue(field);
 
               return (
                 <div
                   key={field.id}
-                  className={
-                    fullWidth
-                      ? 'md:col-span-2'
-                      : ''
-                  }
+                  className={getColumnClass(field.bsColumn)}
                 >
                   <CustomFieldInput
                     field={field}
-                    value={
-                      currentValue
+                    value={savedValue}
+                    onChange={(newValue) =>
+                      handleValueChange(
+                        field.slug,
+                        newValue,
+                      )
                     }
-                    onChange={(
-                      newValue
-                    ) => {
-                      onChange({
-                        ...(values ||
-                          {}),
-                        [field.slug]:
-                          newValue,
-                      });
-                    }}
                     disabled={
                       disabled ||
                       field.disabled
@@ -613,8 +582,7 @@ export default function TransactionCustomFields({
                   />
                 </div>
               );
-            }
-          )}
+            })}
         </div>
       </CardContent>
     </Card>

@@ -647,10 +647,10 @@ export async function GET(request) {
 
       GroupName: groupMap.get(String(item.ItemGroupid)) || "-",
 
-      CreatedByName:
+      createdByName:
         userMap.get(String(item.createby || "").trim()) || "-",
 
-      UpdatedByName:
+      updatedByName:
         userMap.get(String(item.updateby || "").trim()) || "-",
     }));
 
@@ -702,10 +702,26 @@ export async function POST(request) {
 
     const user = await getAuthenticatedUser();
     if (!user) return unauthorized();
+    const openingBalance = Number(body.openingBalance || 0);
 
-    // Location and Machine IDs
+    if (
+      openingBalance > 0 &&
+      !body.Locationid &&
+      !body.Machineid
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Please select either Location or Machine when Opening Balance is greater than 0.",
+        },
+        { status: 400 },
+      );
+    }
+    // Location and ItemCondition IDs
     const Locationid = body.Locationid || null;
     const Machineid = body.Machineid || null;
+    const ItemConditionid = body.ItemConditionid || null;
 
     // Validate selected Location
     if (Locationid) {
@@ -754,7 +770,54 @@ export async function POST(request) {
         );
       }
     }
+    // Validate selected ItemCondition
+    if (ItemConditionid) {
+      const itemCondition = await prisma.PtoductType.findFirst({
+        where: {
+          id: ItemConditionid,
+          status: true,
+          deletedAt: null,
+        },
+        select: {
+          id: true,
+        },
+      });
 
+      if (!itemCondition) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Selected Item Condition is invalid or inactive.",
+          },
+          { status: 400 },
+        );
+      }
+    }
+    // Check duplicate Item Name + Item Condition combination.
+    const duplicateItem = await prisma.itemMaster.findFirst({
+      where: {
+        ItemName: {
+          equals: ItemName,
+          mode: "insensitive",
+        },
+        ItemConditionid,
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (duplicateItem) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "This Item Name already exists with the selected Item Condition.",
+        },
+        { status: 409 },
+      );
+    }
     const item = await prisma.$transaction(async (tx) => {
       if (body.isDefault === true) {
         await tx.itemMaster.updateMany({
@@ -778,6 +841,7 @@ export async function POST(request) {
 
           Locationid,
           Machineid,
+          ItemConditionid,
 
           status: body.status ?? true,
           isDefault: body.isDefault ?? false,
@@ -832,7 +896,22 @@ export async function PUT(request) {
         { status: 400 },
       );
     }
+    const openingBalance = Number(body.openingBalance || 0);
 
+    if (
+      openingBalance > 0 &&
+      !body.Locationid &&
+      !body.Machineid
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Please select either Location or Machine when Opening Balance is greater than 0.",
+        },
+        { status: 400 },
+      );
+    }
     const user = await getAuthenticatedUser();
     if (!user) return unauthorized();
 
@@ -920,6 +999,37 @@ export async function PUT(request) {
       }
 
       updateData.Machineid = Machineid;
+    }
+
+    // Update Item Condition only when provided
+    if (body.ItemConditionid !== undefined || body.ItemConditionid !== undefined) {
+      const ItemConditionid =
+        body.ItemConditionid || body.ItemConditionid || null;
+
+      if (ItemConditionid) {
+        const itemCondition = await prisma.PtoductType.findFirst({
+          where: {
+            id: ItemConditionid,
+            status: true,
+            deletedAt: null,
+          },
+          select: {
+            id: true,
+          },
+        });
+
+        if (!itemCondition) {
+          return NextResponse.json(
+            {
+              success: false,
+              message: "Selected item condition is invalid or inactive.",
+            },
+            { status: 400 },
+          );
+        }
+      }
+
+      updateData.ItemConditionid = ItemConditionid;
     }
 
     if (body.ItemName !== undefined) {

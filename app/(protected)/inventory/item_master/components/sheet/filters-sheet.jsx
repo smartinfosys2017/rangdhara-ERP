@@ -193,7 +193,7 @@ function UserFilter({
         </SelectTrigger>
 
         <SelectContent>
-          <SelectItem value="all">All Administrators</SelectItem>
+          <SelectItem value="all">All</SelectItem>
 
           {users.map((user) => (
             <SelectItem key={String(user.id)} value={String(user.id)}>
@@ -832,24 +832,24 @@ export function StoreClientFiltersSheet({
                 date={draftCreatedDate}
                 setDate={setDraftCreatedDate}
               />
-
-              <DateRangeFilter
-                label="Updated Date"
-                date={draftUpdatedDate}
-                setDate={setDraftUpdatedDate}
+              {/* CREATED BY */}
+              <UserFilter
+                id="createdByFilter"
+                label="Created By"
+                placeholder="Select creator"
+                value={draftCreatedBy}
+                onChange={setDraftCreatedBy}
+                users={users}
               />
+
             </div>
 
             <div className="my-5 border-b border-border" />
 
-            {/* CREATED BY */}
-            <UserFilter
-              id="createdByFilter"
-              label="Created By"
-              placeholder="Select creator"
-              value={draftCreatedBy}
-              onChange={setDraftCreatedBy}
-              users={users}
+            <DateRangeFilter
+              label="Updated Date"
+              date={draftUpdatedDate}
+              setDate={setDraftUpdatedDate}
             />
 
             {/* UPDATED BY */}

@@ -295,7 +295,8 @@ const IssueReceiptList = () => {
   const [createdTo, setCreatedTo] = useState("");
   const [updatedFrom, setUpdatedFrom] = useState("");
   const [updatedTo, setUpdatedTo] = useState("");
-
+  const [createdByFilter, setCreatedByFilter] = useState("");
+  const [updatedByFilter, setUpdatedByFilter] = useState("");
   // MULTIPLE SELECTION
   const [selectedIds, setSelectedIds] = useState([]);
   const [bulkLoading, setBulkLoading] = useState(false);
@@ -437,6 +438,8 @@ const IssueReceiptList = () => {
         createdTo,
         updatedFrom,
         updatedTo,
+        createdBy: createdByFilter || "",
+        updatedBy: updatedByFilter || "",
         sort: sorting?.[0]?.id || "createdAt",
         dir: sorting?.[0]?.desc ? "desc" : "asc",
       });
@@ -497,6 +500,8 @@ const IssueReceiptList = () => {
       groupNameFilter,
       itemTypeFilter,
       itemNameFilter,
+      createdByFilter,
+      updatedByFilter,
     ],
   );
 
@@ -541,6 +546,8 @@ const IssueReceiptList = () => {
       groupNameFilter,
       itemTypeFilter,
       itemNameFilter,
+      createdByFilter,
+      updatedByFilter,
     ],
     queryFn: fetchIssueReceipts,
     staleTime: 0,
@@ -1362,7 +1369,43 @@ const IssueReceiptList = () => {
         size: 175,
         render: (r) => <span>{formatDate(r?.updatedAt)}</span>,
       }),
+      {
+        accessorKey: "createdByName",
+        id: "createdByName",
 
+        header: ({ column }) => (
+          <DataGridColumnHeader title="Created By" column={column} visibility />
+        ),
+
+        cell: ({ row }) => <span>{row.original.CreatedByName || "-"}</span>,
+
+        size: 180,
+        enableSorting: false,
+
+        meta: {
+          headerTitle: "Created By",
+          skeleton: <Skeleton className="h-7 w-24" />,
+        },
+      },
+
+      {
+        accessorKey: "updatedByName",
+        id: "updatedByName",
+
+        header: ({ column }) => (
+          <DataGridColumnHeader title="Updated By" column={column} visibility />
+        ),
+
+        cell: ({ row }) => <span>{row.original.UpdatedByName || "-"}</span>,
+
+        size: 180,
+        enableSorting: false,
+
+        meta: {
+          headerTitle: "Updated By",
+          skeleton: <Skeleton className="h-7 w-24" />,
+        },
+      },
       {
         id: "actions",
         header: "Actions",
@@ -1648,7 +1691,10 @@ const IssueReceiptList = () => {
             setUpdatedFrom={setUpdatedFrom}
             updatedTo={updatedTo}
             setUpdatedTo={setUpdatedTo}
-
+            createdBy={createdByFilter}
+            setCreatedBy={setCreatedByFilter}
+            updatedBy={updatedByFilter}
+            setUpdatedBy={setUpdatedByFilter}
             setPagination={setPagination}
           />
         </div>

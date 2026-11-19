@@ -23,11 +23,43 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { RiCheckboxCircleFill, RiErrorWarningFill } from "@remixicon/react";
 
 import { Alert, AlertIcon, AlertTitle } from "@/components/ui/alert";
+import LocationCustomFields, { validateRequiredCustomFields, } from "../../custom-fields/import-custom-fields";
+const showSuccessToast = (message) => {
+  toast.custom(
+    () => (
+      <Alert variant="mono" icon="success">
+        <AlertIcon>
+          <RiCheckboxCircleFill />
+        </AlertIcon>
+        <AlertTitle>{message}</AlertTitle>
+      </Alert>
+    ),
+    { position: "top-center" },
+  );
+};
 
+const showErrorToast = (message) => {
+  toast.custom(
+    (t) => (
+      <Alert
+        variant="mono"
+        icon="destructive"
+        close={true}
+        onClose={() => toast.dismiss(t)}
+      >
+        <AlertIcon>
+          <RiErrorWarningFill />
+        </AlertIcon>
+        <AlertTitle>{message}</AlertTitle>
+      </Alert>
+    ),
+    { position: "top-center" },
+  );
+};
 const EMPTY_FORM = {
   id: null,
   locationName: "",
@@ -44,7 +76,9 @@ export default function LocationEditDialog({
   const [form, setForm] = useState(EMPTY_FORM);
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
-
+  const [customFieldDefinitions, setCustomFieldDefinitions] = useState([]);
+  const [customFields, setCustomFields] = useState({});
+  const [customFieldsReady, setCustomFieldsReady] = useState(false);
   // LOAD LOCATION DATA
   useEffect(() => {
     if (!open) return;
@@ -56,6 +90,9 @@ export default function LocationEditDialog({
         locationCode: Location.locationCode || "",
         status: Location.status ? "true" : "false",
       });
+      setCustomFields(Location?.customFields ?? {});
+      setCustomFieldDefinitions([]);
+      setCustomFieldsReady(false);
     } else {
       setForm(EMPTY_FORM);
     }
@@ -121,7 +158,17 @@ export default function LocationEditDialog({
   // SAVE
   const handleSave = async () => {
     if (!validate()) return;
+    const missingCustomFields = validateRequiredCustomFields(
+      customFieldDefinitions,
+      customFields,
+    );
 
+    if (missingCustomFields.length > 0) {
+      showErrorToast(
+        `Please fill in required custom fields: ${missingCustomFields.join(", ")}`,
+      );
+      return;
+    }
     if (!form.id) {
       toast.custom(
         () => (
@@ -142,6 +189,7 @@ export default function LocationEditDialog({
       locationName: form.locationName.trim(),
       locationCode: form.locationCode.trim(),
       status: form.status === "true",
+      customFields: customFields ?? {},
     };
 
     try {
@@ -214,8 +262,8 @@ export default function LocationEditDialog({
             <DialogDescription>Update location information.</DialogDescription>
           </DialogHeader>
 
-          <ScrollArea className="grow min-h-0">
-            <DialogBody className="space-y-6 px-0 pt-0">
+          <ScrollArea className="grow min-h-0 flex flex-col h-full max-h-[90vh] overflow-hidden">
+            <DialogBody className="space-y-6 pt-0 px-0 min-h-0">
               {/* LOCATION CODE */}
               <div>
                 <label className="mb-2 block text-sm font-medium">
@@ -276,6 +324,26 @@ export default function LocationEditDialog({
                   </SelectContent>
                 </Select>
               </div>
+              {/* CUSTOM FIELDS */}
+
+              <div className="space-y-4 border-t pt-5">
+                <div>
+                  <h3 className="text-base font-semibold">Custom Fields</h3>
+
+                  <p className="text-sm text-muted-foreground">
+                    Additional location information.
+                  </p>
+                </div>
+
+                <LocationCustomFields
+                  values={customFields}
+                  onChange={setCustomFields}
+                  onFieldsLoaded={(loadedFields) => {
+                    setCustomFieldDefinitions(loadedFields);
+                    setCustomFieldsReady(true);
+                  }}
+                />
+              </div>
             </DialogBody>
           </ScrollArea>
 
@@ -290,7 +358,7 @@ export default function LocationEditDialog({
             </Button>
 
             <Button type="button" onClick={handleSave} disabled={saving}>
-              {saving ? "Saving..." : "Save"}
+              {saving ? "Updating..." : "Update"}
             </Button>
           </DialogFooter>
         </div>

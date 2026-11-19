@@ -40,7 +40,7 @@ const VALID_TYPES = [
   "multi_image",
 ];
 
-const VALID_FIELD_TO = ["company", "leads", "customers", "tasks", "transaction","employee","candidate"];
+const VALID_FIELD_TO = ["company", "transaction", "inventory", "users", "customers", "candidate", "employee", "tasks"];
 
 /*
 |--------------------------------------------------------------------------
@@ -321,7 +321,6 @@ export async function GET(request) {
     */
 
     const pageParam = Number(searchParams.get("page"));
-
     const limitParam = Number(searchParams.get("limit"));
 
     const page = Number.isInteger(pageParam) && pageParam > 0 ? pageParam : 1;
@@ -355,10 +354,48 @@ export async function GET(request) {
           success: false,
           message: "Invalid Field Belongs to value.",
         },
-        {
-          status: 400,
-        },
+        { status: 400 },
       );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Boolean Filters
+    |--------------------------------------------------------------------------
+    */
+
+    const booleanFilterFields = [
+      "disabled",
+      "displayInline",
+      "onlyAdmin",
+      "disallowClientToEdit",
+      "required",
+      "showOnTable",
+      "showOnPdf",
+      "showOnClientPortal",
+      "showOnTicketForm",
+    ];
+
+    const booleanFilters = {};
+
+    for (const field of booleanFilterFields) {
+      const value = searchParams.get(field);
+
+      if (value !== null && value !== "") {
+        if (value === "true" || value === "1") {
+          booleanFilters[field] = true;
+        } else if (value === "false" || value === "0") {
+          booleanFilters[field] = false;
+        } else {
+          return NextResponse.json(
+            {
+              success: false,
+              message: `Invalid boolean value for ${field}. Use true, false, 1, or 0.`,
+            },
+            { status: 400 },
+          );
+        }
+      }
     }
 
     /*
@@ -383,7 +420,9 @@ export async function GET(request) {
     |--------------------------------------------------------------------------
     */
 
-    const where = { deletedAt: null };
+    const where = {
+      deletedAt: null,
+    };
 
     /*
     |--------------------------------------------------------------------------
@@ -391,13 +430,21 @@ export async function GET(request) {
     |--------------------------------------------------------------------------
     */
 
-    // Filter by fieldto
     if (fieldto) {
       where.fieldto = {
         equals: fieldto,
         mode: "insensitive",
       };
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Boolean Conditions
+    |--------------------------------------------------------------------------
+    */
+
+    Object.assign(where, booleanFilters);
+
     /*
     |--------------------------------------------------------------------------
     | Search Filter
@@ -486,6 +533,7 @@ export async function GET(request) {
       filters: {
         search,
         fieldto,
+        ...booleanFilters,
         sortBy,
         sortOrder,
       },
@@ -498,9 +546,7 @@ export async function GET(request) {
         success: false,
         message: error?.message || "Failed to load custom fields.",
       },
-      {
-        status: 500,
-      },
+      { status: 500 },
     );
   }
 }

@@ -153,7 +153,15 @@ const createItemMasterNotification = async ({
     return null;
   }
 };
+const formatDate = (value) => {
+  if (!value) return "-";
 
+  const date = new Date(value);
+
+  return Number.isNaN(date.getTime())
+    ? "-"
+    : date.toLocaleDateString();
+};
 export default function ItemMasterList() {
   const queryClient = useQueryClient();
   const { data: session } = useSession();
@@ -474,12 +482,10 @@ export default function ItemMasterList() {
       Rate: item.rather ?? "",
       Status: item.status ? "Active" : "Inactive",
       Default: item.isDefault ? "Yes" : "No",
-      "Created Date": item.createdAt
-        ? new Date(item.createdAt).toLocaleString()
-        : "",
-      "Updated Date": item.updatedAt
-        ? new Date(item.updatedAt).toLocaleString()
-        : "",
+      "Created Date": formatDate(item.createdAt),
+      "Created By": item.createdByName || "-",
+      "Updated Date": formatDate(item.updatedAt),
+      "Updated By": item.updatedByName || "-",
     }));
 
     const worksheet = XLSX.utils.json_to_sheet(rows);
@@ -492,7 +498,9 @@ export default function ItemMasterList() {
       { wch: 14 },
       { wch: 12 },
       { wch: 22 },
+      { wch: 25 },
       { wch: 22 },
+      { wch: 25 },
     ];
 
     const workbook = XLSX.utils.book_new();
@@ -569,8 +577,10 @@ export default function ItemMasterList() {
         <td>${escapeHtml(item.rather ?? "-")}</td>
         <td>${item.status ? "Active" : "Inactive"}</td>
         <td>${item.isDefault ? "Yes" : "No"}</td>
-        <td>${escapeHtml(item.createdAt ? new Date(item.createdAt).toLocaleDateString() : "-")}</td>
-        <td>${escapeHtml(item.updatedAt ? new Date(item.updatedAt).toLocaleDateString() : "-")}</td>
+        <td>${escapeHtml(formatDate(item.createdAt))}</td>
+        <td>${escapeHtml(item.createdByName || "-")}</td>
+        <td>${escapeHtml(formatDate(item.updatedAt))}</td>              
+        <td>${escapeHtml(item.updatedByName || "-")}</td>
       </tr>`,
         )
         .join("");
@@ -601,7 +611,11 @@ export default function ItemMasterList() {
             <thead>
               <tr>
                 <th>ID</th><th>Item Name</th><th>Description</th><th>Rate</th>
-                <th>Status</th><th>Default</th><th>Added Date</th><th>Updated Date</th>
+                <th>Status</th><th>Default</th>
+                <th>Created Date</th>
+                <th>Created By</th>
+                <th>Updated Date</th>
+                <th>Updated By</th>
               </tr>
             </thead>
             <tbody>${rows}</tbody>
@@ -1491,7 +1505,7 @@ export default function ItemMasterList() {
         accessorKey: "isDefault",
         id: "isDefault",
         header: ({ column }) => (
-          <DataGridColumnHeader title="Default" column={column} visibility />
+          <DataGridColumnHeader title="Is Default" column={column} visibility />
         ),
         cell: ({ row }) => <span>{row.original.isDefault ? "Yes" : "No"}</span>,
         size: 100,
@@ -1531,47 +1545,14 @@ export default function ItemMasterList() {
         accessorKey: "createdAt",
         id: "createdAt",
         header: ({ column }) => (
-          <DataGridColumnHeader title="Added Date" column={column} visibility />
+          <DataGridColumnHeader title="Created Date" column={column} visibility />
         ),
-        cell: ({ row }) => {
-          const value = row.original?.createdAt;
-          if (!value) return "-";
-
-          const date = new Date(value);
-
-          return Number.isNaN(date.getTime()) ? "-" : date.toLocaleDateString();
-        },
+        cell: ({ row }) => formatDate(row.original?.createdAt),
         size: 150,
         enableSorting: true,
         enableHiding: true,
         meta: {
-          headerTitle: "Added Date",
-          skeleton: <Skeleton className="h-7 w-24" />,
-        },
-      },
-      {
-        accessorKey: "updatedAt",
-        id: "updatedAt",
-        header: ({ column }) => (
-          <DataGridColumnHeader
-            title="Updated Date"
-            column={column}
-            visibility
-          />
-        ),
-        cell: ({ row }) => {
-          const value = row.original?.updatedAt;
-          if (!value) return "-";
-
-          const date = new Date(value);
-
-          return Number.isNaN(date.getTime()) ? "-" : date.toLocaleDateString();
-        },
-        size: 150,
-        enableSorting: true,
-        enableHiding: true,
-        meta: {
-          headerTitle: "Updated Date",
+          headerTitle: "Created Date",
           skeleton: <Skeleton className="h-7 w-24" />,
         },
       },
@@ -1582,7 +1563,7 @@ export default function ItemMasterList() {
           <DataGridColumnHeader title="Created By" column={column} visibility />
         ),
         cell: ({ row }) => (
-          <span>{row.original.CreatedByName || row.original.createdBy?.username || row.original.createdBy || "-"}</span>
+          <span>{row.original.createdByName || row.original.createdBy?.username || row.original.createdBy || "-"}</span>
         ),
         size: 160,
         enableSorting: true,
@@ -1593,13 +1574,29 @@ export default function ItemMasterList() {
         },
       },
       {
+        accessorKey: "updatedAt",
+        id: "updatedAt",
+        header: ({ column }) => (
+          <DataGridColumnHeader title="Updated Date" column={column} visibility />
+        ),
+        cell: ({ row }) => formatDate(row.original?.updatedAt),
+        size: 150,
+        enableSorting: true,
+        enableHiding: true,
+        meta: {
+          headerTitle: "Updated Date",
+          skeleton: <Skeleton className="h-7 w-24" />,
+        },
+      },
+
+      {
         accessorKey: "updatedBy",
         id: "updatedBy",
         header: ({ column }) => (
           <DataGridColumnHeader title="Updated By" column={column} visibility />
         ),
         cell: ({ row }) => (
-          <span>{row.original.UpdatedByName || row.original.updatedBy?.username || row.original.updatedBy || "-"}</span>
+          <span>{row.original.updatedByName || row.original.updatedBy?.username || row.original.updatedBy || "-"}</span>
         ),
         size: 160,
         enableSorting: true,

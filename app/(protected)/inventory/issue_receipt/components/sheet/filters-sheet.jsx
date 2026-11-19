@@ -82,8 +82,9 @@ function MultiSelectDropdown({
           </span>
 
           <ChevronDown
-            className={`ml-2 size-4 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''
-              }`}
+            className={`ml-2 size-4 shrink-0 transition-transform ${
+              isOpen ? 'rotate-180' : ''
+            }`}
           />
         </Button>
 
@@ -176,9 +177,9 @@ function DateRangeFilter({ label, date, setDate }) {
               {date?.from
                 ? date.to
                   ? `${format(date.from, 'LLL dd, y')} - ${format(
-                    date.to,
-                    'LLL dd, y',
-                  )}`
+                      date.to,
+                      'LLL dd, y',
+                    )}`
                   : format(date.from, 'LLL dd, y')
                 : 'Select date range'}
             </span>
@@ -198,6 +199,37 @@ function DateRangeFilter({ label, date, setDate }) {
     </div>
   );
 }
+
+const UserFilter = ({
+  label,
+  value,
+  onChange,
+  users = [],
+  loading = false,
+}) => (
+  <div className="min-w-0 space-y-1.5">
+    <label className="text-sm font-medium">{label}</label>
+
+    <select
+      value={value || 'all'}
+      onChange={(e) =>
+        onChange(e.target.value === 'all' ? '' : e.target.value)
+      }
+      disabled={loading}
+      className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      <option value="all">
+        {loading ? 'Loading users...' : 'All Users'}
+      </option>
+
+      {users.map((user) => (
+        <option key={user.id} value={user.id}>
+          {user.name}
+        </option>
+      ))}
+    </select>
+  </div>
+);
 
 export function StoreClientFiltersSheet({
   trigger,
@@ -250,13 +282,24 @@ export function StoreClientFiltersSheet({
   setUpdatedFrom,
   updatedTo = '',
   setUpdatedTo,
+
+  createdBy = '',
+  setCreatedBy,
+  updatedBy = '',
+  setUpdatedBy,
 }) {
   const [open, setOpen] = useState(false);
 
+  // Users
+  const [users, setUsers] = useState([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+
+  // Groups
   const [groups, setGroups] = useState(initialGroups);
   const [groupsLoading, setGroupsLoading] = useState(false);
   const [groupDropdownOpen, setGroupDropdownOpen] = useState(false);
 
+  // Draft filters
   const [draftQuantityMin, setDraftQuantityMin] = useState(quantityMin);
   const [draftQuantityMax, setDraftQuantityMax] = useState(quantityMax);
   const [draftPriceMin, setDraftPriceMin] = useState(priceMin);
@@ -266,29 +309,92 @@ export function StoreClientFiltersSheet({
   const [draftReceivedBy, setDraftReceivedBy] = useState([
     ...receivedByFilter,
   ]);
+
   const [draftTransactionTypes, setDraftTransactionTypes] = useState([
     ...transactionTypeFilter,
   ]);
+
   const [draftGroupIds, setDraftGroupIds] = useState([
     ...selectedGroupIds,
   ]);
+
   const [draftItemTypes, setDraftItemTypes] = useState([
     ...itemTypeFilter,
   ]);
+
   const [draftItemNames, setDraftItemNames] = useState([
     ...itemNameFilter,
   ]);
 
+  // Created By and Updated By
+  const [draftCreatedBy, setDraftCreatedBy] = useState(createdBy);
+  const [draftUpdatedBy, setDraftUpdatedBy] = useState(updatedBy);
+
+  // Date filters
   const [draftAddedDate, setDraftAddedDate] = useState(
     () => toDateRange(addedFrom, addedTo),
   );
+
   const [draftIssueDate, setDraftIssueDate] = useState(
     () => toDateRange(issueFrom, issueTo),
   );
+
   const [draftUpdatedDate, setDraftUpdatedDate] = useState(
     () => toDateRange(updatedFrom, updatedTo),
   );
 
+  // Fetch users
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchUsers = async () => {
+      setUsersLoading(true);
+
+      try {
+        const response = await fetch('/api/inventory/filter-users', {
+          method: 'GET',
+          credentials: 'same-origin',
+          headers: {
+            Accept: 'application/json',
+          },
+        });
+
+        const result = await response.json();
+
+        if (!response.ok || result.success === false) {
+          throw new Error(
+            result.message || 'Failed to fetch users.',
+          );
+        }
+
+        const userList = Array.isArray(result.data)
+          ? result.data
+          : [];
+
+        if (isMounted) {
+          setUsers(userList);
+        }
+      } catch (error) {
+        console.error('Failed to fetch filter users:', error);
+
+        if (isMounted) {
+          setUsers([]);
+        }
+      } finally {
+        if (isMounted) {
+          setUsersLoading(false);
+        }
+      }
+    };
+
+    fetchUsers();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Fetch groups
   useEffect(() => {
     let cancelled = false;
 
@@ -300,14 +406,18 @@ export function StoreClientFiltersSheet({
           '/api/inventory/item-groups?limit=10000',
           {
             credentials: 'same-origin',
-            headers: { Accept: 'application/json' },
+            headers: {
+              Accept: 'application/json',
+            },
           },
         );
 
         const result = await response.json();
 
         if (!response.ok || result.success === false) {
-          throw new Error(result.message || 'Failed to load groups');
+          throw new Error(
+            result.message || 'Failed to load groups',
+          );
         }
 
         const list = Array.isArray(result.data)
@@ -323,6 +433,7 @@ export function StoreClientFiltersSheet({
             list
               .filter((group) => {
                 const id = group.id ?? group._id ?? group.groupId;
+
                 return (
                   id != null &&
                   typeof group.groupName === 'string' &&
@@ -334,18 +445,30 @@ export function StoreClientFiltersSheet({
 
                 return [
                   String(id),
-                  { id, groupName: group.groupName.trim() },
+                  {
+                    id,
+                    groupName: group.groupName.trim(),
+                  },
                 ];
               }),
           ).values(),
-        ].sort((a, b) => a.groupName.localeCompare(b.groupName));
+        ].sort((a, b) =>
+          a.groupName.localeCompare(b.groupName),
+        );
 
-        if (!cancelled) setGroups(uniqueGroups);
+        if (!cancelled) {
+          setGroups(uniqueGroups);
+        }
       } catch (error) {
         console.error('LOAD GROUP NAMES ERROR:', error);
-        if (!cancelled) setGroups([]);
+
+        if (!cancelled) {
+          setGroups([]);
+        }
       } finally {
-        if (!cancelled) setGroupsLoading(false);
+        if (!cancelled) {
+          setGroupsLoading(false);
+        }
       }
     };
 
@@ -356,6 +479,7 @@ export function StoreClientFiltersSheet({
     };
   }, []);
 
+  // Sync draft values when the filter sheet opens
   useEffect(() => {
     if (!open) return;
 
@@ -374,6 +498,9 @@ export function StoreClientFiltersSheet({
     setDraftAddedDate(toDateRange(addedFrom, addedTo));
     setDraftIssueDate(toDateRange(issueFrom, issueTo));
     setDraftUpdatedDate(toDateRange(updatedFrom, updatedTo));
+
+    setDraftCreatedBy(createdBy || '');
+    setDraftUpdatedBy(updatedBy || '');
 
     setGroupDropdownOpen(false);
   }, [
@@ -394,6 +521,8 @@ export function StoreClientFiltersSheet({
     issueTo,
     updatedFrom,
     updatedTo,
+    createdBy,
+    updatedBy,
   ]);
 
   const resetPagination = () => {
@@ -419,6 +548,7 @@ export function StoreClientFiltersSheet({
     });
   };
 
+  // Reset all filters
   const handleReset = () => {
     setDraftQuantityMin('');
     setDraftQuantityMax('');
@@ -432,9 +562,23 @@ export function StoreClientFiltersSheet({
     setDraftItemTypes([]);
     setDraftItemNames([]);
 
-    setDraftAddedDate({ from: undefined, to: undefined });
-    setDraftIssueDate({ from: undefined, to: undefined });
-    setDraftUpdatedDate({ from: undefined, to: undefined });
+    setDraftAddedDate({
+      from: undefined,
+      to: undefined,
+    });
+
+    setDraftIssueDate({
+      from: undefined,
+      to: undefined,
+    });
+
+    setDraftUpdatedDate({
+      from: undefined,
+      to: undefined,
+    });
+
+    setDraftCreatedBy('');
+    setDraftUpdatedBy('');
 
     setQuantityMin?.('');
     setQuantityMax?.('');
@@ -455,10 +599,14 @@ export function StoreClientFiltersSheet({
     setUpdatedFrom?.('');
     setUpdatedTo?.('');
 
+    setCreatedBy?.('');
+    setUpdatedBy?.('');
+
     resetPagination();
     setOpen(false);
   };
 
+  // Apply filters
   const handleApply = () => {
     setQuantityMin?.(draftQuantityMin);
     setQuantityMax?.(draftQuantityMax);
@@ -474,10 +622,15 @@ export function StoreClientFiltersSheet({
 
     setAddedFrom?.(toDateString(draftAddedDate?.from));
     setAddedTo?.(toDateString(draftAddedDate?.to));
+
     setIssueFrom?.(toDateString(draftIssueDate?.from));
     setIssueTo?.(toDateString(draftIssueDate?.to));
+
     setUpdatedFrom?.(toDateString(draftUpdatedDate?.from));
     setUpdatedTo?.(toDateString(draftUpdatedDate?.to));
+
+    setCreatedBy?.(draftCreatedBy);
+    setUpdatedBy?.(draftUpdatedBy);
 
     resetPagination();
     setOpen(false);
@@ -511,6 +664,7 @@ export function StoreClientFiltersSheet({
                       setDraftQuantityMin(event.target.value)
                     }
                   />
+
                   <Input
                     type="number"
                     min="0"
@@ -540,6 +694,7 @@ export function StoreClientFiltersSheet({
                       setDraftPriceMin(event.target.value)
                     }
                   />
+
                   <Input
                     type="number"
                     min="0"
@@ -620,8 +775,9 @@ export function StoreClientFiltersSheet({
                     </span>
 
                     <ChevronDown
-                      className={`ml-2 size-4 transition-transform ${groupDropdownOpen ? 'rotate-180' : ''
-                        }`}
+                      className={`ml-2 size-4 transition-transform ${
+                        groupDropdownOpen ? 'rotate-180' : ''
+                      }`}
                     />
                   </Button>
 
@@ -664,6 +820,7 @@ export function StoreClientFiltersSheet({
                                   )
                                 }
                               />
+
                               <span className="break-words">
                                 {group.groupName}
                               </span>
@@ -731,6 +888,26 @@ export function StoreClientFiltersSheet({
                 label="Updated Date"
                 date={draftUpdatedDate}
                 setDate={setDraftUpdatedDate}
+              />
+
+              <div className="border-b border-border" />
+
+              {/* CREATED BY */}
+              <UserFilter
+                label="Created By"
+                value={draftCreatedBy}
+                onChange={setDraftCreatedBy}
+                users={users}
+                loading={usersLoading}
+              />
+
+              {/* UPDATED BY */}
+              <UserFilter
+                label="Updated By"
+                value={draftUpdatedBy}
+                onChange={setDraftUpdatedBy}
+                users={users}
+                loading={usersLoading}
               />
             </div>
           </ScrollArea>

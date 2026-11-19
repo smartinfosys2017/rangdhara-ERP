@@ -375,7 +375,26 @@ export async function POST(request) {
         { status: 400 },
       );
     }
+    // Validate customFields. 
+    let submittedCustomFields = {};
 
+    if (body.customFields !== undefined) {
+      if (
+        body.customFields === null ||
+        typeof body.customFields !== "object" ||
+        Array.isArray(body.customFields)
+      ) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "customFields must be a valid object.",
+          },
+          { status: 400 },
+        );
+      }
+
+      submittedCustomFields = body.customFields;
+    }
     // 5. Authenticate user
     const user = await getAuthenticatedUser();
 
@@ -433,7 +452,7 @@ export async function POST(request) {
           Description,
           status: body.status ?? true,
           isDefault: body.isDefault ?? false,
-
+          customFields: submittedCustomFields,
           createby: user.id,
           updateby: user.id,
 
@@ -579,7 +598,6 @@ export async function PUT(request) {
         { status: 400 },
       );
     }
-
     // 6. Authenticate user
     const user = await getAuthenticatedUser();
 
@@ -637,7 +655,23 @@ export async function PUT(request) {
         );
       }
     }
-
+    // Validate customFields.
+    if (
+      body.customFields !== undefined &&
+      (
+        body.customFields === null ||
+        typeof body.customFields !== "object" ||
+        Array.isArray(body.customFields)
+      )
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "customFields must be a valid object.",
+        },
+        { status: 400 },
+      );
+    }
     // 9. Update Item Type
     const updated = await prisma.$transaction(async (tx) => {
       if (body.isDefault === true) {
@@ -675,7 +709,13 @@ export async function PUT(request) {
       if (body.isDefault !== undefined) {
         updateData.isDefault = body.isDefault;
       }
-
+      const updatedCustomFields =
+        body.customFields !== undefined
+          ? body.customFields
+          : existing.customFields ?? {};
+      if (body.customFields !== undefined) {
+        updateData.customFields = updatedCustomFields;
+      }
       return tx.ptoductType.update({
         where: { id: body.id },
         data: updateData,

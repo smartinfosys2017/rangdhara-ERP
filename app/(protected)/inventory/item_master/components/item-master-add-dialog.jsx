@@ -42,6 +42,7 @@ export default function ItemMasterAddDialog({ open, closeDialog, onSuccess }) {
   const [taxes, setTaxes] = useState([]);
   const [locations, setLocations] = useState([]);
   const [machines, setMachines] = useState([]);
+  const [itemCondition, setItemCondition] = useState([]);
 
   const [errors, setErrors] = useState({});
 
@@ -56,6 +57,7 @@ export default function ItemMasterAddDialog({ open, closeDialog, onSuccess }) {
     Tax2: "",
     Locationid: "",
     Machineid: "",
+    ItemConditionid: "",
     ApplicableForRelocateLevel: false,
     RelocateLevel: "",
     status: true,
@@ -120,6 +122,7 @@ export default function ItemMasterAddDialog({ open, closeDialog, onSuccess }) {
       loadTaxes();
       loadLocations();
       loadMachines();
+      loadItemCondition();
     }
   }, [open]);
 
@@ -211,7 +214,6 @@ export default function ItemMasterAddDialog({ open, closeDialog, onSuccess }) {
       console.error("LOAD LOCATIONS ERROR", error);
     }
   };
-
   // ============================
   // LOAD MACHINES
   // ============================
@@ -231,6 +233,28 @@ export default function ItemMasterAddDialog({ open, closeDialog, onSuccess }) {
       );
     } catch (error) {
       console.error("LOAD MACHINES ERROR", error);
+    }
+  };
+
+  // ============================
+  // LOAD Item Condition
+  // ============================
+
+  const loadItemCondition = async () => {
+    try {
+      const res = await apiFetch(
+        "/api/inventory/product-type?limit=100&status=active",
+      );
+
+      const json = await res.json();
+
+      setItemCondition(
+        (json.data || []).filter(
+          (itemCondition) => itemCondition.status === true && !itemCondition.deletedAt,
+        ),
+      );
+    } catch (error) {
+      console.error("LOAD Item Condition ERROR", error);
     }
   };
 
@@ -268,11 +292,14 @@ export default function ItemMasterAddDialog({ open, closeDialog, onSuccess }) {
 
     const ItemName = form.ItemName?.trim() || "";
     const Description = form.Description?.trim() || "";
+    const openingBalance = Number(form.openingBalance || 0);
 
     if (!form.ItemGroupid) {
       newErrors.ItemGroupid = "Item Group is required.";
     }
-
+    if (!form.ItemConditionid) {
+      newErrors.ItemConditionid = "Item Condition is required.";
+    }
     if (!ItemName) {
       newErrors.ItemName = "Item Name is required.";
     } else if (ItemName.length > 255) {
@@ -281,6 +308,14 @@ export default function ItemMasterAddDialog({ open, closeDialog, onSuccess }) {
 
     if (!form.Unitid) {
       newErrors.Unitid = "Unit is required.";
+    }
+
+    if (openingBalance > 0 && !form.Locationid && !form.Machineid) {
+      newErrors.Locationid =
+        "Please select either Location or Machine.";
+
+      newErrors.Machineid =
+        "Please select either Location or Machine.";
     }
 
     if (form.ApplicableForRelocateLevel && !form.RelocateLevel?.trim()) {
@@ -295,7 +330,6 @@ export default function ItemMasterAddDialog({ open, closeDialog, onSuccess }) {
 
     if (Object.keys(newErrors).length > 0) {
       showErrorToast("Please check the required fields and character limits.");
-
       return false;
     }
 
@@ -339,6 +373,8 @@ export default function ItemMasterAddDialog({ open, closeDialog, onSuccess }) {
           Locationid: form.Locationid || null,
 
           Machineid: form.Machineid || null,
+
+          ItemConditionid: form.ItemConditionid || null,
 
           status: form.status ?? true,
 
@@ -450,7 +486,7 @@ export default function ItemMasterAddDialog({ open, closeDialog, onSuccess }) {
 
               <div>
                 <label>
-                  Unit (Abbreviation)<span className="text-destructive">*</span>
+                  Unit (Abbreviation) <span className="text-destructive">*</span>
                 </label>
 
                 <Select
@@ -477,18 +513,43 @@ export default function ItemMasterAddDialog({ open, closeDialog, onSuccess }) {
                 )}
               </div>
 
+              {/* OPENING BALANCE */}
+
+              <div>
+                <label>Opening Balance <span className="text-destructive">*</span></label>
+
+                <Input
+                  type="number"
+                  value={form.openingBalance ?? "0"}
+                  onChange={(e) =>
+                    updateField("openingBalance", e.target.value)
+                  }
+                />
+              </div>
               {/* LOCATION */}
 
               <div>
-                <label className="text-sm font-medium">Location</label>
+                <label className="text-sm font-medium">
+                  Location
+                  {Number(form.openingBalance || 0) > 0 && (
+                    <span className="text-destructive"> *</span>
+                  )}
+                </label>
 
                 <Select
                   value={form.Locationid || "none"}
-                  onValueChange={(value) =>
-                    updateField("Locationid", value === "none" ? "" : value)
-                  }
+                  onValueChange={(value) => {
+                    updateField("Locationid", value === "none" ? "" : value);
+                    setErrors((prev) => ({
+                      ...prev,
+                      Locationid: "",
+                      Machineid: "",
+                    }));
+                  }}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger
+                    className={errors.Locationid ? "border-destructive" : ""}
+                  >
                     <SelectValue placeholder="Select Location" />
                   </SelectTrigger>
 
@@ -502,20 +563,38 @@ export default function ItemMasterAddDialog({ open, closeDialog, onSuccess }) {
                     ))}
                   </SelectContent>
                 </Select>
+
+                {errors.Locationid && (
+                  <p className="mt-1 text-sm text-destructive">
+                    {errors.Locationid}
+                  </p>
+                )}
               </div>
 
               {/* MACHINE */}
 
               <div>
-                <label className="text-sm font-medium">Machine</label>
+                <label className="text-sm font-medium">
+                  Machine
+                  {Number(form.openingBalance || 0) > 0 && (
+                    <span className="text-destructive"> *</span>
+                  )}
+                </label>
 
                 <Select
                   value={form.Machineid || "none"}
-                  onValueChange={(value) =>
-                    updateField("Machineid", value === "none" ? "" : value)
-                  }
+                  onValueChange={(value) => {
+                    updateField("Machineid", value === "none" ? "" : value);
+                    setErrors((prev) => ({
+                      ...prev,
+                      Locationid: "",
+                      Machineid: "",
+                    }));
+                  }}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger
+                    className={errors.Machineid ? "border-destructive" : ""}
+                  >
                     <SelectValue placeholder="Select Machine" />
                   </SelectTrigger>
 
@@ -529,26 +608,52 @@ export default function ItemMasterAddDialog({ open, closeDialog, onSuccess }) {
                     ))}
                   </SelectContent>
                 </Select>
+
+                {errors.Machineid && (
+                  <p className="mt-1 text-sm text-destructive">
+                    {errors.Machineid}
+                  </p>
+                )}
               </div>
 
-              {/* OPENING BALANCE */}
+              {/* ItemCondition */}
 
               <div>
-                <label>Opening Balance</label>
+                <label className="text-sm font-medium">Item Condition <span className="text-destructive"> *</span></label>
 
-                <Input
-                  type="number"
-                  value={form.openingBalance ?? "0"}
-                  onChange={(e) =>
-                    updateField("openingBalance", e.target.value)
+                <Select
+                  value={form.ItemConditionid || "none"}
+                  onValueChange={(value) =>
+                    updateField("ItemConditionid", value === "none" ? "" : value)
                   }
-                />
+                >
+                  <SelectTrigger
+                    className={errors.ItemConditionid ? "border-destructive" : ""}
+                  >
+                    <SelectValue placeholder="Select Item Condition" />
+                  </SelectTrigger>
+
+                  <SelectContent>
+                    <SelectItem value="none">Select Item Condition</SelectItem>
+                    {itemCondition.map((item) => (
+                      <SelectItem key={item.id} value={String(item.id)}>
+                        {item.ProductType}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {errors.ItemConditionid && (
+                  <p className="text-sm text-destructive">
+                    {errors.ItemConditionid}
+                  </p>
+                )}
               </div>
 
               {/* RATE */}
 
               <div>
-                <label>Rate (₹)</label>
+                <label>Rate (₹) <span className="text-destructive">*</span></label>
 
                 <Input
                   type="number"
@@ -698,7 +803,7 @@ export default function ItemMasterAddDialog({ open, closeDialog, onSuccess }) {
 
               <div>
                 <label>
-                  Default <span className="text-destructive">*</span>
+                  Is Default <span className="text-destructive">*</span>
                 </label>
 
                 <Select
