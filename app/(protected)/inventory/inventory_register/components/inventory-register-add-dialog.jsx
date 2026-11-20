@@ -309,7 +309,7 @@ export default function IssueReceiptAddDialog({
         Balance: initialBalance,
       }));
     } catch (error) {
-      console.error("ISSUE/RECEIPT DROPDOWN ERROR", error);
+      console.error("Stock Movement DROPDOWN ERROR", error);
       showErrorToast(error.message || "Failed loading dropdown data");
     } finally {
       setDropdownLoading(false);
@@ -485,17 +485,17 @@ export default function IssueReceiptAddDialog({
       const result = await response.json();
 
       if (!response.ok || !result.success) {
-        throw new Error(result.message || "Failed creating Issue/Receipt");
+        throw new Error(result.message || "Failed creating Stock Movement");
       }
 
-      showSuccessToast("Issue/Receipt created successfully");
+      showSuccessToast("Stock Movement created successfully");
 
       onSuccess?.(result.data);
       resetForm();
       closeDialog?.();
     } catch (error) {
-      console.error("CREATE ISSUE/RECEIPT ERROR", error);
-      showErrorToast(error.message || "Failed creating Issue/Receipt");
+      console.error("CREATE Stock Movement ERROR", error);
+      showErrorToast(error.message || "Failed creating Stock Movement");
     } finally {
       setLoading(false);
     }
@@ -522,7 +522,7 @@ export default function IssueReceiptAddDialog({
           </DialogTitle>
 
           <DialogDescription>
-            Enter the issue/receipt details below.
+            Enter the Stock Movement details below.
           </DialogDescription>
         </DialogHeader>
         <ScrollArea className="grow min-h-0 flex flex-col h-full max-h-[60vh] overflow-hidden">
@@ -858,7 +858,7 @@ export default function IssueReceiptAddDialog({
             onClick={handleSubmit}
             disabled={loading || dropdownLoading || status === "loading"}
           >
-            {loading ? "Saving..." : "Save Issue/Receipt"}
+            {loading ? "Saving..." : "Save Stock Movement"}
           </Button>
         </DialogFooter>
       </DialogContent>

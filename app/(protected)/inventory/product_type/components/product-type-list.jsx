@@ -1390,10 +1390,10 @@ const ProductTypeList = () => {
         accessorKey: "id",
         id: "id",
         header: ({ column }) => (
-          <DataGridColumnHeader title="#" column={column} visibility />
+          <DataGridColumnHeader title="ID" column={column} visibility />
         ),
         cell: ({ row }) => (
-          <span className="font-medium">
+          <span>
             #{row.original?.id ? String(row.original.id).substring(0, 8) : "-"}
           </span>
         ),
@@ -1499,6 +1499,31 @@ const ProductTypeList = () => {
         },
       },
       {
+        accessorKey: "createdBy",
+        id: "createdBy",
+        header: ({ column }) => (
+          <DataGridColumnHeader
+            title="Created By"
+            column={column}
+            visibility
+          />
+        ),
+        cell: ({ row }) => (
+          <span className="font-medium">
+            {row.original?.createdBy?.name ||
+              row.original?.createdByName ||
+              row.original?.createdBy ||
+              "-"}
+          </span>
+        ),
+        size: 180,
+        enableSorting: false,
+        meta: {
+          headerTitle: "Created By",
+          skeleton: <Skeleton className="h-7 w-28" />,
+        },
+      },
+      {
         accessorKey: "updatedAt",
         id: "updatedAt",
         header: ({ column }) => (
@@ -1524,31 +1549,7 @@ const ProductTypeList = () => {
           skeleton: <Skeleton className="h-7 w-24" />,
         },
       },
-      {
-        accessorKey: "createdBy",
-        id: "createdBy",
-        header: ({ column }) => (
-          <DataGridColumnHeader
-            title="Created By"
-            column={column}
-            visibility
-          />
-        ),
-        cell: ({ row }) => (
-          <span className="font-medium">
-            {row.original?.createdBy?.name ||
-              row.original?.createdByName ||
-              row.original?.createdBy ||
-              "-"}
-          </span>
-        ),
-        size: 180,
-        enableSorting: false,
-        meta: {
-          headerTitle: "Created By",
-          skeleton: <Skeleton className="h-7 w-28" />,
-        },
-      },
+
       {
         accessorKey: "updatedBy",
         id: "updatedBy",

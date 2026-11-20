@@ -466,7 +466,7 @@ export default function CustomerSyncEditDialog({
               <div className="mt-3">
 
                 <p className="text-sm font-medium">
-                  Created At
+                  Created Date
                 </p>
 
                 <p className="text-xs text-muted-foreground">
@@ -482,7 +482,7 @@ export default function CustomerSyncEditDialog({
               <div className="mt-3">
 
                 <p className="text-sm font-medium">
-                  Updated At
+                  Updated Date
                 </p>
 
                 <p className="text-xs text-muted-foreground">

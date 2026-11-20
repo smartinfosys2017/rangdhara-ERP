@@ -642,7 +642,7 @@ export function StoreClientFiltersSheet({
 
       <SheetContent className="sm:w-[320px] sm:max-w-none inset-5 start-auto h-auto rounded-lg p-0 [&_[data-slot=sheet-close]]:top-4.5 [&_[data-slot=sheet-close]]:end-5">
         <SheetHeader className="border-b border-border px-5 py-3.5">
-          <SheetTitle>Inventory Filters</SheetTitle>
+          <SheetTitle>Stock Movement Filters</SheetTitle>
         </SheetHeader>
 
         <SheetBody className="min-h-0 flex-1 py-0">

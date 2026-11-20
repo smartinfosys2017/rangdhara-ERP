@@ -1336,7 +1336,7 @@ export default function ItemMasterList() {
           const displayId = id !== null && id !== undefined ? String(id) : "-";
 
           return (
-            <span className="font-medium">
+            <span>
               #{displayId.length > 8 ? displayId.substring(0, 8) : displayId}
             </span>
           );

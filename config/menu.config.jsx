@@ -467,7 +467,7 @@ export const MENU_SIDEBAR = [
         permission: "item_master.list",
       },
       {
-        title: "Inventory Issue/Receipt",
+        title: "Stock Movement",
         path: "/inventory/issue_receipt",
         permission: "issue_receipt.list",
       },
@@ -487,7 +487,7 @@ export const MENU_SIDEBAR = [
         permission: "machinemaster.list",
       },
       {
-        title: "Location",
+        title: "Warehouse",
         path: "/inventory/location",
         permission: "location.list",
       },
@@ -1271,7 +1271,7 @@ export const MENU_SIDEBAR_COMPACT = [
         permission: "item_master.list",
       },
       {
-        title: "Inventory Issue/Receipt",
+        title: "Stock Movement",
         path: "/inventory/issue_receipt",
         permission: "issue_receipt.list",
       },
@@ -1291,7 +1291,7 @@ export const MENU_SIDEBAR_COMPACT = [
         permission: "machinemaster.list",
       },
       {
-        title: "Location",
+        title: "Warehouse",
         path: "/inventory/location",
         permission: "location.list",
       },

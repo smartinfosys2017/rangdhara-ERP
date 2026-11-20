@@ -107,7 +107,7 @@ const taxViewDialog = ({
           {/* CREATED */}
 
           <InfoItem
-            label="Created At"
+            label="Created Date"
             value={
               tax.createdAt
                 ? formatDate(
@@ -122,7 +122,7 @@ const taxViewDialog = ({
           {/* UPDATED */}
 
           <InfoItem
-            label="Updated At"
+            label="Updated Date"
             value={
               tax.updatedAt
                 ? formatDate(

@@ -95,7 +95,7 @@ const CountryViewDialog = ({ open, closeDialog, Country }) => {
                 {/* CREATED */}
 
                 <InfoItem
-                  label="Created At"
+                  label="Created Date"
                   value={
                     Country.createdAt ? formatDate(new Date(Country.createdAt)) : "-"
                   }
@@ -104,7 +104,7 @@ const CountryViewDialog = ({ open, closeDialog, Country }) => {
                 {/* UPDATED */}
 
                 <InfoItem
-                  label="Updated At"
+                  label="Updated Date"
                   value={
                     Country.updatedAt ? formatDate(new Date(Country.updatedAt)) : "-"
                   }

@@ -187,7 +187,7 @@ const PaymentMethodViewDialog = ({
           {/* CREATED */}
 
           <InfoItem
-            label="Created At"
+            label="Created Date"
             value={
               payment.createdAt
                 ? formatDate(
@@ -202,7 +202,7 @@ const PaymentMethodViewDialog = ({
           {/* UPDATED */}
 
           <InfoItem
-            label="Updated At"
+            label="Updated Date"
             value={
               payment.updatedAt
                 ? formatDate(

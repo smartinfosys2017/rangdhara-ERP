@@ -141,8 +141,8 @@ const createLocationNotification = async ({
                     locationId !== null && locationId !== undefined
                         ? String(locationId)
                         : null,
-                entityType: "location",
-                entityName: locationName || "Location",
+                entityType: "warehouse",
+                entityName: locationName || "Warehouse",
                 url: "/inventory/location",
             }),
             cache: "no-store",
@@ -166,7 +166,7 @@ const createLocationNotification = async ({
 
         return result;
     } catch (error) {
-        console.error("LOCATION NOTIFICATION ERROR:", error);
+        console.error("Warehouse NOTIFICATION ERROR:", error);
         return null;
     }
 };
@@ -368,7 +368,7 @@ const LocationList = () => {
 
             return result;
         } catch (error) {
-            console.error("LOCATION SYNC ERROR:", error);
+            console.error("Warehouse SYNC ERROR:", error);
             showError(error.message);
             return null;
         } finally {
@@ -424,7 +424,7 @@ const LocationList = () => {
     }, []);
 
     // ===================================================
-    // FETCH LOCATIONS
+    // FETCH Warehouse
     // ===================================================
 
     const fetchLocations = useCallback(async () => {
@@ -455,7 +455,7 @@ const LocationList = () => {
         const result = await response.json();
 
         if (!response.ok || !result.success) {
-            throw new Error(result.message || "Failed loading locations");
+            throw new Error(result.message || "Failed loading warehouse");
         }
 
         return result;
@@ -566,7 +566,7 @@ const LocationList = () => {
         const result = await response.json();
 
         if (!response.ok || !result.success) {
-            throw new Error(result.message || "Failed to load locations");
+            throw new Error(result.message || "Failed to load warehouse");
         }
 
         return result.data || [];
@@ -591,8 +591,8 @@ const LocationList = () => {
     const buildLocationExcel = useCallback((items) => {
         const rows = items.map((item) => ({
             ID: item.id,
-            "Location Name": item.locationName || "",
-            "Location Code": item.locationCode || "",
+            "Warehouse Name": item.locationName || "",
+            "Warehouse Code": item.locationCode || "",
             Status: item.status ? "Active" : "Inactive",
             "Created Date": formatDate(item.createdAt),
             "Created By": item.createdByName || "-",
@@ -621,9 +621,9 @@ const LocationList = () => {
     }, []);
 
     const downloadLocationExcel = useCallback(
-        (items, filename = "locations.xlsx") => {
+        (items, filename = "Warehouse.xlsx") => {
             if (!items.length) {
-                showError("No locations to export");
+                showError("No warehouse to export");
                 return false;
             }
 
@@ -637,14 +637,14 @@ const LocationList = () => {
     const handleExportExcel = useCallback(async () => {
         try {
             toast.loading("Preparing Excel export...", {
-                id: "location-export",
+                id: "warehouse-export",
             });
 
             const items = await getLocationReportRows();
 
             if (!items.length) {
                 showError("No locations to export", {
-                    id: "location-export",
+                    id: "warehouse-export",
                 });
 
                 return;
@@ -652,7 +652,7 @@ const LocationList = () => {
 
             downloadLocationExcel(items);
 
-            showSuccess(`${items.length} location(s) exported.`, "location-export");
+            showSuccess(`${items.length} warehouse(s) exported.`, "warehouse-export");
         } catch (error) {
             console.error("LOCATION EXPORT ERROR:", error);
             showError(error.message);
@@ -701,7 +701,7 @@ const LocationList = () => {
                 <!doctype html>
                 <html>
                     <head>
-                        <title>Locations Report</title>
+                        <title>Warehouse Report</title>
                         <meta charset="utf-8">
                         <style>
                             body {
@@ -735,7 +735,7 @@ const LocationList = () => {
                         </style>
                     </head>
                     <body>
-                        <h1>Locations Report</h1>
+                        <h1>Warehouse Report</h1>
                         <p>Generated: ${escapeHtml(new Date().toLocaleString())}</p>
                         <p>Total records: ${items.length}</p>
 
@@ -743,8 +743,8 @@ const LocationList = () => {
                             <thead>
                                 <tr>
                                     <th>ID</th>
-                                    <th>Location Name</th>
-                                    <th>Location Code</th>
+                                    <th>Warehouse Name</th>
+                                    <th>Warehouse Code</th>
                                     <th>Status</th>
                                     <th>Created Date</th>
                                     <th>Created By</th>
@@ -767,7 +767,7 @@ const LocationList = () => {
 
             printWindow.document.close();
         } catch (error) {
-            console.error("LOCATION PRINT ERROR:", error);
+            console.error("Warehouse PRINT ERROR:", error);
             showError(error.message);
         }
     }, [getLocationReportRows]);
@@ -825,7 +825,7 @@ const LocationList = () => {
     ]);
 
     // ===================================================
-    // DELETE LOCATION
+    // DELETE Warehouse
     // ===================================================
 
     const handleDelete = useCallback((item) => {
@@ -855,12 +855,12 @@ const LocationList = () => {
                 throw new Error(result.message || "Delete failed");
             }
 
-            showSuccess("Location deleted successfully.");
+            showSuccess("Warehouse deleted successfully.");
 
             await createLocationNotification({
                 action: "deleted",
-                title: "Location Deleted",
-                message: `${selectedLocation.locationName} location has been deleted.`,
+                title: "Warehouse Deleted",
+                message: `${selectedLocation.locationName} warehouse has been deleted.`,
                 locationId: selectedLocation.id,
                 locationName: selectedLocation.locationName,
             });
@@ -876,7 +876,7 @@ const LocationList = () => {
             await refreshLocations();
             await syncInventoryLocations();
         } catch (error) {
-            console.error("LOCATION DELETE ERROR:", error);
+            console.error("Warehouse DELETE ERROR:", error);
             showError(error.message || "Delete failed");
         } finally {
             setDeleteLoading(false);
@@ -884,7 +884,7 @@ const LocationList = () => {
     }, [selectedLocation, refreshLocations, syncInventoryLocations]);
 
     // ===================================================
-    // EXISTING LOCATION CODES AND NAMES
+    // EXISTING Warehouse CODES AND NAMES
     // ===================================================
 
     const getExistingLocations = useCallback(async () => {
@@ -902,14 +902,14 @@ const LocationList = () => {
         const result = await response.json();
 
         if (!response.ok || !result.success) {
-            throw new Error(result.message || "Unable to check existing locations.");
+            throw new Error(result.message || "Unable to check existing warehouse.");
         }
 
         return result.data || [];
     }, []);
 
     // ===================================================
-    // COPY LOCATION
+    // COPY Warehouse
     // ===================================================
 
     const handleCopyLocation = useCallback(
@@ -918,7 +918,7 @@ const LocationList = () => {
                 const originalName = String(item.locationName || "").trim();
 
                 if (!originalName) {
-                    showError("Location name is missing.");
+                    showError("Warehouse name is missing.");
                     return;
                 }
 
@@ -940,7 +940,7 @@ const LocationList = () => {
                     ),
                 );
 
-                // Generate unique location name.
+                // Generate unique warehouse name.
                 let copiedName = `${originalName} (Copy)`;
                 let counter = 2;
 
@@ -949,7 +949,7 @@ const LocationList = () => {
                     counter++;
                 }
 
-                // Generate a new unique random location code.
+                // Generate a new unique random warehouse code.
                 let copiedCode = generateLocationCode();
 
                 while (existingCodes.has(copiedCode.toLowerCase())) {
@@ -961,7 +961,7 @@ const LocationList = () => {
                 setCopyLocationCode(copiedCode);
                 setCopyDialogOpen(true);
             } catch (error) {
-                console.error("OPEN LOCATION COPY ERROR:", error);
+                console.error("OPEN Warehouse COPY ERROR:", error);
                 showError(error.message);
             }
         },
@@ -970,7 +970,7 @@ const LocationList = () => {
 
     const handleConfirmCopyLocation = useCallback(async () => {
         if (!copySourceItem?.id) {
-            showError("Please select a location to copy.");
+            showError("Please select a warehouse to copy.");
             return;
         }
 
@@ -978,13 +978,13 @@ const LocationList = () => {
         const finalCode = copyLocationCode.trim();
 
         if (!finalName || !finalCode) {
-            showError("Location name and location code are required.");
+            showError("Warehouse name and Warehouse code are required.");
 
             return;
         }
 
         if (finalName.length > 255 || finalCode.length > 25) {
-            showError("Location name or code exceeds the allowed character limit.");
+            showError("Warehouse name or code exceeds the allowed character limit.");
 
             return;
         }
@@ -1009,11 +1009,11 @@ const LocationList = () => {
             );
 
             if (nameExists) {
-                throw new Error("This location name already exists.");
+                throw new Error("This warehouse name already exists.");
             }
 
             if (codeExists) {
-                throw new Error("This location code already exists.");
+                throw new Error("This warehouse code already exists.");
             }
 
             const response = await apiFetch("/api/inventory/location", {
@@ -1031,14 +1031,14 @@ const LocationList = () => {
             const result = await response.json();
 
             if (!response.ok || !result.success) {
-                throw new Error(result.message || "Failed to copy location.");
+                throw new Error(result.message || "Failed to copy warehouse.");
             }
 
-            showSuccess("Location copied successfully.");
+            showSuccess("Warehouse copied successfully.");
 
             await createLocationNotification({
                 action: "created",
-                title: "Location Copied",
+                title: "Warehouse Copied",
                 message: `${finalName} was copied from ${copySourceItem.locationName}.`,
                 locationId: result.data?.id,
                 locationName: finalName,
@@ -1052,7 +1052,7 @@ const LocationList = () => {
             await refreshLocations();
             await syncInventoryLocations();
         } catch (error) {
-            console.error("LOCATION COPY ERROR:", error);
+            console.error("Warehouse COPY ERROR:", error);
             showError(error.message);
         } finally {
             setCopyLoading(false);
@@ -1067,7 +1067,7 @@ const LocationList = () => {
     ]);
 
     // ===================================================
-    // SINGLE LOCATION STATUS
+    // SINGLE Warehouse STATUS
     // ===================================================
 
     const handleToggleLocationStatus = useCallback(
@@ -1094,13 +1094,13 @@ const LocationList = () => {
 
                 showSuccess(
                     `${item.locationName} marked ${nextStatus ? "active" : "inactive"}`,
-                    "location-status",
+                    "warehouse-status",
                 );
 
                 await refreshLocations();
                 await syncInventoryLocations();
             } catch (error) {
-                console.error("LOCATION STATUS ERROR:", error);
+                console.error("Warehouse STATUS ERROR:", error);
                 showError(error.message);
             }
         },
@@ -1114,12 +1114,12 @@ const LocationList = () => {
     const handleBulkStatus = useCallback(
         async (status) => {
             if (!selectedIds.length) {
-                showError("Select at least one location");
+                showError("Select at least one warehouse");
                 return;
             }
 
             if (!(canManage || canEdit)) {
-                showError("You do not have permission to change location status");
+                showError("You do not have permission to change warehouse status");
 
                 return;
             }
@@ -1147,8 +1147,8 @@ const LocationList = () => {
                 }
 
                 showSuccess(
-                    `${result.count ?? idsToUpdate.length} location(s) marked ${status ? "active" : "inactive"}`,
-                    "location-status-update",
+                    `${result.count ?? idsToUpdate.length} warehouse(s) marked ${status ? "active" : "inactive"}`,
+                    "warehouse-status-update",
                 );
 
                 setActiveDialogOpen(false);
@@ -1158,7 +1158,7 @@ const LocationList = () => {
                 await refreshLocations();
                 await syncInventoryLocations();
             } catch (error) {
-                console.error("BULK LOCATION STATUS ERROR:", error);
+                console.error("BULK Warehouse STATUS ERROR:", error);
                 showError(error.message);
             } finally {
                 setBulkLoading(false);
@@ -1173,12 +1173,12 @@ const LocationList = () => {
 
     const handleBulkDelete = useCallback(() => {
         if (!selectedIds.length) {
-            showError("Select at least one location");
+            showError("Select at least one warehouse");
             return;
         }
 
         if (!canDelete) {
-            showError("You do not have permission to delete locations");
+            showError("You do not have permission to delete warehouse");
 
             return;
         }
@@ -1211,8 +1211,8 @@ const LocationList = () => {
             }
 
             showSuccess(
-                `${result.count ?? idsToDelete.length} location(s) deleted`,
-                "location-delete",
+                `${result.count ?? idsToDelete.length} warehouse(s) deleted`,
+                "warehouse-delete",
             );
 
             setBulkDeleteDialogOpen(false);
@@ -1221,7 +1221,7 @@ const LocationList = () => {
             await refreshLocations();
             await syncInventoryLocations();
         } catch (error) {
-            console.error("BULK LOCATION DELETE ERROR:", error);
+            console.error("BULK Warehouse DELETE ERROR:", error);
             showError(error.message);
         } finally {
             setBulkLoading(false);
@@ -1236,15 +1236,15 @@ const LocationList = () => {
         setSelectedRecipientEmails([]);
         setAttachExcel(true);
 
-        setEmailSubject("Locations Report");
+        setEmailSubject("Warehouse Report");
 
         setEmailMessage(
             [
                 "Dear Team,",
                 "",
-                "Please find the Locations report for your review.",
+                "Please find the Warehouse report for your review.",
                 "",
-                "The report includes the location name, location code, status, and creation and update dates.",
+                "The report includes the warehouse name, warehouse code, status, and creation and update dates.",
                 "",
                 "Please review the information and let us know if any corrections are required.",
                 "",
@@ -1355,12 +1355,12 @@ const LocationList = () => {
                 attachExcel
                     ? "Email sent successfully with the Excel attachment."
                     : "Email sent successfully.",
-                "location-email",
+                "warehouse-email",
             );
 
             setEmailDialogOpen(false);
         } catch (error) {
-            console.error("LOCATION EMAIL ERROR:", error);
+            console.error("Warehouse EMAIL ERROR:", error);
             showError(error.message);
         } finally {
             setEmailSending(false);
@@ -1536,7 +1536,7 @@ const LocationList = () => {
                 id: "id",
 
                 header: ({ column }) => (
-                    <DataGridColumnHeader title="#" column={column} visibility />
+                    <DataGridColumnHeader title="ID" column={column} visibility />
                 ),
 
                 cell: ({ row }) => (
@@ -1545,30 +1545,13 @@ const LocationList = () => {
 
                 size: 120,
             },
-            {
-                accessorKey: "locationCode",
-                id: "locationCode",
-
-                header: ({ column }) => (
-                    <DataGridColumnHeader
-                        title="Location Code"
-                        column={column}
-                        visibility
-                    />
-                ),
-
-                cell: ({ row }) => <span>{row.original.locationCode || "-"}</span>,
-
-                size: 180,
-            },
-
-            {
+             {
                 accessorKey: "locationName",
                 id: "locationName",
 
                 header: ({ column }) => (
                     <DataGridColumnHeader
-                        title="Location Name"
+                        title="Warehouse Name"
                         column={column}
                         visibility
                     />
@@ -1580,7 +1563,22 @@ const LocationList = () => {
 
                 size: 220,
             },
+            {
+                accessorKey: "locationCode",
+                id: "locationCode",
 
+                header: ({ column }) => (
+                    <DataGridColumnHeader
+                        title="Warehouse Code"
+                        column={column}
+                        visibility
+                    />
+                ),
+
+                cell: ({ row }) => <span>{row.original.locationCode || "-"}</span>,
+
+                size: 180,
+            },
             {
                 accessorKey: "status",
                 id: "status",
@@ -1822,7 +1820,7 @@ const LocationList = () => {
 
                     <Input
                         type="text"
-                        placeholder="Search location"
+                        placeholder="Search warehouse"
                         value={searchInput}
                         onChange={(event) => setSearchInput(event.target.value)}
                         onKeyDown={(event) => {
@@ -1864,7 +1862,7 @@ const LocationList = () => {
                     </TooltipTrigger>
 
                     <TooltipContent>
-                        <p>Search by location name or location code.</p>
+                        <p>Search by warehouse name or warehouse code.</p>
                     </TooltipContent>
                 </Tooltip>
             </div>
@@ -1953,7 +1951,7 @@ const LocationList = () => {
                 {canManage && (
                     <Button type="button" onClick={() => setAddDialogOpen(true)}>
                         <Plus className="mr-2 size-4" />
-                        Add Location
+                        Add Warehouse
                     </Button>
                 )}
 
@@ -1995,7 +1993,7 @@ const LocationList = () => {
                         <h3 className="text-lg font-semibold">Access Denied</h3>
 
                         <p className="mt-1 text-sm text-muted-foreground">
-                            You do not have permission to view Location.
+                            You do not have permission to view Warehouse.
                         </p>
                     </div>
                 </CardHeader>
@@ -2039,7 +2037,7 @@ const LocationList = () => {
                 </Card>
             </DataGrid>
 
-            {/* ADD LOCATION */}
+            {/* ADD warehouse */}
             <LocationAddDialog
                 open={addDialogOpen}
                 closeDialog={() => setAddDialogOpen(false)}
@@ -2048,7 +2046,7 @@ const LocationList = () => {
 
                     await createLocationNotification({
                         action: "created",
-                        title: "New Location Created",
+                        title: "New Warehouse Created",
                         message: `${newLocation?.locationName} has been created.`,
                         locationId: newLocation?.id,
                         locationName: newLocation?.locationName,
@@ -2059,7 +2057,7 @@ const LocationList = () => {
                 }}
             />
 
-            {/* VIEW LOCATION */}
+            {/* VIEW warehouse */}
             <LocationViewDialog
                 open={viewDialogOpen}
                 Location={selectedLocation}
@@ -2083,7 +2081,7 @@ const LocationList = () => {
 
                     await createLocationNotification({
                         action: "updated",
-                        title: "Location Updated",
+                        title: "Warehouse Updated",
                         message: `${name} has been updated.`,
                         locationId: updatedLocation?.id || selectedLocation?.id,
                         locationName: name,
@@ -2094,7 +2092,7 @@ const LocationList = () => {
                 }}
             />
 
-            {/* DELETE LOCATION */}
+            {/* DELETE Warehouse */}
             <LocationDeleteDialog
                 open={deleteDialogOpen}
                 Location={selectedLocation}
@@ -2106,7 +2104,7 @@ const LocationList = () => {
                 }}
             />
 
-            {/* COPY LOCATION */}
+            {/* COPY Warehouse */}
             <Dialog
                 open={copyDialogOpen}
                 onOpenChange={(open) => {
@@ -2123,10 +2121,10 @@ const LocationList = () => {
             >
                 <DialogContent className="sm:max-w-md">
                     <DialogHeader>
-                        <DialogTitle>Copy Location</DialogTitle>
+                        <DialogTitle>Copy Warehouse</DialogTitle>
 
                         <DialogDescription>
-                            Enter a unique location name and code for the copied location.
+                            Enter a unique warehouse name and code for the copied warehouse.
                         </DialogDescription>
                     </DialogHeader>
 
@@ -2139,18 +2137,18 @@ const LocationList = () => {
                     >
                         <div className="space-y-2">
                             <label
-                                htmlFor="copy-location-name"
+                                htmlFor="copy-warehouse-name"
                                 className="text-sm font-medium"
                             >
-                                Location Name
+                                Warehouse Name
                                 <span className="text-destructive"> *</span>
                             </label>
 
                             <Input
-                                id="copy-location-name"
+                                id="copy-warehouse-name"
                                 value={copyLocationName}
                                 onChange={(event) => setCopyLocationName(event.target.value)}
-                                placeholder="Enter location name"
+                                placeholder="Enter warehouse name"
                                 maxLength={255}
                                 required
                                 disabled={copyLoading}
@@ -2165,19 +2163,19 @@ const LocationList = () => {
 
                         <div className="space-y-2">
                             <label
-                                htmlFor="copy-location-code"
+                                htmlFor="copy-warehouse-code"
                                 className="text-sm font-medium"
                             >
-                                Location Code
+                                Warehouse Code
                                 <span className="text-destructive"> *</span>
                             </label>
 
                             <Input
-                                id="copy-location-code"
+                                id="copy-warehouse-code"
                                 value={copyLocationCode}
 
                                 readOnly
-                                placeholder="Enter location code"
+                                placeholder="Enter warehouse code"
                                 maxLength={25}
                                 required
                                 disabled={copyLoading}
@@ -2417,14 +2415,14 @@ const LocationList = () => {
                                 {/* SUBJECT */}
                                 <div className="space-y-2">
                                     <label
-                                        htmlFor="location-subject"
+                                        htmlFor="warehouse-subject"
                                         className="text-sm font-medium"
                                     >
                                         Subject
                                     </label>
 
                                     <Input
-                                        id="location-subject"
+                                        id="warehouse-subject"
                                         required
                                         value={emailSubject}
                                         onChange={(event) => setEmailSubject(event.target.value)}
@@ -2449,7 +2447,7 @@ const LocationList = () => {
                                             </span>
 
                                             <span className="mt-1 block text-xs text-muted-foreground">
-                                                Attach the location report as an Excel file (.xlsx).
+                                                Attach the warehouse report as an Excel file (.xlsx).
                                             </span>
                                         </span>
 
@@ -2460,14 +2458,14 @@ const LocationList = () => {
                                 {/* MESSAGE */}
                                 <div className="space-y-2">
                                     <label
-                                        htmlFor="location-message"
+                                        htmlFor="warehouse-message"
                                         className="text-sm font-medium"
                                     >
                                         Message
                                     </label>
 
                                     <Textarea
-                                        id="location-message"
+                                        id="warehouse-message"
                                         required
                                         rows={5}
                                         value={emailMessage}

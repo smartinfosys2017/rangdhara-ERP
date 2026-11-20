@@ -864,26 +864,26 @@ const permissions = [
         description: 'Permission to delete item records.',
     },
 
-    // Issue/Receipt
+    // Stock Movement
     {
         slug: 'issue_receipt.view',
-        name: 'View Issue/Receipts',
-        description: 'Permission to view Issue/Receipts.',
+        name: 'View Stock Movements',
+        description: 'Permission to view Stock Movements.',
     },
     {
         slug: 'issue_receipt.manage',
-        name: 'Manage Issue/Receipts',
-        description: 'Permission to create and manage Issue/Receipts.',
+        name: 'Manage Stock Movements',
+        description: 'Permission to create and manage Stock Movements.',
     },
     {
         slug: 'issue_receipt.edit',
-        name: 'Edit Issue/Receipt',
-        description: 'Permission to edit Issue/Receipts.',
+        name: 'Edit Stock Movement',
+        description: 'Permission to edit Stock Movements.',
     },
     {
         slug: 'issue_receipt.delete',
-        name: 'Delete Issue/Receipt',
-        description: 'Permission to delete Issue/Receipts.',
+        name: 'Delete Stock Movement',
+        description: 'Permission to delete Stock Movements.',
     },
 
     // System Update

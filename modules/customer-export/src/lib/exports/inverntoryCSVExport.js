@@ -18,8 +18,8 @@ export default class InventoryCSVExport extends CSVExport {
       "Relocate Level",
       "Status",
       "Default",
-      "Created At",
-      "Updated At",
+      "Created Date",
+      "Updated Date",
       "Deleted At",
       "Last Sync At"
     ]);

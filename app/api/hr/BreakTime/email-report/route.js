@@ -364,8 +364,8 @@ export async function POST(request) {
         "Break Type": breakTime.breakType ?? "",
         "Flexible": breakTime.isFlexible ? "Yes" : "No",
         "Status": breakTime.status ? "Active" : "Inactive",
-        "Created At": formatDate(breakTime.createdAt),
-        "Updated At": formatDate(breakTime.updatedAt),
+        "Created Date": formatDate(breakTime.createdAt),
+        "Updated Date": formatDate(breakTime.updatedAt),
       }));
 
       const worksheet = XLSX.utils.json_to_sheet(rows);

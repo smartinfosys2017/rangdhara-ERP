@@ -31,13 +31,13 @@ const LocationsDeleteDialog = ({
             <span className="flex size-9 items-center justify-center rounded-full bg-destructive/10">
               <Trash2 className="size-5 text-destructive" />
             </span>
-            Delete Location
+            Delete Warehouse
           </DialogTitle>
 
           <DialogDescription>
             Are you sure you want to delete{" "}
             <strong className="text-foreground">
-              {selectedCount} location
+              {selectedCount} warehouse
               {selectedCount !== 1 ? "s" : ""}
             </strong>
             ? This action cannot be undone.

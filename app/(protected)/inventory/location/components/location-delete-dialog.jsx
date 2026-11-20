@@ -33,17 +33,17 @@ export default function LocationDeleteDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-destructive">
             <Trash2 className="h-5 w-5" />
-            Delete Location
+            Delete Warehouse
           </DialogTitle>
 
           <DialogDescription>
-            Are you sure you want to delete this location?
+            Are you sure you want to delete this warehouse?
           </DialogDescription>
         </DialogHeader>
 
         <div className="rounded-md border bg-muted/30 p-4">
           <p className="mt-1 text-sm text-muted-foreground">
-            Location Code: {Location?.locationCode || "-"}
+            Warehouse Code: {Location?.locationCode || "-"}
           </p>
 
           <p className="mt-2 text-sm text-muted-foreground">

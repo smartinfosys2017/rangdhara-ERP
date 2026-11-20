@@ -68,7 +68,7 @@ const DepartmentViewDialog = ({
           {/* CREATED */}
           <div className="space-y-1">
             <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Created At
+              Created Date
             </div>
 
             <div className="text-sm font-medium">
@@ -85,7 +85,7 @@ const DepartmentViewDialog = ({
           {/* UPDATED */}
           <div className="space-y-1">
             <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Updated At
+              Updated Date
             </div>
 
             <div className="text-sm font-medium">

@@ -102,6 +102,15 @@ const showErrorToast = (message) => {
     { position: "top-center" },
   );
 };
+const formatDate = (value) => {
+    if (!value) return "-";
+
+    const date = new Date(value);
+
+    return Number.isNaN(date.getTime())
+        ? "-"
+        : date.toLocaleDateString();
+};
 const createIssueReceiptNotification = async ({
   action,
   title,
@@ -123,7 +132,7 @@ const createIssueReceiptNotification = async ({
             ? String(issueReceiptId)
             : null,
         entityType: "issue_receipt",
-        entityName: issueReceiptName || "Issue/Receipt",
+        entityName: issueReceiptName || "Stock Movement",
         url: "/inventory/issue_receipt",
       }),
       cache: "no-store",
@@ -146,7 +155,7 @@ const createIssueReceiptNotification = async ({
 
     return result;
   } catch (error) {
-    console.error("Issue/Receipt NOTIFICATION ERROR", error);
+    console.error("Stock Movement NOTIFICATION ERROR", error);
     return null;
   }
 };
@@ -154,20 +163,6 @@ const createIssueReceiptNotification = async ({
 const getDisplayValue = (value) => {
   if (value === null || value === undefined || value === "") return "-";
   return String(value);
-};
-
-const formatDate = (value) => {
-  if (!value) return "-";
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) return "-";
-
-  return date.toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
 };
 
 const formatPrice = (value) => {
@@ -183,20 +178,12 @@ const formatPrice = (value) => {
 // Short label used in notifications and messages.
 const getReceiptLabel = (item) => {
   if (item?.ReciptChallanNo) {
-    return `Issue/Receipt ${String(item.ReciptChallanNo).substring(0, 18)}`;
+    return `Stock Movement ${String(item.ReciptChallanNo).substring(0, 18)}`;
   }
 
-  if (item?.id) return `Issue/Receipt #${String(item.id).substring(0, 8)}`;
+  if (item?.id) return `Stock Movement #${String(item.id).substring(0, 8)}`;
 
-  return "Issue/Receipt";
-};
-
-const reportDate = (value) => {
-  if (!value) return "";
-
-  const date = new Date(value);
-
-  return Number.isNaN(date.getTime()) ? "" : date.toLocaleDateString();
+  return "Stock Movement";
 };
 
 // One definition drives both the Excel export and the print report.
@@ -207,7 +194,7 @@ const REPORT_COLUMNS = [
   { label: "Item", width: 28, get: (r) => r.ItemMasterName },
   { label: "Item Type", width: 18, get: (r) => r.ItemTypeName },
   { label: "Transaction Type", width: 20, get: (r) => r.TransactionTypeName },
-  { label: "Issue Date", width: 14, get: (r) => reportDate(r.IssueDate) },
+  { label: "Issue Date", width: 14, get: (r) => formatDate(r.IssueDate) },
   { label: "Previous Balance", width: 16, get: (r) => r.PreviousBalance },
   { label: "Qty", width: 10, get: (r) => r.Qty },
   { label: "Price", width: 12, get: (r) => r.Price },
@@ -217,13 +204,15 @@ const REPORT_COLUMNS = [
   {
     label: "Date Of Receive",
     width: 16,
-    get: (r) => reportDate(r.DateOfRecive),
+    get: (r) => formatDate(r.DateOfRecive),
   },
   { label: "Received By", width: 18, get: (r) => r.ReceivedByName },
   { label: "Particulars", width: 30, get: (r) => r.Particuler },
   { label: "Comment", width: 30, get: (r) => r.Comment },
-  { label: "Created Date", width: 14, get: (r) => reportDate(r.createdAt) },
-  { label: "Updated Date", width: 14, get: (r) => reportDate(r.updatedAt) },
+  { label: "Created Date", width: 14, get: (r) => formatDate(r.createdAt) },
+  { label: "Created By", width: 14, get: (r) => (r.createdByName) },
+  { label: "Updated Date", width: 14, get: (r) => formatDate(r.updatedAt) },
+  { label: "Updated By", width: 14, get: (r) => (r.updatedByName) },
 ];
 
 // Builds a sortable, hideable column from a small definition.
@@ -387,7 +376,7 @@ const IssueReceiptList = () => {
       window.dispatchEvent(new CustomEvent("notifications-refresh"));
       return result;
     } catch (error) {
-      console.error("Issue/Receipt SYNC ERROR", error);
+      console.error("Stock Movement SYNC ERROR", error);
       showErrorToast(error.message || "Inventory sync failed");
       return null;
     } finally {
@@ -517,7 +506,7 @@ const IssueReceiptList = () => {
     const result = await response.json();
 
     if (!response.ok || !result.success) {
-      throw new Error(result.message || "Failed loading Issue/Receipts");
+      throw new Error(result.message || "Failed loading Stock Movement");
     }
 
     return result;
@@ -582,7 +571,7 @@ const IssueReceiptList = () => {
     const result = await response.json();
 
     if (!response.ok || !result.success) {
-      throw new Error(result.message || "Failed to load Issue/Receipts");
+      throw new Error(result.message || "Failed to load Stock Movement");
     }
 
     return result.data || [];
@@ -597,7 +586,7 @@ const IssueReceiptList = () => {
       const items = await getIssueReceiptReportRows();
 
       if (!items.length) {
-        showErrorToast("No Issue/Receipts to export", {
+        showErrorToast("No Stock Movement to export", {
           id: "issue-receipt-export",
         });
         return;
@@ -616,11 +605,11 @@ const IssueReceiptList = () => {
       XLSX.utils.book_append_sheet(workbook, worksheet, "Issue-Receipt");
       XLSX.writeFile(workbook, "issue-receipts.xlsx");
 
-      showSuccessToast(`${items.length} Issue/Receipt(s) exported`, {
+      showSuccessToast(`${items.length} Stock Movement exported`, {
         id: "issue-receipt-export",
       });
     } catch (error) {
-      console.error("Issue/Receipt EXPORT ERROR", error);
+      console.error("Stock Movement EXPORT ERROR", error);
       showErrorToast(error.message || "Excel export failed", {
         id: "issue-receipt-export",
       });
@@ -645,7 +634,7 @@ const IssueReceiptList = () => {
 
       if (!items.length) {
         printWindow.close();
-        showErrorToast("No Issue/Receipts to print");
+        showErrorToast("No Stock Movement to print");
         return;
       }
 
@@ -680,7 +669,7 @@ const IssueReceiptList = () => {
       <!doctype html>
       <html>
         <head>
-          <title>Issue/Receipt Report</title>
+          <title>Stock Movement Report</title>
           <meta charset="utf-8">
           <style>
             @page { size: landscape; margin: 10mm; }
@@ -695,7 +684,7 @@ const IssueReceiptList = () => {
           </style>
         </head>
         <body>
-          <h1>Issue/Receipt Report</h1>
+          <h1>Stock Movement Report</h1>
           <p>Generated: ${escapeHtml(new Date().toLocaleString())}</p>
           <p>Total records: ${items.length}</p>
           <table>
@@ -714,7 +703,7 @@ const IssueReceiptList = () => {
       printWindow.document.close();
     } catch (error) {
       printWindow.close();
-      console.error("Issue/Receipt PRINT ERROR", error);
+      console.error("Stock Movement PRINT ERROR", error);
       showErrorToast(error.message || "Unable to prepare print report");
     }
   }, [getIssueReceiptReportRows]);
@@ -874,11 +863,11 @@ const IssueReceiptList = () => {
         throw new Error(result.message || "Delete failed");
       }
 
-      showSuccessToast("Issue/Receipt deleted successfully");
+      showSuccessToast("Stock Movement deleted successfully");
 
       await createIssueReceiptNotification({
         action: "deleted",
-        title: "Issue/Receipt Deleted",
+        title: "Stock Movement Deleted",
         message: `${getReceiptLabel(itemToDelete)} has been deleted.`,
         issueReceiptId: itemToDelete.id,
         issueReceiptName: getReceiptLabel(itemToDelete),
@@ -893,8 +882,8 @@ const IssueReceiptList = () => {
       await refreshIssueReceipts();
       await syncInventoryIssueReceipts();
     } catch (error) {
-      console.error("Issue/Receipt DELETE ERROR", error);
-      showErrorToast(error.message || "Unable to delete Issue/Receipt");
+      console.error("Stock Movement DELETE ERROR", error);
+      showErrorToast(error.message || "Unable to delete Stock Movement");
     } finally {
       setDeleteLoading(false);
     }
@@ -922,12 +911,12 @@ const IssueReceiptList = () => {
 
   const handleBulkDelete = useCallback(() => {
     if (!selectedIds.length) {
-      showErrorToast("Select at least one Issue/Receipt");
+      showErrorToast("Select at least one stock movement");
       return;
     }
 
     if (!canDelete) {
-      showErrorToast("You do not have permission to delete Issue/Receipts");
+      showErrorToast("You do not have permission to delete stock movement");
       return;
     }
 
@@ -958,7 +947,7 @@ const IssueReceiptList = () => {
       }
 
       showSuccessToast(
-        `${result.count ?? idsToDelete.length} Issue/Receipt(s) deleted`,
+        `${result.count ?? idsToDelete.length} stock movement deleted`,
       );
 
       setShowDeleteDialog(false);
@@ -1040,13 +1029,13 @@ const IssueReceiptList = () => {
   const handleOpenEmailDialog = useCallback(() => {
     setSelectedRecipientEmails([]);
     setAttachExcel(true);
-    setEmailSubject("Issue/Receipt Report");
+    setEmailSubject("Stock Movement Report");
 
     setEmailMessage(
       [
         "Dear Team,",
         "",
-        "Please find the Issue/Receipt report for your review.",
+        "Please find the Stock Movement report for your review.",
         "",
         "The report includes the item details, transaction type, issue and receive dates, quantity, price, balance, challan and gate pass numbers, and the people involved.",
         "",
@@ -1224,7 +1213,7 @@ const IssueReceiptList = () => {
         title: "ID",
         size: 120,
         render: (r) => (
-          <span className="font-mono text-xs">
+          <span>
             #{r?.id ? String(r.id).substring(0, 8) : "-"}
           </span>
         ),
@@ -1359,15 +1348,9 @@ const IssueReceiptList = () => {
       }),
       makeColumn({
         id: "createdAt",
-        title: "Added Date",
+        title: "Created Date",
         size: 175,
         render: (r) => <span>{formatDate(r?.createdAt)}</span>,
-      }),
-      makeColumn({
-        id: "updatedAt",
-        title: "Updated Date",
-        size: 175,
-        render: (r) => <span>{formatDate(r?.updatedAt)}</span>,
       }),
       {
         accessorKey: "createdByName",
@@ -1387,6 +1370,12 @@ const IssueReceiptList = () => {
           skeleton: <Skeleton className="h-7 w-24" />,
         },
       },
+      makeColumn({
+        id: "updatedAt",
+        title: "Updated Date",
+        size: 175,
+        render: (r) => <span>{formatDate(r?.updatedAt)}</span>,
+      }),      
 
       {
         accessorKey: "updatedByName",
@@ -1514,7 +1503,7 @@ const IssueReceiptList = () => {
 
             <Input
               type="text"
-              placeholder="Search issue/receipts"
+              placeholder="Search stock movement"
               value={searchInput}
               onChange={(event) => setSearchInput(event.target.value)}
               onKeyDown={(event) => {
@@ -1710,7 +1699,7 @@ const IssueReceiptList = () => {
           <div>
             <h3 className="text-lg font-semibold">Access Denied</h3>
             <p className="mt-1 text-sm text-muted-foreground">
-              You do not have permission to view Issue/Receipt.
+              You do not have permission to view stock movement.
             </p>
           </div>
         </CardHeader>
@@ -1749,7 +1738,7 @@ const IssueReceiptList = () => {
         </Card>
       </DataGrid>
 
-      {/* ADD Issue/Receipt */}
+      {/* ADD Stock Movement */}
       <IssueReceiptAddDialog
         open={addDialogOpen}
         closeDialog={() => setAddDialogOpen(false)}
@@ -1758,7 +1747,7 @@ const IssueReceiptList = () => {
 
           await createIssueReceiptNotification({
             action: "created",
-            title: "New Issue/Receipt Created",
+            title: "New Stock Movement Created",
             message: `${getReceiptLabel(newIssueReceipt)} has been created.`,
             issueReceiptId: newIssueReceipt?.id,
             issueReceiptName: getReceiptLabel(newIssueReceipt),
@@ -1769,7 +1758,7 @@ const IssueReceiptList = () => {
         }}
       />
 
-      {/* VIEW Issue/Receipt */}
+      {/* VIEW Stock Movement */}
       <IssueReceiptViewDialog
         open={viewDialogOpen}
         IssueReceipt={selectedIssueReceipt}
@@ -1779,7 +1768,7 @@ const IssueReceiptList = () => {
         }}
       />
 
-      {/* EDIT Issue/Receipt */}
+      {/* EDIT Stock Movement */}
       <IssueReceiptEditDialog
         open={editDialogOpen}
         IssueReceipt={selectedIssueReceipt}
@@ -1792,7 +1781,7 @@ const IssueReceiptList = () => {
 
           await createIssueReceiptNotification({
             action: "updated",
-            title: "Issue/Receipt Updated",
+            title: "Stock Movement Updated",
             message: `${getReceiptLabel(receipt)} has been updated.`,
             issueReceiptId: receipt?.id,
             issueReceiptName: getReceiptLabel(receipt),
@@ -1803,7 +1792,7 @@ const IssueReceiptList = () => {
         }}
       />
 
-      {/* DELETE Issue/Receipt */}
+      {/* DELETE Stock Movement */}
       <IssueReceiptDeleteDialog
         open={deleteDialogOpen}
         IssueReceipt={selectedIssueReceipt}
@@ -1825,9 +1814,9 @@ const IssueReceiptList = () => {
             }}
           >
             <DialogHeader className="px-6 pt-6 pb-4 shrink-0">
-              <DialogTitle>Email Issue/Receipt</DialogTitle>
+              <DialogTitle>Email Stock Movement</DialogTitle>
               <DialogDescription>
-                Select recipients and send the Inventory issue/receipt report.
+                Select recipients and send the Stock Movement report.
               </DialogDescription>
             </DialogHeader>
 
@@ -2111,7 +2100,7 @@ const IssueReceiptList = () => {
             <DialogDescription>
               Are you sure you want to delete{" "}
               <span className="font-semibold text-foreground">
-                {selectedIds.length} selected Issue/Receipt
+                {selectedIds.length} selected Stock Movement
                 {selectedIds.length !== 1 ? "s" : ""}
               </span>
               ? This action cannot be undone.

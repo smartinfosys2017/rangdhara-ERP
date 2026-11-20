@@ -102,7 +102,7 @@ const REPORT_COLUMNS = [
 ];
 
 // ======================================================
-// SEND Issue/Receipt EMAIL REPORT
+// SEND Stock Movement EMAIL REPORT
 // ======================================================
 
 export async function POST(request) {
@@ -162,7 +162,7 @@ export async function POST(request) {
           !["string", "number"].includes(typeof id),
       )
     ) {
-      return badRequest("selectedIds must be an array of Issue/Receipt IDs.");
+      return badRequest("selectedIds must be an array of Stock Movement IDs.");
     }
 
     if (typeof attachExcel !== "boolean") {
@@ -289,7 +289,7 @@ export async function POST(request) {
     if (createdRange) where.createdAt = createdRange;
     if (updatedRange) where.updatedAt = updatedRange;
 
-    // 5. Fetch Issue/Receipts and add names.
+    // 5. Fetch Stock Movements and add names.
     const issueReceipts = await prisma.issueReceipt.findMany({
       where,
       orderBy: { createdAt: "desc" },
@@ -299,7 +299,7 @@ export async function POST(request) {
       return NextResponse.json(
         {
           success: false,
-          message: "No Issue/Receipts match the selected IDs and filters.",
+          message: "No Stock Movements match the selected IDs and filters.",
         },
         { status: 404 },
       );
@@ -331,7 +331,7 @@ export async function POST(request) {
       worksheet["!cols"] = REPORT_COLUMNS.map((col) => ({ wch: col.width }));
 
       const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "Issue/Receipts");
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Stock Movements");
 
       const excelBuffer = XLSX.write(workbook, {
         type: "buffer",
@@ -355,12 +355,12 @@ export async function POST(request) {
     // 7. Build email content.
     const plainMessage = String(message || "").trim();
     const defaultMessage =
-      "Please find the Issue/Receipt report for your review.";
+      "Please find the Stock Movement report for your review.";
 
     const emailText = [
       plainMessage || defaultMessage,
       "",
-      `Total Issue/Receipts: ${items.length}`,
+      `Total Stock Movements: ${items.length}`,
       attachExcel ? `Attachment: ${fileName}` : "No Excel attachment included.",
       "",
       "Regards,",
@@ -374,12 +374,12 @@ export async function POST(request) {
 
     const emailHtml = `
       <div style="font-family:Arial,sans-serif;color:#333;line-height:1.7">
-        <h2 style="margin-bottom:16px">Issue/Receipt Report</h2>
+        <h2 style="margin-bottom:16px">Stock Movement Report</h2>
 
         <p>${safeMessage}</p>
 
         <p>
-          <strong>Total Issue/Receipts:</strong>
+          <strong>Total Stock Movements:</strong>
           ${items.length}
         </p>
 
@@ -426,7 +426,7 @@ export async function POST(request) {
       {
         success: false,
         message:
-          error.message || "Failed to generate or send the Issue/Receipt report.",
+          error.message || "Failed to generate or send the Stock Movement report.",
       },
       { status: 500 },
     );

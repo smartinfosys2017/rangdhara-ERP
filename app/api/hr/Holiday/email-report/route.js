@@ -337,8 +337,8 @@ export async function POST(request) {
         "To Date": formatDate(holiday.toDate),
         Description: holiday.description ?? "",
         Status: holiday.status ? "Active" : "Inactive",
-        "Created At": formatDate(holiday.createdAt),
-        "Updated At": formatDate(holiday.updatedAt),
+        "Created Date": formatDate(holiday.createdAt),
+        "Updated Date": formatDate(holiday.updatedAt),
       }));
 
       const worksheet = XLSX.utils.json_to_sheet(rows);

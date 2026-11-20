@@ -162,7 +162,7 @@ const CurrencyViewDialog = ({
           {/* CREATED */}
 
           <InfoItem
-            label="Created At"
+            label="Created Date"
             value={
               currency.createdAt
                 ? formatDate(
@@ -177,7 +177,7 @@ const CurrencyViewDialog = ({
           {/* UPDATED */}
 
           <InfoItem
-            label="Updated At"
+            label="Updated Date"
             value={
               currency.updatedAt
                 ? formatDate(

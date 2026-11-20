@@ -81,7 +81,7 @@ const SourceViewDialog = ({
           />
 
           <InfoItem
-            label="Created At"
+            label="Created Date"
             value={
               Source.createdAt
                 ? formatDate(
@@ -94,7 +94,7 @@ const SourceViewDialog = ({
           />
 
           <InfoItem
-            label="Updated At"
+            label="Updated Date"
             value={
               Source.updatedAt
                 ? formatDate(

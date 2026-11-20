@@ -384,13 +384,13 @@ export default function ExpensesViewDialog({ open, closeDialog, Expense }) {
             "
           >
             <div>
-              <label>Created At</label>
+              <label>Created Date</label>
 
               <p>{Expense.created_at || "-"}</p>
             </div>
 
             <div>
-              <label>Updated At</label>
+              <label>Updated Date</label>
 
               <p>{Expense.updated_at || "-"}</p>
             </div>

@@ -85,7 +85,7 @@ const ServiceViewDialog = ({
                 />
 
                 <InfoItem
-                  label="Created At"
+                  label="Created Date"
                   value={
                     service.createdAt
                       ? formatDateTime(
@@ -98,7 +98,7 @@ const ServiceViewDialog = ({
                 />
 
                 <InfoItem
-                  label="Updated At"
+                  label="Updated Date"
                   value={
                     service.updatedAt
                       ? formatDateTime(

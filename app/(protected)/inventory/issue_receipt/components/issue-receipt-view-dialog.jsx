@@ -12,6 +12,9 @@ import {
   IndianRupee,
   MessageSquare,
   ClipboardList,
+  MapPin,
+  Truck,
+  Calculator,
 } from "lucide-react";
 
 import {
@@ -25,50 +28,7 @@ import {
 } from "@/components/ui/dialog";
 
 import { Button } from "@/components/ui/button";
-import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
-// =======================================================
-// FORMAT DATE
-// =======================================================
-
-const formatDate = (value) => {
-  if (!value) {
-    return "-";
-  }
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return "-";
-  }
-
-  return date.toLocaleString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-};
-
-// =======================================================
-// FORMAT DATE ONLY
-// =======================================================
-
-const formatDateOnly = (value) => {
-  if (!value) {
-    return "-";
-  }
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return "-";
-  }
-
-  return date.toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-};
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 // =======================================================
 // DISPLAY VALUE
@@ -83,6 +43,155 @@ const displayValue = (value) => {
 };
 
 // =======================================================
+// FORMAT DATE AND TIME
+// =======================================================
+
+const formatDate = (value) => {
+  if (!value) return "-";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "-";
+  }
+
+  return date.toLocaleString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
+// =======================================================
+// FORMAT DATE ONLY
+// =======================================================
+
+const formatDateOnly = (value) => {
+  if (!value) return "-";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "-";
+  }
+
+  return date.toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+};
+
+// =======================================================
+// FORMAT CURRENCY
+// =======================================================
+
+const formatCurrency = (value) => {
+  if (value === null || value === undefined || value === "") {
+    return "-";
+  }
+
+  const amount = Number(value);
+
+  if (!Number.isFinite(amount)) {
+    return "-";
+  }
+
+  return `₹${amount.toLocaleString("en-IN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+};
+
+// =======================================================
+// GET DESTINATION NAME
+// =======================================================
+
+const getDestinationName = (record) => {
+  const destinationType = String(
+    record?.DestinationType || ""
+  ).toLowerCase();
+
+  if (destinationType === "location") {
+    return (
+      record?.LocationName ||
+      record?.DestinationName ||
+      record?.locationName ||
+      record?.Location?.locationName ||
+      record?.Location?.LocationName ||
+      "-"
+    );
+  }
+
+  if (destinationType === "machinery") {
+    return (
+      record?.MachineName ||
+      record?.DestinationName ||
+      record?.machineName ||
+      record?.Machine?.machineName ||
+      record?.Machine?.MachineName ||
+      record?.MachineMaster?.machineName ||
+      record?.MachineMaster?.MachineName ||
+      "-"
+    );
+  }
+
+  return record?.DestinationName || "-";
+};
+
+// =======================================================
+// INFORMATION CARD
+// =======================================================
+
+function DetailCard({
+  label,
+  value,
+  icon: Icon,
+  valueClassName = "",
+}) {
+  return (
+    <div className="rounded-lg border p-4 min-w-0">
+      <div className="mb-2 flex items-center gap-2 font-semibold text-sm">
+        {Icon && <Icon className="h-4 w-4 shrink-0" />}
+        <span>{label}</span>
+      </div>
+
+      <p
+        className={`break-words text-sm text-muted-foreground ${valueClassName}`}
+      >
+        {displayValue(value)}
+      </p>
+    </div>
+  );
+}
+
+// =======================================================
+// SECTION HEADER
+// =======================================================
+
+function SectionHeader({
+  icon: Icon,
+  title,
+  description,
+}) {
+  return (
+    <div className="mb-4 flex items-center gap-2 border-b pb-3">
+      <Icon className="h-5 w-5 shrink-0" />
+
+      <div>
+        <h3 className="text-sm font-semibold">{title}</h3>
+
+        <p className="text-xs text-muted-foreground">
+          {description}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// =======================================================
 // COMPONENT
 // =======================================================
 
@@ -95,6 +204,25 @@ export default function IssueReceiptViewDialog({
     return null;
   }
 
+  const record = IssueReceipt;
+
+  const quantity = Number(record.Qty || 0);
+  const rate = Number(record.Price || 0);
+  const total = quantity * rate;
+
+  const destinationType = String(
+    record.DestinationType || ""
+  ).toLowerCase();
+
+  const destinationName = getDestinationName(record);
+
+  const destinationLabel =
+    destinationType === "location"
+      ? "Location"
+      : destinationType === "machinery"
+        ? "Machinery"
+        : "Destination";
+
   return (
     <Dialog
       open={open}
@@ -104,410 +232,375 @@ export default function IssueReceiptViewDialog({
         }
       }}
     >
-      <DialogContent className="w-[95vw] max-w-[95vw] sm:w-[90vw] sm:max-w-[600px] md:max-w-[700px] lg:max-w-[900px] xl:max-w-[1000px]">
+      <DialogContent className="w-[95vw] max-w-[95vw] sm:w-[90vw] sm:max-w-[600px] md:max-w-[700px] lg:max-w-[900px] xl:max-w-[1000px] max-h-[95vh]">
+
         <DialogHeader>
           <DialogTitle>
-            Issue/Receipt Details
+            
+            Stock Movement Details
           </DialogTitle>
 
           <DialogDescription>
-            View complete Issue/Receipt information.
+            View complete stock movement information.
           </DialogDescription>
         </DialogHeader>
-        <ScrollArea className="grow min-h-0 flex flex-col h-full max-h-[60vh] overflow-hidden">
-        <DialogBody className="space-y-6 pt-0 px-0 min-h-0">
-          <div className="space-y-6 py-4">
-            {/* ===================================================== */}
-            {/* ITEM DETAILS */}
-            {/* ===================================================== */}
 
-            <div>
-              <div className="mb-4 flex items-center gap-2 border-b pb-3">
-                <Package className="h-5 w-5" />
+        <ScrollArea className="grow min-h-0 flex flex-col h-full max-h-[70vh] overflow-hidden">
+          <DialogBody className="space-y-6 pt-0 px-0 min-h-0">
+            <div className="space-y-6 py-4">
 
-                <div>
-                  <h3 className="text-sm font-semibold">Item Details</h3>
+              {/* ITEM DETAILS */}
 
-                  <p className="text-xs text-muted-foreground">
-                    Item and transaction information
-                  </p>
+              <div>
+                <SectionHeader
+                  icon={Package}
+                  title="Item Details"
+                  description="Item and transaction information"
+                />
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+
+                  <DetailCard
+                    label="Item Group"
+                    value={record.ItemGroupName}
+                    icon={Package}
+                  />
+
+                  <DetailCard
+                    label="Item"
+                    value={record.ItemMasterName}
+                    icon={Package}
+                  />
+
+                  <DetailCard
+                    label="Item Condition"
+                    value={record.ItemTypeName}
+                    icon={FileText}
+                  />
+
+                  <DetailCard
+                    label="Transaction Type"
+                    value={record.TransactionTypeName}
+                    icon={Receipt}
+                  />
+
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-                {/* ITEM GROUP */}
+              {/* STOCK / QUANTITY DETAILS */}
 
-                <div className="rounded-lg border p-4">
-                  <div className="mb-2 text-xs font-medium text-muted-foreground">
-                    Item Group
-                  </div>
+              <div>
+                <SectionHeader
+                  icon={ClipboardList}
+                  title="Stock & Quantity Details"
+                  description="Balance, quantity and pricing information"
+                />
 
-                  <p className="break-words text-sm font-medium">
-                    {displayValue(
-                      IssueReceipt.ItemGroup?.groupName ||
-                      IssueReceipt.ItemGroup?.name ||
-                      IssueReceipt.groupName ||
-                      IssueReceipt.ItemGroupid,
-                    )}
-                  </p>
-                </div>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
 
-                {/* ITEM */}
+                  <DetailCard
+                    label="Previous Balance"
+                    value={record.PreviousBalance}
+                    icon={ArrowDown}
+                    valueClassName="text-lg font-semibold"
+                  />
 
-                <div className="rounded-lg border p-4">
-                  <div className="mb-2 text-xs font-medium text-muted-foreground">
-                    Item
-                  </div>
+                  <DetailCard
+                    label="Quantity"
+                    value={record.Qty}
+                    icon={Hash}
+                    valueClassName="text-lg font-semibold"
+                  />
 
-                  <p className="break-words text-sm font-medium">
-                    {displayValue(
-                      IssueReceipt.ItemMaster?.itemName ||
-                      IssueReceipt.ItemMaster?.name ||
-                      IssueReceipt.itemName ||
-                      IssueReceipt.ItemMasterid,
-                    )}
-                  </p>
-                </div>
+                  <DetailCard
+                    label="Rate"
+                    value={formatCurrency(record.Price)}
+                    icon={IndianRupee}
+                    valueClassName="text-lg font-semibold"
+                  />
 
-                {/* ITEM TYPE */}
+                  <DetailCard
+                    label="Total"
+                    value={formatCurrency(total)}
+                    icon={Calculator}
+                    valueClassName="text-lg font-semibold"
+                  />
 
-                <div className="rounded-lg border p-4">
-                  <div className="mb-2 text-xs font-medium text-muted-foreground">
-                    Item Type
-                  </div>
+                  <DetailCard
+                    label="Balance"
+                    value={record.Balance}
+                    icon={ArrowUp}
+                    valueClassName="text-lg font-semibold"
+                  />
 
-                  <p className="break-words text-sm font-medium">
-                    {displayValue(
-                      IssueReceipt.ItemType?.name ||
-                      IssueReceipt.ItemType?.typeName ||
-                      IssueReceipt.itemTypeName ||
-                      IssueReceipt.ItemTypeid,
-                    )}
-                  </p>
-                </div>
-
-                {/* TRANSACTION TYPE */}
-
-                <div className="rounded-lg border p-4">
-                  <div className="mb-2 text-xs font-medium text-muted-foreground">
-                    Transaction Type
-                  </div>
-
-                  <p className="break-words text-sm font-medium">
-                    {displayValue(
-                      IssueReceipt.TransactionType?.name ||
-                      IssueReceipt.TransactionType?.transactionName ||
-                      IssueReceipt.transactionTypeName ||
-                      IssueReceipt.TransactionTypeid,
-                    )}
-                  </p>
                 </div>
               </div>
+
+              {/* DATE DETAILS */}
+
+              <div>
+                <SectionHeader
+                  icon={Calendar}
+                  title="Date Details"
+                  description="Issue, receipt and receiving dates"
+                />
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+
+                  <DetailCard
+                    label="Issue Date & Time"
+                    value={formatDate(record.IssueDate)}
+                    icon={Calendar}
+                  />
+
+                  <DetailCard
+                    label="Date Of Receive"
+                    value={formatDateOnly(record.DateOfRecive)}
+                    icon={Calendar}
+                  />
+
+                  <DetailCard
+                    label="Receipt Date & Time"
+                    value={formatDate(record.ReceiptDate)}
+                    icon={Calendar}
+                  />
+
+                  <DetailCard
+                    label="Requisition Supply Date & Time"
+                    value={formatDate(record.RequisitionSupplyDate)}
+                    icon={Calendar}
+                  />
+
+                  <DetailCard
+                    label="Purchase Order Date & Time"
+                    value={formatDate(record.PurchaseDate)}
+                    icon={Calendar}
+                  />
+
+                </div>
+              </div>
+
+              {/* ISSUE & RECEIVE DETAILS */}
+
+              <div>
+                <SectionHeader
+                  icon={User}
+                  title="Issue & Receive Details"
+                  description="Issue and receiving information"
+                />
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+
+                  <DetailCard
+                    label="Issue By"
+                    value={record.IssueByName}
+                    icon={User}
+                  />
+
+                  <DetailCard
+                    label="Gate Pass No"
+                    value={record.GetPassNo}
+                    icon={Receipt}
+                  />
+
+                  <DetailCard
+                    label="Receipt Challan No"
+                    value={record.ReciptChallanNo}
+                    icon={FileText}
+                  />
+
+                  <DetailCard
+                    label="Received By"
+                    value={record.ReceivedByName}
+                    icon={User}
+                  />
+
+                </div>
+              </div>
+
+              {/* REQUISITION DETAILS */}
+
+              <div>
+                <SectionHeader
+                  icon={ClipboardList}
+                  title="Requisition Details"
+                  description="Requisition supply information"
+                />
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+
+                  <DetailCard
+                    label="Requisition Supply Number"
+                    value={record.RequisitionSupplyNo}
+                    icon={FileText}
+                  />
+
+                  <DetailCard
+                    label="Requisition Supply Date & Time"
+                    value={formatDate(record.RequisitionSupplyDate)}
+                    icon={Calendar}
+                  />
+
+                </div>
+              </div>
+
+              {/* PURCHASE ORDER DETAILS */}
+
+              <div>
+                <SectionHeader
+                  icon={Receipt}
+                  title="Purchase Order Details"
+                  description="Purchase order information"
+                />
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+
+                  <DetailCard
+                    label="Purchase Order Number"
+                    value={record.PurchaseNo}
+                    icon={FileText}
+                  />
+
+                  <DetailCard
+                    label="Purchase Order Date & Time"
+                    value={formatDate(record.PurchaseDate)}
+                    icon={Calendar}
+                  />
+
+                </div>
+              </div>
+
+              {/* DESTINATION DETAILS */}
+
+              <div>
+                <SectionHeader
+                  icon={MapPin}
+                  title="Destination Details"
+                  description="Selected location or machinery"
+                />
+
+                <div className="rounded-lg border p-4 space-y-4">
+
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+
+                    <DetailCard
+                      label="Destination Type"
+                      value={
+                        destinationType === "location"
+                          ? "Location"
+                          : destinationType === "machinery"
+                            ? "Machinery"
+                            : record.DestinationType
+                      }
+                      icon={MapPin}
+                    />
+
+                    <DetailCard
+                      label={destinationLabel}
+                      value={destinationName}
+                      icon={
+                        destinationType === "machinery"
+                          ? Truck
+                          : MapPin
+                      }
+                    />
+
+                  </div>
+
+                </div>
+              </div>
+
+              {/* PARTICULAR */}
+
+              <div className="rounded-lg border p-4">
+                <div className="mb-2 flex items-center gap-2 font-semibold">
+                  <FileText className="h-4 w-4" />
+                  Particuler
+                </div>
+
+                <p className="whitespace-pre-wrap text-sm text-muted-foreground">
+                  {displayValue(record.Particuler)}
+                </p>
+              </div>
+
+              {/* COMMENT */}
+
+              <div className="rounded-lg border p-4">
+                <div className="mb-2 flex items-center gap-2 font-semibold">
+                  <MessageSquare className="h-4 w-4" />
+                  Comment
+                </div>
+
+                <p className="whitespace-pre-wrap text-sm text-muted-foreground">
+                  {displayValue(record.Comment)}
+                </p>
+              </div>
+
+              {/* SYSTEM DETAILS */}
+
+              <div>
+                <SectionHeader
+                  icon={FileText}
+                  title="System Details"
+                  description="Record information"
+                />
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+
+                  <DetailCard
+                    label="Created By"
+                    value={record.CreatedByName}
+                    icon={User}
+                  />
+
+                  <DetailCard
+                    label="Updated By"
+                    value={record.UpdatedByName}
+                    icon={User}
+                  />
+
+                  <DetailCard
+                    label="Created Date"
+                    value={formatDate(record.createdAt)}
+                    icon={Calendar}
+                  />
+
+                  <DetailCard
+                    label="Updated Date"
+                    value={formatDate(record.updatedAt)}
+                    icon={Calendar}
+                  />
+
+                </div>
+              </div>
+
+              {/* ID */}
+
+              <div className="rounded-lg border p-4">
+                <div className="mb-2 font-semibold">
+                  ID
+                </div>
+
+                <p className="break-all text-sm text-muted-foreground">
+                  {displayValue(record.id)}
+                </p>
+              </div>
+
             </div>
-
-            {/* ===================================================== */}
-            {/* STOCK / QUANTITY DETAILS */}
-            {/* ===================================================== */}
-
-            <div>
-              <div className="mb-4 flex items-center gap-2 border-b pb-3">
-                <ClipboardList className="h-5 w-5" />
-
-                <div>
-                  <h3 className="text-sm font-semibold">
-                    Stock & Quantity Details
-                  </h3>
-
-                  <p className="text-xs text-muted-foreground">
-                    Balance, quantity and pricing information
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                {/* PREVIOUS BALANCE */}
-
-                <div className="rounded-lg border p-4">
-                  <div className="mb-2 flex items-center gap-2 font-semibold">
-                    <ArrowDown className="h-4 w-4" />
-                    Previous Balance
-                  </div>
-
-                  <p className="text-lg font-semibold">
-                    {displayValue(IssueReceipt.PreviousBalance)}
-                  </p>
-                </div>
-
-                {/* QUANTITY */}
-
-                <div className="rounded-lg border p-4">
-                  <div className="mb-2 flex items-center gap-2 font-semibold">
-                    <Hash className="h-4 w-4" />
-                    Quantity
-                  </div>
-
-                  <p className="text-lg font-semibold">
-                    {displayValue(IssueReceipt.Qty)}
-                  </p>
-                </div>
-
-                {/* PRICE */}
-
-                <div className="rounded-lg border p-4">
-                  <div className="mb-2 flex items-center gap-2 font-semibold">
-                    <IndianRupee className="h-4 w-4" />
-                    Price
-                  </div>
-
-                  <p className="text-lg font-semibold">
-                    {IssueReceipt.Price !== null &&
-                      IssueReceipt.Price !== undefined &&
-                      IssueReceipt.Price !== ""
-                      ? `₹${IssueReceipt.Price}`
-                      : "-"}
-                  </p>
-                </div>
-
-                {/* BALANCE */}
-
-                <div className="rounded-lg border p-4">
-                  <div className="mb-2 flex items-center gap-2 font-semibold">
-                    <ArrowUp className="h-4 w-4" />
-                    Balance
-                  </div>
-
-                  <p className="text-lg font-semibold">
-                    {displayValue(IssueReceipt.Balance)}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* ===================================================== */}
-            {/* DATE DETAILS */}
-            {/* ===================================================== */}
-
-            <div>
-              <div className="mb-4 flex items-center gap-2 border-b pb-3">
-                <Calendar className="h-5 w-5" />
-
-                <div>
-                  <h3 className="text-sm font-semibold">Date Details</h3>
-
-                  <p className="text-xs text-muted-foreground">
-                    Issue and receiving dates
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                {/* ISSUE DATE */}
-
-                <div className="rounded-lg border p-4">
-                  <div className="mb-2 flex items-center gap-2 font-semibold">
-                    <Calendar className="h-4 w-4" />
-                    Issue Date
-                  </div>
-
-                  <p className="text-sm">
-                    {formatDateOnly(IssueReceipt.IssueDate)}
-                  </p>
-                </div>
-
-                {/* DATE OF RECEIVE */}
-
-                <div className="rounded-lg border p-4">
-                  <div className="mb-2 flex items-center gap-2 font-semibold">
-                    <Calendar className="h-4 w-4" />
-                    Date Of Receive
-                  </div>
-
-                  <p className="text-sm">
-                    {formatDateOnly(IssueReceipt.DateOfRecive)}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* ===================================================== */}
-            {/* ISSUE & RECEIVE DETAILS */}
-            {/* ===================================================== */}
-
-            <div>
-              <div className="mb-4 flex items-center gap-2 border-b pb-3">
-                <User className="h-5 w-5" />
-
-                <div>
-                  <h3 className="text-sm font-semibold">
-                    Issue & Receive Details
-                  </h3>
-
-                  <p className="text-xs text-muted-foreground">
-                    Issue and receiving information
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                {/* ISSUE BY */}
-
-                <div className="rounded-lg border p-4">
-                  <div className="mb-2 flex items-center gap-2 font-semibold">
-                    <User className="h-4 w-4" />
-                    Issue By
-                  </div>
-
-                  <p className="break-all text-sm">
-                    {displayValue(
-                      IssueReceipt.IssueBy?.name ||
-                      IssueReceipt.IssueBy?.username ||
-                      IssueReceipt.issueByName ||
-                      IssueReceipt.Issue_by,
-                    )}
-                  </p>
-                </div>
-
-                {/* Gate Pass NO */}
-
-                <div className="rounded-lg border p-4">
-                  <div className="mb-2 flex items-center gap-2 font-semibold">
-                    <Receipt className="h-4 w-4" />
-                    Gate Pass No
-                  </div>
-
-                  <p className="text-sm">
-                    {displayValue(IssueReceipt.GetPassNo)}
-                  </p>
-                </div>
-
-                {/* RECEIPT CHALLAN NO */}
-
-                <div className="rounded-lg border p-4">
-                  <div className="mb-2 flex items-center gap-2 font-semibold">
-                    <FileText className="h-4 w-4" />
-                    Receipt Challan No
-                  </div>
-
-                  <p className="text-sm">
-                    {displayValue(IssueReceipt.ReciptChallanNo)}
-                  </p>
-                </div>
-
-                {/* RECEIVED BY */}
-
-                <div className="rounded-lg border p-4">
-                  <div className="mb-2 flex items-center gap-2 font-semibold">
-                    <User className="h-4 w-4" />
-                    Received By
-                  </div>
-
-                  <p className="break-all text-sm">
-                    {displayValue(
-                      IssueReceipt.ReceivedBy?.name ||
-                      IssueReceipt.ReceivedBy?.username ||
-                      IssueReceipt.receivedByName ||
-                      IssueReceipt.RecivedBy,
-                    )}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* ===================================================== */}
-            {/* PARTICULAR */}
-            {/* ===================================================== */}
-
-            <div className="rounded-lg border p-4">
-              <div className="mb-2 flex items-center gap-2 font-semibold">
-                <FileText className="h-4 w-4" />
-                Particuler
-              </div>
-
-              <p className="whitespace-pre-wrap text-sm text-muted-foreground">
-                {displayValue(IssueReceipt.Particuler)}
-              </p>
-            </div>
-
-            {/* ===================================================== */}
-            {/* COMMENT */}
-            {/* ===================================================== */}
-
-            <div className="rounded-lg border p-4">
-              <div className="mb-2 flex items-center gap-2 font-semibold">
-                <MessageSquare className="h-4 w-4" />
-                Comment
-              </div>
-
-              <p className="whitespace-pre-wrap text-sm text-muted-foreground">
-                {displayValue(IssueReceipt.Comment)}
-              </p>
-            </div>
-
-            {/* ===================================================== */}
-            {/* SYSTEM DETAILS */}
-            {/* ===================================================== */}
-
-            <div>
-              <div className="mb-4 flex items-center gap-2 border-b pb-3">
-                <FileText className="h-5 w-5" />
-
-                <div>
-                  <h3 className="text-sm font-semibold">System Details</h3>
-
-                  <p className="text-xs text-muted-foreground">
-                    Record information
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                {/* CREATED */}
-
-                <div className="rounded-lg border p-4">
-                  <div className="mb-2 flex items-center gap-2 font-semibold">
-                    <Calendar className="h-4 w-4" />
-                    Created At
-                  </div>
-
-                  <p className="text-sm">{formatDate(IssueReceipt.createdAt)}</p>
-                </div>
-
-                {/* UPDATED */}
-
-                <div className="rounded-lg border p-4">
-                  <div className="mb-2 flex items-center gap-2 font-semibold">
-                    <Calendar className="h-4 w-4" />
-                    Updated At
-                  </div>
-
-                  <p className="text-sm">{formatDate(IssueReceipt.updatedAt)}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* ===================================================== */}
-            {/* ID */}
-            {/* ===================================================== */}
-
-            <div className="rounded-lg border p-4">
-              <div className="mb-2 font-semibold">ID</div>
-
-              <p className="break-all text-sm text-muted-foreground">
-                {displayValue(IssueReceipt.id)}
-              </p>
-            </div>
-          </div>
-        </DialogBody>
+          </DialogBody>
         </ScrollArea>
-        {/* ===================================================== */}
+
         {/* FOOTER */}
-        {/* ===================================================== */}
 
         <DialogFooter>
-          <Button variant="outline" onClick={closeDialog}>
+          <Button
+            variant="outline"
+            onClick={closeDialog}
+          >
             Close
           </Button>
         </DialogFooter>
+
       </DialogContent>
     </Dialog>
   );

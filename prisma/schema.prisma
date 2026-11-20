@@ -721,7 +721,7 @@ model ItemMaster {
   updatedAt  DateTime  @updatedAt
   deletedAt  DateTime?
   lastSyncAt DateTime?
-  
+
   @@unique([ItemName, ItemConditionid])
   @@map("ItemMaster")
 }
@@ -749,29 +749,48 @@ model Country {
 }
 
 model IssueReceipt {
-  id                String    @id @default(uuid())
-  ItemGroupid       String    @db.VarChar(36)
-  ItemMasterid      String    @db.VarChar(36)
-  ItemTypeid        String    @db.VarChar(36)
-  TransactionTypeid String    @db.VarChar(36)
-  IssueDate         DateTime  @db.Date
-  Qty               Int
-  PreviousBalance   Int       @default(0)
-  Price             Decimal?  @db.Decimal(12, 2)
-  Particuler        String?
-  Balance           Int       @default(0)
-  Issue_by          String    @db.VarChar(36)
-  GetPassNo         String?   @db.VarChar(100)
-  DateOfRecive      DateTime? @db.Date
-  ReciptChallanNo   String?   @db.VarChar(100)
-  RecivedBy         String    @db.VarChar(36)
-  Comment           String?
-  createby          String?
-  updateby          String?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-  deletedAt         DateTime?
-  lastSyncAt        DateTime?
+  id                String @id @default(uuid())
+  ItemGroupid       String @db.VarChar(36)
+  ItemMasterid      String @db.VarChar(36)
+  ItemTypeid        String @db.VarChar(36)
+  TransactionTypeid String @db.VarChar(36)
+
+  // Date and time
+  IssueDate DateTime
+
+  Qty             Int
+  PreviousBalance Int      @default(0)
+  Price           Decimal? @db.Decimal(12, 2)
+  Particuler      String?
+  Balance         Int      @default(0)
+
+  Issue_by     String    @db.VarChar(36)
+  GetPassNo    String?   @db.VarChar(100)
+  DateOfRecive DateTime? @db.Date
+
+  ReciptChallanNo String?
+  ReceiptDate     DateTime?
+
+  RequisitionSupplyNo   String?
+  RequisitionSupplyDate DateTime?
+
+  PurchaseNo   String?
+  PurchaseDate DateTime?
+
+  // Optional received-by user
+  RecivedBy String? @db.VarChar(36)
+
+  // Location / Machinery
+  DestinationType String? @db.VarChar(20)
+  DestinationId   String? @db.VarChar(36)
+
+  Comment    String?
+  createby   String?
+  updateby   String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
+  lastSyncAt DateTime?
 
   @@index([ItemGroupid])
   @@index([ItemMasterid])
@@ -780,6 +799,7 @@ model IssueReceipt {
   @@index([Issue_by])
   @@index([RecivedBy])
   @@index([IssueDate])
+  @@index([DestinationType, DestinationId])
   @@map("IssueReceipt")
 }
 
@@ -1574,4 +1594,22 @@ model Location {
   customFields Json?     @default("{}")
 
   @@map("location")
+}
+
+model BrandManufacturer {
+  id           String    @id @default(uuid())
+  brandName    String    @db.VarChar(255)
+  manufacturerName String    @db.VarChar(255)
+  websiteURL   String    @db.VarChar(255)
+  description  String?
+  status       Boolean   @default(true)
+  createby     String?
+  updateby     String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+  lastSyncAt   DateTime?
+  customFields Json?     @default("{}")
+
+  @@map("BrandManufacturer")
 }

@@ -324,14 +324,14 @@ const CustomerSyncViewDialog = ({
             >
 
               <InfoItem
-                label="Created At"
+                label="Created Date"
                 value={formatDate(
                   CustomerSyncData.createdAt
                 )}
               />
 
               <InfoItem
-                label="Updated At"
+                label="Updated Date"
                 value={formatDate(
                   CustomerSyncData.updatedAt
                 )}

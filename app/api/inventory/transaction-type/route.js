@@ -898,7 +898,7 @@ export async function PATCH(request) {
   }
 }
 
-// DELETE: soft-delete one record or multiple selected records.
+
 export async function DELETE(request) {
   try {
     const accessError = await getAccessError();
@@ -912,7 +912,9 @@ export async function DELETE(request) {
         ...(Array.isArray(body.ids) ? body.ids : []),
         ...(body.id ? [body.id] : []),
       ]),
-    ].filter(Boolean);
+    ]
+      .map((id) => String(id).trim())
+      .filter(Boolean);
 
     if (!ids.length) {
       return NextResponse.json(
@@ -936,11 +938,10 @@ export async function DELETE(request) {
       );
     }
 
+    // Find selected Transaction Types.
     const records = await prisma.transactionType.findMany({
       where: {
-        id: {
-          in: ids,
-        },
+        id: { in: ids },
         deletedAt: null,
       },
       select: {
@@ -949,22 +950,95 @@ export async function DELETE(request) {
       },
     });
 
-    const now = new Date();
-
-    const result = await prisma.transactionType.updateMany({
-      where: {
-        id: {
-          in: ids,
+    if (records.length !== ids.length) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "One or more Transaction Types were not found or already deleted.",
         },
+        { status: 404 },
+      );
+    }
+
+    // Check whether selected Transaction Types are used in IssueReceipt.
+    const usedRecords = await prisma.issueReceipt.findMany({
+      where: {
+        TransactionTypeid: { in: ids },
         deletedAt: null,
       },
-      data: {
-        deletedAt: now,
-        updateby: String(user.id),
-        lastSyncAt: now,
+      select: {
+        id: true,
+        TransactionTypeid: true,
       },
     });
 
+    if (usedRecords.length > 0) {
+      const usedIds = [
+        ...new Set(usedRecords.map((item) => item.TransactionTypeid)),
+      ];
+
+      const usedTransactionTypes = records
+        .filter((record) => usedIds.includes(record.id))
+        .map((record) => ({
+          id: record.id,
+          TransactionType: record.TransactionType,
+        }));
+
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Cannot delete Transaction Type because it is already used in Stock Movement. Please remove or update the associated Stock Movement records first.",
+          usedTransactionTypes,
+          usedCount: usedRecords.length,
+        },
+        { status: 409 },
+      );
+    }
+
+    const now = new Date();
+
+    // Soft delete selected Transaction Types.
+    const result = await prisma.$transaction(async (tx) => {
+      // Recheck usage before deleting.
+      const transactionUsedRecords = await tx.issueReceipt.findMany({
+        where: {
+          TransactionTypeid: { in: ids },
+          deletedAt: null,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      if (transactionUsedRecords.length > 0) {
+        throw new Error(
+          "Transaction Type is already used in Stock Movement. Please remove or update the associated records first.",
+        );
+      }
+
+      const deleted = await tx.transactionType.updateMany({
+        where: {
+          id: { in: ids },
+          deletedAt: null,
+        },
+        data: {
+          deletedAt: now,
+          updateby: String(user.id),
+          lastSyncAt: now,
+        },
+      });
+
+      if (deleted.count !== ids.length) {
+        throw new Error(
+          "Some Transaction Types could not be deleted. Please refresh and try again.",
+        );
+      }
+
+      return deleted;
+    });
+
+    // Create system logs.
     for (const record of records) {
       await systemLog({
         event: "delete",
@@ -978,8 +1052,12 @@ export async function DELETE(request) {
 
     return NextResponse.json({
       success: true,
-      message: `${result.count} transaction type(s) deleted successfully.`,
+      message:
+        result.count === 1
+          ? "Transaction Type deleted successfully."
+          : `${result.count} Transaction Types deleted successfully.`,
       count: result.count,
+      deletedIds: ids,
       sync: true,
     });
   } catch (error) {
@@ -990,7 +1068,11 @@ export async function DELETE(request) {
         success: false,
         message: error.message || "Failed to delete Transaction Type.",
       },
-      { status: 500 },
+      {
+        status: error.message?.includes("already used in Stock Movement")
+          ? 409
+          : 500,
+      },
     );
   }
 }

@@ -113,7 +113,7 @@ function parseDate(value) {
 }
 
 // -------------------------------------------------
-// CSV → Issue/Receipt
+// CSV → Stock Movement
 // -------------------------------------------------
 
 export function csvToInventory(csv) {

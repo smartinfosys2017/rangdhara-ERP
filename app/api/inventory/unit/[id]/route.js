@@ -5,6 +5,7 @@ import { checkMenuAccess } from "@/lib/module-access";
 import { systemLog } from "@/services/system-log";
 import { getAuthenticatedUser } from "@/lib/auth-user";
 
+import { checkMasterUsage } from "@/lib/check-master-usage";
 function getIpAddress(request) {
   return (
     request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
@@ -43,7 +44,25 @@ export async function DELETE(request, { params }) {
         { status: 401 }
       );
     }
+    const usage = await checkMasterUsage([
+      {
+        model: prisma.itemMaster,
+        where: { Unitid: id, deletedAt: null },
+        message:
+          "This unit is already used in Item Master. Please remove or update the associated Item Master records before deleting this unit.",
+      },
+    ]);
 
+    if (!usage.canDelete) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: usage.message,
+        },
+        { status: 409 }
+      );
+    }
+    
     // Find active unit
     const existingUnit = await prisma.unit.findFirst({
       where: {

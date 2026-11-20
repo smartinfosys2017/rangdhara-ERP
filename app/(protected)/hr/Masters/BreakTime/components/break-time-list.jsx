@@ -546,8 +546,8 @@ export default function BreakTimeList() {
       "Duration (Minutes)": item.durationMinutes ?? "",
       Flexible: item.isFlexible ? "Yes" : "No",
       Status: isActive(item.status) ? "Active" : "Inactive",
-      "Created At": formatDateTime(item.createdAt),
-      "Updated At": formatDateTime(item.updatedAt),
+      "Created Date": formatDateTime(item.createdAt),
+      "Updated Date": formatDateTime(item.updatedAt),
     }));
 
     const worksheet = XLSX.utils.json_to_sheet(rows);

@@ -81,7 +81,7 @@ const ProjectViewDialog = ({
           />
 
           <InfoItem
-            label="Created At"
+            label="Created Date"
             value={
               project.createdAt
                 ? formatDate(
@@ -94,7 +94,7 @@ const ProjectViewDialog = ({
           />
 
           <InfoItem
-            label="Updated At"
+            label="Updated Date"
             value={
               project.updatedAt
                 ? formatDate(

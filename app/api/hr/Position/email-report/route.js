@@ -307,8 +307,8 @@ export async function POST(request) {
                 "Position Name": item.positionName ?? "",
                 Description: item.description ?? "",
                 Status: item.status ? "Active" : "Inactive",
-                "Created At": formatDate(item.createdAt),
-                "Updated At": formatDate(item.updatedAt),
+                "Created Date": formatDate(item.createdAt),
+                "Updated Date": formatDate(item.updatedAt),
             }));
 
             const worksheet = XLSX.utils.json_to_sheet(rows);

@@ -4,7 +4,7 @@ import prisma from "@/lib/prisma";
 import { checkMenuAccess } from "@/lib/module-access";
 import { systemLog } from "@/services/system-log";
 import { getAuthenticatedUser } from "@/lib/auth-user";
-
+import { checkMasterUsage } from "@/lib/check-master-usage";
 // ======================================================
 // HELPERS
 // ======================================================
@@ -797,13 +797,12 @@ export async function DELETE(request) {
     // Find all requested units.
     const existingUnits = await prisma.unit.findMany({
       where: {
-        id: {
-          in: unitIds,
-        },
+        id: { in: unitIds },
       },
       select: {
         id: true,
         unitName: true,
+        abbreviation: true,
         deletedAt: true,
       },
     });
@@ -838,15 +837,74 @@ export async function DELETE(request) {
       );
     }
 
+    // Check whether any selected Unit is used in ItemMaster.
+    const usedItems = await prisma.itemMaster.findMany({
+      where: {
+        Unitid: { in: unitIds },
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+        ItemName: true,
+        Unitid: true,
+      },
+    });
+
+    if (usedItems.length > 0) {
+      const usedUnitIds = [
+        ...new Set(usedItems.map((item) => item.Unitid)),
+      ];
+
+      const usedUnits = existingUnits
+        .filter((unit) => usedUnitIds.includes(unit.id))
+        .map((unit) => ({
+          id: unit.id,
+          unitName: unit.unitName,
+          abbreviation: unit.abbreviation,
+        }));
+
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Some selected units are already used in Item Master. Please remove or update the associated Item Master records before deleting these units.",
+          usedUnits,
+          usedItems: usedItems.map((item) => ({
+            id: item.id,
+            itemName: item.ItemName,
+            unitId: item.Unitid,
+          })),
+        },
+        { status: 409 }
+      );
+    }
+
     const now = new Date();
 
     // Delete all units together.
     const deletedCount = await prisma.$transaction(async (tx) => {
+      // Recheck usage inside the transaction before updating.
+      const transactionUsedItems = await tx.itemMaster.findMany({
+        where: {
+          Unitid: { in: unitIds },
+          deletedAt: null,
+        },
+        select: {
+          id: true,
+          ItemName: true,
+          Unitid: true,
+        },
+      });
+
+      if (transactionUsedItems.length > 0) {
+        throw new Error(
+          "One or more selected units are already used in Item Master. Please remove or update the associated Item Master records before deleting."
+        );
+      }
+
       const result = await tx.unit.updateMany({
         where: {
-          id: {
-            in: unitIds,
-          },
+          id: { in: unitIds },
           deletedAt: null,
         },
         data: {
@@ -897,7 +955,11 @@ export async function DELETE(request) {
         success: false,
         message: error.message || "Failed to delete unit.",
       },
-      { status: 500 }
+      {
+        status: error.message?.includes("already used in Item Master")
+          ? 409
+          : 500,
+      }
     );
   }
 }

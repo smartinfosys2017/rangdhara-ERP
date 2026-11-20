@@ -235,8 +235,8 @@ export async function POST(request) {
         Rate: item.rather ?? "",
         Status: item.status ? "Active" : "Inactive",
         "Default Item": item.isDefault ? "Yes" : "No",
-        "Created At": formatDate(item.createdAt),
-        "Updated At": formatDate(item.updatedAt),
+        "Created Date": formatDate(item.createdAt),
+        "Updated Date": formatDate(item.updatedAt),
       }));
 
       const worksheet = XLSX.utils.json_to_sheet(rows);

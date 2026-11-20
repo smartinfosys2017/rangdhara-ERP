@@ -233,7 +233,7 @@ export function StoreClientFiltersSheet({
 
       <SheetContent className="sm:w-[320px] sm:max-w-none inset-5 start-auto h-auto rounded-lg p-0 [&_[data-slot=sheet-close]]:top-4.5 [&_[data-slot=sheet-close]]:end-5">
         <SheetHeader className="border-b border-border px-5 py-3.5">
-          <SheetTitle>Filter Location</SheetTitle>
+          <SheetTitle>Filter Warehouse</SheetTitle>
         </SheetHeader>
 
         <SheetBody className="py-0">
@@ -248,7 +248,7 @@ export function StoreClientFiltersSheet({
                   </TooltipTrigger>
 
                   <TooltipContent>
-                    <p>Filter location by status.</p>
+                    <p>Filter warehouse by status.</p>
                   </TooltipContent>
                 </Tooltip>
               </div>

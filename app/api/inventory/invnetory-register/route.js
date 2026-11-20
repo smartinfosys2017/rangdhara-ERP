@@ -186,7 +186,7 @@ export async function GET(request) {
       }
 
       // -------------------------------------------------
-      // 2. GET LATEST Issue/Receipt
+      // 2. GET LATEST Stock Movement
       // -------------------------------------------------
 
       const latestIssueReceipt = await prisma.issueReceipt.findFirst({
@@ -399,7 +399,7 @@ export async function GET(request) {
         },
       }),
 
-      // Issue/Receipt
+      // Stock Movement
       prisma.issueReceipt.findMany({
         where: {
           deletedAt: null,
@@ -446,7 +446,7 @@ export async function GET(request) {
     );
 
     // =================================================
-    // LATEST Issue/Receipt MAP + ITEM TYPES PER ITEM
+    // LATEST Stock Movement MAP + ITEM TYPES PER ITEM
     //
     // issueReceipts are ordered newest -> oldest, so the first receipt
     // found for each ItemMasterid is the latest one.
@@ -912,19 +912,19 @@ export async function POST(request) {
 
       return issueReceipt;
     });
-    // SYSTEM LOG: CREATE Issue/Receipt
+    // SYSTEM LOG: CREATE Stock Movement
     await systemLog({
       event: "create",
       userId: body.UserId ? String(body.UserId) : null,
       entityId: String(result.id),
       entityType: "inventory.issue-receipt",
-      description: `Issue/Receipt created. Receipt ID: ${result.id}`,
+      description: `Stock Movement created. Receipt ID: ${result.id}`,
       ipAddress: request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null,
     });
     return NextResponse.json(
       {
         success: true,
-        message: "Issue/Receipt created successfully",
+        message: "Stock Movement created successfully",
         data: issueReceipt,
       },
       {
@@ -932,12 +932,12 @@ export async function POST(request) {
       },
     );
   } catch (error) {
-    console.error("CREATE Issue/Receipt ERROR:", error);
+    console.error("CREATE Stock Movement ERROR:", error);
 
     return NextResponse.json(
       {
         success: false,
-        message: error.message || "Failed creating Issue/Receipt",
+        message: error.message || "Failed creating Stock Movement",
       },
       {
         status: 500,
@@ -1030,7 +1030,7 @@ export async function DELETE(request) {
 
     // 5. SOFT-DELETE ALL RELATED RECORDS
     const result = await prisma.$transaction(async (tx) => {
-      // Update Issue/Receipt entries.
+      // Update Stock Movement entries.
       const issueReceiptResult =
         await tx.issueReceipt.updateMany({
           where: {

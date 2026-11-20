@@ -72,11 +72,11 @@ export default function IssueReceiptDeleteDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-destructive">
             <Trash2 className="h-5 w-5" />
-            Delete Issue/Receipt
+            Delete Stock Movement
           </DialogTitle>
 
           <DialogDescription>
-            Are you sure you want to delete this Issue/Receipt?
+            Are you sure you want to delete this Stock Movement?
           </DialogDescription>
         </DialogHeader>
         <ScrollArea className="grow min-h-0 flex flex-col h-full max-h-[60vh] overflow-hidden">
@@ -263,7 +263,7 @@ export default function IssueReceiptDeleteDialog({
           >
             <Trash2 className="mr-2 h-4 w-4" />
 
-            {loading ? "Deleting..." : "Delete Issue/Receipt"}
+            {loading ? "Deleting..." : "Delete Stock Movement"}
           </Button>
         </DialogFooter>
       </DialogContent>

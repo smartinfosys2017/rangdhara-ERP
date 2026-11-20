@@ -29,13 +29,13 @@ const LocationsActiveDialog = ({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <CheckCircle className="size-5 text-green-600" />
-            Mark Location Active
+            Mark Warehouse Active
           </DialogTitle>
 
           <DialogDescription>
             Are you sure you want to mark{" "}
             <strong className="text-foreground">
-              {selectedCount} location
+              {selectedCount} warehouse
               {selectedCount !== 1 ? "s" : ""}
             </strong>{" "}
             as active?

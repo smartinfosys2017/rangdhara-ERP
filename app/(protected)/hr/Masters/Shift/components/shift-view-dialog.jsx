@@ -225,20 +225,20 @@ export default function ShiftViewDialog({
                 </Select>
               </div>
 
-              {/* CREATED AT */}
+              {/* CREATED Date */}
               <div className="space-y-2">
                 <label className="flex items-center gap-2 text-sm font-medium">
                   <CalendarDays className="h-4 w-4" />
-                  Created At
+                  Created Date
                 </label>
                 <Input value={formatDate(Shift.createdAt)} readOnly />
               </div>
 
-              {/* UPDATED AT */}
+              {/* UPDATED Date */}
               <div className="space-y-2">
                 <label className="flex items-center gap-2 text-sm font-medium">
                   <CalendarDays className="h-4 w-4" />
-                  Updated At
+                  Updated Date
                 </label>
                 <Input value={formatDate(Shift.updatedAt)} readOnly />
               </div>

@@ -49,7 +49,7 @@ export async function POST(request) {
       return NextResponse.json(
         {
           success: false,
-          message: "CSV file contains no Issue/Receipt records.",
+          message: "CSV file contains no Stock Movement records.",
         },
         {
           status: 400,
@@ -64,7 +64,7 @@ export async function POST(request) {
     const errors = [];
 
     // -------------------------------------------------
-    // IMPORT Issue/Receipt
+    // IMPORT Stock Movement
     // -------------------------------------------------
 
     for (let index = 0; index < inventory.length; index++) {
@@ -147,7 +147,7 @@ export async function POST(request) {
         imported++;
       } catch (error) {
         console.error(
-          `Issue/Receipt import row ${index + 2}:`,
+          `Stock Movement import row ${index + 2}:`,
           error
         );
 
@@ -157,7 +157,7 @@ export async function POST(request) {
           row: index + 2,
           message:
             error?.message ||
-            "Unable to import Issue/Receipt.",
+            "Unable to import Stock Movement.",
         });
       }
     }
@@ -176,14 +176,14 @@ export async function POST(request) {
     });
   } catch (error) {
     console.error(
-      "Issue/Receipt import error:",
+      "Stock Movement import error:",
       error
     );
 
     return NextResponse.json(
       {
         success: false,
-        message: "Issue/Receipt import failed.",
+        message: "Stock Movement import failed.",
         error: error?.message,
       },
       {

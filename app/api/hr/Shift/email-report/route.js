@@ -333,8 +333,8 @@ export async function POST(request) {
         "Shift Name": shift.name ?? "",
         Description: shift.description ?? "",
         Status: shift.status ? "Active" : "Inactive",
-        "Created At": formatDate(shift.createdAt),
-        "Updated At": formatDate(shift.updatedAt),
+        "Created Date": formatDate(shift.createdAt),
+        "Updated Date": formatDate(shift.updatedAt),
       }));
 
       const worksheet = XLSX.utils.json_to_sheet(rows);

@@ -103,7 +103,7 @@ const ExpenseCategoryViewDialog = ({
           {/* CREATED */}
 
           <InfoItem
-            label="Created At"
+            label="Created Date"
             value={
               expenseCategory.createdAt
                 ? formatDate(
@@ -118,7 +118,7 @@ const ExpenseCategoryViewDialog = ({
           {/* UPDATED */}
 
           <InfoItem
-            label="Updated At"
+            label="Updated Date"
             value={
               expenseCategory.updatedAt
                 ? formatDate(

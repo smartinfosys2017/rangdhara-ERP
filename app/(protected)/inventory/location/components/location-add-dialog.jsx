@@ -228,21 +228,21 @@ export default function LocationAddDialog({
 
       if (!response.ok || !result.success) {
         throw new Error(
-          result.message || `Failed to ${item ? "update" : "create"} location.`,
+          result.message || `Failed to ${item ? "update" : "create"} warehouse.`,
         );
       }
 
       showToast(
         "success",
         item
-          ? "Location updated successfully."
-          : "Location added successfully.",
+          ? "Warehouse updated successfully."
+          : "Warehouse added successfully.",
       );
 
       onSuccess?.(result.data);
       handleClose();
     } catch (error) {
-      console.error("LOCATION SAVE ERROR:", error);
+      console.error("Warehouse SAVE ERROR:", error);
 
       showToast("error", error.message || "Something went wrong.");
     } finally {
@@ -277,19 +277,19 @@ export default function LocationAddDialog({
       <DialogContent>
         <div className="flex h-full max-h-[90vh] flex-col overflow-hidden">
           <DialogHeader>
-            <DialogTitle>{item ? "Edit Location" : "Add Location"}</DialogTitle>
+            <DialogTitle>{item ? "Edit Warehouse" : "Add Warehouse"}</DialogTitle>
 
             <DialogDescription>
-              {item ? "Update location information." : "Create a new location."}
+              {item ? "Update warehouse information." : "Create a new warehouse."}
             </DialogDescription>
           </DialogHeader>
 
           <ScrollArea className="grow min-h-0 flex flex-col h-full max-h-[90vh] overflow-hidden">
             <DialogBody className="space-y-6 pt-0 px-0 min-h-0">
-              {/* LOCATION CODE */}
+              {/* Warehouse CODE */}
               <div>
                 <label className="mb-2 block text-sm font-medium">
-                  Location Code <span className="text-destructive">*</span>
+                  Warehouse Code <span className="text-destructive">*</span>
                 </label>
 
                 <Input
@@ -306,15 +306,15 @@ export default function LocationAddDialog({
                 )}
               </div>
 
-              {/* LOCATION NAME */}
+              {/* Warehouse NAME */}
               <div>
                 <label className="mb-2 block text-sm font-medium">
-                  Location Name <span className="text-destructive">*</span>
+                  Warehouse Name <span className="text-destructive">*</span>
                 </label>
 
                 <Input
                   value={form.locationName}
-                  placeholder="Enter location name"
+                  placeholder="Enter warehouse name"
                   maxLength={255}
                   onChange={(e) => updateField("locationName", e.target.value)}
                 />
@@ -354,7 +354,7 @@ export default function LocationAddDialog({
                   <h3 className="text-base font-semibold">Custom Fields</h3>
 
                   <p className="text-sm text-muted-foreground">
-                    Additional location information.
+                    Additional warehouse information.
                   </p>
                 </div>
 

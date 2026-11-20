@@ -22,8 +22,8 @@ import {
 import IssueReceiptList from "./components/issue-receipt-list";
 
 export const metadata = {
-  title: "Issue/Receipt",
-  description: "Manage Issue/Receipt.",
+  title: "Stock Movement",
+  description: "Manage Stock Movement.",
 };
 
 export default async function Page() {
@@ -37,7 +37,7 @@ export default async function Page() {
       {/* <Container>
         <Toolbar>
           <ToolbarHeading>
-            <ToolbarTitle>Issue/Receipt</ToolbarTitle>
+            <ToolbarTitle>Stock Movement</ToolbarTitle>
 
             <Breadcrumb>
               <BreadcrumbList>
@@ -48,7 +48,7 @@ export default async function Page() {
                 <BreadcrumbSeparator />
 
                 <BreadcrumbItem>
-                  <BreadcrumbPage>Issue/Receipt Management</BreadcrumbPage>
+                  <BreadcrumbPage>Stock Movement Management</BreadcrumbPage>
                 </BreadcrumbItem>
               </BreadcrumbList>
             </Breadcrumb>

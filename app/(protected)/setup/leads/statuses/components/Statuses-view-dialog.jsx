@@ -147,7 +147,7 @@ const StatusesViewDialog = ({
           {/* CREATED */}
 
           <InfoItem
-            label="Created At"
+            label="Created Date"
             value={
               Statuses.createdAt
                 ? formatDate(
@@ -162,7 +162,7 @@ const StatusesViewDialog = ({
           {/* UPDATED */}
 
           <InfoItem
-            label="Updated At"
+            label="Updated Date"
             value={
               Statuses.updatedAt
                 ? formatDate(

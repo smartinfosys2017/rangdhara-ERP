@@ -1565,28 +1565,20 @@ const MachineMasterList = () => {
                 enableSorting: false,
                 enableHiding: false,
             },
-
             {
-                accessorKey: "machineNumber",
-                id: "machineNumber",
+                accessorKey: "id",
+                id: "id",
 
                 header: ({ column }) => (
-                    <DataGridColumnHeader
-                        title="Machine Number"
-                        column={column}
-                        visibility
-                    />
+                    <DataGridColumnHeader title="ID" column={column} visibility />
                 ),
 
                 cell: ({ row }) => (
-                    <span className="font-medium">
-                        {row.original.machineNumber || "-"}
-                    </span>
+                    <span>#{String(row.original.id).substring(0, 8)}</span>
                 ),
 
-                size: 160,
+                size: 120,
             },
-
             {
                 accessorKey: "machineName",
                 id: "machineName",
@@ -1607,6 +1599,28 @@ const MachineMasterList = () => {
 
                 size: 190,
             },
+            {
+                accessorKey: "machineNumber",
+                id: "machineNumber",
+
+                header: ({ column }) => (
+                    <DataGridColumnHeader
+                        title="Machine Number"
+                        column={column}
+                        visibility
+                    />
+                ),
+
+                cell: ({ row }) => (
+                    <span>
+                        {row.original.machineNumber || "-"}
+                    </span>
+                ),
+
+                size: 160,
+            },
+
+
 
             {
                 accessorKey: "machineCode",
@@ -1724,8 +1738,8 @@ const MachineMasterList = () => {
                     <DataGridColumnHeader title="Created By" column={column} visibility />
                 ),
 
-                cell: ({ row }) => ( <span> {getCreatedByName(row.original)}
-                    </span>
+                cell: ({ row }) => (<span> {getCreatedByName(row.original)}
+                </span>
                 ),
 
                 size: 160,
@@ -1757,7 +1771,7 @@ const MachineMasterList = () => {
                     headerTitle: "Updated Date",
                     skeleton: <Skeleton className="h-7 w-24" />,
                 },
-            },          
+            },
 
             {
                 accessorKey: "updatedByName",

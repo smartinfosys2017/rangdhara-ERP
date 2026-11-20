@@ -29,8 +29,8 @@ export default class CustomerCSVExport extends CSVExport {
       "Shipping Country",
       "Groups",
       "Active",
-      "Created At",
-      "Updated At",
+      "Created Date",
+      "Updated Date",
       "Custom Fields"
     ]);
   }

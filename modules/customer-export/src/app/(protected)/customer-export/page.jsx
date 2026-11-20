@@ -128,11 +128,11 @@ export default function Page() {
               <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
                 <div>
                   <h4 className="mb-2 text-sm font-semibold text-foreground">
-                    Inventory Issue/Receipt CSV Management
+                    Stock Movement CSV Management
                   </h4>
 
                   <p className="text-sm text-muted-foreground">
-                    Use the buttons above to import Inventory Issue/Receipt from
+                    Use the buttons above to import Stock Movement from
                     a CSV file or download your existing Inventory records.
                   </p>
                 </div>
@@ -145,7 +145,7 @@ export default function Page() {
                     variant="outline"
                     onClick={() => openImport("issueReceipt")}
                   >
-                    Import Issue/Receipt CSV
+                    Import Stock Movement CSV
                   </Button>
                 </div>
               </div>
@@ -237,7 +237,7 @@ export default function Page() {
         }}
       />
 
-      {/* Issue/Receipt */}
+      {/* Stock Movement */}
       <InventoryIssueReciptImport
         open={activeImport === "issueReceipt"}
         closeDialog={closeImport}

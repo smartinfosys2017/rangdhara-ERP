@@ -254,12 +254,12 @@ export default function CustomerDetailsPage() {
             />
 
             <Field
-              label="Created At"
+              label="Created Date"
               value={customer?.created_at}
             />
 
             <Field
-              label="Updated At"
+              label="Updated Date"
               value={customer?.updated_at}
             />
 

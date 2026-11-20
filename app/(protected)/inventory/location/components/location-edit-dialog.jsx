@@ -79,7 +79,7 @@ export default function LocationEditDialog({
   const [customFieldDefinitions, setCustomFieldDefinitions] = useState([]);
   const [customFields, setCustomFields] = useState({});
   const [customFieldsReady, setCustomFieldsReady] = useState(false);
-  // LOAD LOCATION DATA
+  // LOAD Warehouse DATA
   useEffect(() => {
     if (!open) return;
 
@@ -121,15 +121,15 @@ export default function LocationEditDialog({
     const locationCode = form.locationCode.trim();
 
     if (!locationName) {
-      newErrors.locationName = "Location name is required.";
+      newErrors.locationName = "Warehouse name is required.";
     } else if (locationName.length > 255) {
-      newErrors.locationName = "Location name must not exceed 255 characters.";
+      newErrors.locationName = "Warehouse name must not exceed 255 characters.";
     }
 
     if (!locationCode) {
-      newErrors.locationCode = "Location code is required.";
+      newErrors.locationCode = "Warehouse code is required.";
     } else if (locationCode.length > 25) {
-      newErrors.locationCode = "Location code must not exceed 25 characters.";
+      newErrors.locationCode = "Warehouse code must not exceed 25 characters.";
     }
 
     setErrors(newErrors);
@@ -176,7 +176,7 @@ export default function LocationEditDialog({
             <AlertIcon>
               <RiErrorWarningFill />
             </AlertIcon>
-            <AlertTitle>Location ID is missing.</AlertTitle>
+            <AlertTitle>Warehouse ID is missing.</AlertTitle>
           </Alert>
         ),
         { position: "top-center" },
@@ -206,7 +206,7 @@ export default function LocationEditDialog({
       const result = await response.json();
 
       if (!response.ok || !result.success) {
-        throw new Error(result.message || "Failed to update location.");
+        throw new Error(result.message || "Failed to update warehouse.");
       }
 
       toast.custom(
@@ -215,7 +215,7 @@ export default function LocationEditDialog({
             <AlertIcon>
               <RiCheckboxCircleFill />
             </AlertIcon>
-            <AlertTitle>Location updated successfully.</AlertTitle>
+            <AlertTitle>Warehouse updated successfully.</AlertTitle>
           </Alert>
         ),
         { position: "top-center" },
@@ -224,7 +224,7 @@ export default function LocationEditDialog({
       onSuccess?.(result.data);
       handleClose();
     } catch (error) {
-      console.error("Location UPDATE ERROR:", error);
+      console.error("Warehouse UPDATE ERROR:", error);
 
       toast.custom(
         () => (
@@ -258,23 +258,23 @@ export default function LocationEditDialog({
       <DialogContent className="max-h-[75vh] overflow-y-auto">
         <div className="flex h-full max-h-[90vh] flex-col overflow-hidden">
           <DialogHeader>
-            <DialogTitle>Edit Location</DialogTitle>
-            <DialogDescription>Update location information.</DialogDescription>
+            <DialogTitle>Edit Warehouse</DialogTitle>
+            <DialogDescription>Update warehouse information.</DialogDescription>
           </DialogHeader>
 
           <ScrollArea className="grow min-h-0 flex flex-col h-full max-h-[90vh] overflow-hidden">
             <DialogBody className="space-y-6 pt-0 px-0 min-h-0">
-              {/* LOCATION CODE */}
+              {/* Warehouse CODE */}
               <div>
                 <label className="mb-2 block text-sm font-medium">
-                  Location Code <span className="text-destructive">*</span>
+                  Warehouse Code <span className="text-destructive">*</span>
                 </label>
 
                 <Input
                   value={form.locationCode}
                   maxLength={25}
                   readOnly
-                  placeholder="Enter location code"
+                  placeholder="Enter warehouse code"
                   onChange={(e) => handleChange("locationCode", e.target.value)}
                 />
 
@@ -284,10 +284,10 @@ export default function LocationEditDialog({
                   </p>
                 )}
               </div>
-              {/* LOCATION NAME */}
+              {/* Warehouse NAME */}
               <div>
                 <label className="mb-2 block text-sm font-medium">
-                  Location Name <span className="text-destructive">*</span>
+                  Warehouse Name <span className="text-destructive">*</span>
                 </label>
 
                 <Input
@@ -331,7 +331,7 @@ export default function LocationEditDialog({
                   <h3 className="text-base font-semibold">Custom Fields</h3>
 
                   <p className="text-sm text-muted-foreground">
-                    Additional location information.
+                    Additional warehouse information.
                   </p>
                 </div>
 

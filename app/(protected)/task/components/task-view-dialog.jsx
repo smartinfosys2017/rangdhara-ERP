@@ -1169,7 +1169,7 @@ const TaskViewDialog = ({
               description="Task record timestamps."
             >
               <InfoItem
-                label="Created At"
+                label="Created Date"
                 value={
                   taskData.createdAt
                     ? formatDateTime(
@@ -1182,7 +1182,7 @@ const TaskViewDialog = ({
               />
 
               <InfoItem
-                label="Updated At"
+                label="Updated Date"
                 value={
                   taskData.updatedAt
                     ? formatDateTime(

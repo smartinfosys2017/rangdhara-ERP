@@ -19,11 +19,11 @@ import {
   ToolbarTitle,
 } from "@/components/common/toolbar";
 
-import LocationList from "./components/location-list";
+import WarehouseList from "./components/location-list";
 
 export const metadata = {
-  title: "Location",
-  description: "Manage Location.",
+  title: "Warehouse",
+  description: "Manage Warehouse.",
 };
 
 export default async function Page() {
@@ -37,22 +37,17 @@ export default async function Page() {
       {/* <Container>
         <Toolbar>
           <ToolbarHeading>
-            <ToolbarTitle>Location</ToolbarTitle>
+            <ToolbarTitle>Warehouse</ToolbarTitle>
 
             <Breadcrumb>
               <BreadcrumbList>
-                <BreadcrumbItem>
-                  <BreadcrumbLink href="/">Setup</BreadcrumbLink>
-                </BreadcrumbItem>
-
-                <BreadcrumbSeparator />
                 <BreadcrumbItem>
                   <BreadcrumbLink href="/">Inventrory</BreadcrumbLink>
                 </BreadcrumbItem>
 
                 <BreadcrumbSeparator />
                 <BreadcrumbItem>
-                  <BreadcrumbPage>Location</BreadcrumbPage>
+                  <BreadcrumbPage>Warehouse</BreadcrumbPage>
                 </BreadcrumbItem>
               </BreadcrumbList>
             </Breadcrumb>
@@ -63,7 +58,7 @@ export default async function Page() {
       </Container> */}
 
       <Container>
-        <LocationList />
+        <WarehouseList />
       </Container>
     </>
   );

@@ -4,6 +4,7 @@ import prisma from "@/lib/prisma";
 import { checkMenuAccess } from "@/lib/module-access";
 import { systemLog } from "@/services/system-log";
 import { getAuthenticatedUser } from "@/lib/auth-user";
+import { checkMasterUsage } from "@/lib/check-master-usage";
 
 // ======================================================
 // HELPERS
@@ -713,11 +714,12 @@ export async function DELETE(request) {
 
     const body = await request.json();
 
+    // Support single and bulk delete.
     const ids = [
       ...new Set(
         (Array.isArray(body.ids) ? body.ids : body.id ? [body.id] : [])
-          .filter((id) => id !== null && id !== undefined && String(id))
-          .map(String),
+          .filter((id) => id !== null && id !== undefined && String(id).trim())
+          .map((id) => String(id).trim()),
       ),
     ];
 
@@ -733,7 +735,7 @@ export async function DELETE(request) {
 
     const user = await getAuthenticatedUser();
 
-    if (!user) {
+    if (!user?.id) {
       return NextResponse.json(
         {
           success: false,
@@ -743,6 +745,7 @@ export async function DELETE(request) {
       );
     }
 
+    // Find active Item Groups.
     const existingGroups = await prisma.itemGroup.findMany({
       where: {
         id: { in: ids },
@@ -754,27 +757,121 @@ export async function DELETE(request) {
       },
     });
 
-    if (!existingGroups.length) {
+    if (existingGroups.length !== ids.length) {
       return NextResponse.json(
         {
           success: false,
-          message: "No active item groups were found to delete.",
+          message:
+            "One or more item groups were not found or have already been deleted.",
         },
         { status: 404 },
       );
     }
 
-    const deleteResult = await prisma.itemGroup.updateMany({
-      where: {
-        id: { in: existingGroups.map((item) => item.id) },
-        deletedAt: null,
+    const activeIds = existingGroups.map((item) => item.id);
+    const groupNames = existingGroups.map((item) => item.groupName);
+
+    // Check ItemMaster, IssueReceipt and MachineItemDetails usage.
+    const usage = await checkMasterUsage([
+      {
+        model: prisma.itemMaster,
+        where: {
+          ItemGroupid: { in: activeIds },
+          deletedAt: null,
+        },
+        message:
+          "Cannot delete Item Group because it is already used in Item Master. Please remove or update the associated Item Master records first.",
       },
-      data: {
-        deletedAt: new Date(),
-        lastSyncAt: new Date(),
+      {
+        model: prisma.issueReceipt,
+        where: {
+          ItemGroupid: { in: activeIds },
+          deletedAt: null,
+        },
+        message:
+          "Cannot delete Item Group because it is already used in Stock Movement. Please remove or update the associated Stock Movement records first.",
       },
+      {
+        model: prisma.machineItemDetails,
+        where: {
+          SelectedGroupName: { in: groupNames },
+          deletedAt: null,
+        },
+        message:
+          "Cannot delete Item Group because it is already assigned to a Machine. Please remove the associated Machine Item Details first.",
+      },
+    ]);
+
+    if (!usage.canDelete) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: usage.message,
+        },
+        { status: 409 },
+      );
+    }
+
+    const now = new Date();
+
+    // Recheck usage and soft-delete inside transaction.
+    const deleteResult = await prisma.$transaction(async (tx) => {
+      const transactionUsage = await checkMasterUsage([
+        {
+          model: tx.itemMaster,
+          where: {
+            ItemGroupid: { in: activeIds },
+            deletedAt: null,
+          },
+          message:
+            "Cannot delete Item Group because it is already used in Item Master. Please remove or update the associated Item Master records first.",
+        },
+        {
+          model: tx.issueReceipt,
+          where: {
+            ItemGroupid: { in: activeIds },
+            deletedAt: null,
+          },
+          message:
+            "Cannot delete Item Group because it is already used in Stock Movement. Please remove or update the associated Stock Movement records first.",
+        },
+        {
+          model: tx.machineItemDetails,
+          where: {
+            SelectedGroupName: { in: groupNames },
+            deletedAt: null,
+          },
+          message:
+            "Cannot delete Item Group because it is already assigned to a Machine. Please remove the associated Machine Item Details first.",
+        },
+      ]);
+
+      if (!transactionUsage.canDelete) {
+        throw new Error(transactionUsage.message);
+      }
+
+      const result = await tx.itemGroup.updateMany({
+        where: {
+          id: { in: activeIds },
+          deletedAt: null,
+        },
+        data: {
+          deletedAt: now,
+          updateby: String(user.id),
+          lastSyncAt: now,
+        },
+      });
+
+      if (result.count !== activeIds.length) {
+        throw new Error(
+          "Some item groups could not be deleted. Please refresh and try again.",
+        );
+      }
+
+      return result;
     });
 
+    // Create system logs.
     for (const item of existingGroups) {
       await systemLog({
         event: "delete",
@@ -793,6 +890,7 @@ export async function DELETE(request) {
           ? "Item group deleted successfully."
           : `${deleteResult.count} item group(s) deleted successfully.`,
       count: deleteResult.count,
+      deletedIds: activeIds,
       sync: true,
     });
   } catch (error) {
@@ -803,7 +901,9 @@ export async function DELETE(request) {
         success: false,
         message: error.message || "Failed to delete item group(s).",
       },
-      { status: 500 },
+      {
+        status: error.message?.includes("already used") ? 409 : 500,
+      },
     );
   }
 }

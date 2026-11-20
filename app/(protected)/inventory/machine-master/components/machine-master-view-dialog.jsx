@@ -482,14 +482,14 @@ export default function MachineMasterViewDialog({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <DetailCard
                     icon={Calendar}
-                    title="Created At"
+                    title="Created Date"
                   >
                     {formatDate(MachineMaster.createdAt)}
                   </DetailCard>
 
                   <DetailCard
                     icon={Calendar}
-                    title="Updated At"
+                    title="Updated Date"
                   >
                     {formatDate(MachineMaster.updatedAt)}
                   </DetailCard>

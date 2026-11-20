@@ -1103,7 +1103,7 @@ const CustomerViewDialog = ({
               description="Customer record timestamps."
             >
               <InfoItem
-                label="Created At"
+                label="Created Date"
                 value={
                   customerData.createdAt
                     ? formatDateTime(
@@ -1116,7 +1116,7 @@ const CustomerViewDialog = ({
               />
 
               <InfoItem
-                label="Updated At"
+                label="Updated Date"
                 value={
                   customerData.updatedAt
                     ? formatDateTime(

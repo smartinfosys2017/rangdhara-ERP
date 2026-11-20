@@ -104,10 +104,10 @@ export default function LocationViewDialog({ open, closeDialog, Location }) {
       <DialogContent>
         <div className="flex h-full max-h-[90vh] flex-col overflow-hidden">
           <DialogHeader>
-            <DialogTitle>Location Details</DialogTitle>
+            <DialogTitle>Warehouse Details</DialogTitle>
 
             <DialogDescription>
-              View complete location information.
+              View complete warehouse information.
             </DialogDescription>
           </DialogHeader>
 
@@ -117,7 +117,7 @@ export default function LocationViewDialog({ open, closeDialog, Location }) {
               <div className="rounded-lg border p-4">
                 <div className="mb-2 flex items-center gap-2 font-semibold">
                   <Layers className="h-4 w-4" />
-                  Location Code
+                  Warehouse Code
                 </div>
 
                 <p className="break-all text-sm">
@@ -129,7 +129,7 @@ export default function LocationViewDialog({ open, closeDialog, Location }) {
               <div className="rounded-lg border p-4">
                 <div className="mb-2 flex items-center gap-2 font-semibold">
                   <Layers className="h-4 w-4" />
-                  Location Name
+                  Warehouse Name
                 </div>
 
                 <p className="break-words text-sm">
@@ -189,21 +189,21 @@ export default function LocationViewDialog({ open, closeDialog, Location }) {
 
               {/* CREATED AND UPDATED */}
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                {/* CREATED AT */}
+                {/* CREATED Date */}
                 <div className="rounded-lg border p-4">
                   <div className="mb-2 flex items-center gap-2 font-semibold">
                     <Calendar className="h-4 w-4" />
-                    Created At
+                    Created Date
                   </div>
 
                   <p className="text-sm">{formatDate(Location.createdAt)}</p>
                 </div>
 
-                {/* UPDATED AT */}
+                {/* UPDATED Date */}
                 <div className="rounded-lg border p-4">
                   <div className="mb-2 flex items-center gap-2 font-semibold">
                     <Calendar className="h-4 w-4" />
-                    Updated At
+                    Updated Date
                   </div>
 
                   <p className="text-sm">{formatDate(Location.updatedAt)}</p>

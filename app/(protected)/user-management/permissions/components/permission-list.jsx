@@ -232,7 +232,7 @@ const PermissionList = () => {
       id: 'createdAt',
       accessorKey: 'createdAt',
       header: ({ column }) =>
-      <DataGridColumnHeader title="Created At" column={column} />,
+      <DataGridColumnHeader title="Created Date" column={column} />,
 
       cell: (info) => {
         const value = info.getValue();
@@ -241,7 +241,7 @@ const PermissionList = () => {
       enableSorting: true,
       enableHiding: false,
       meta: {
-        headerTitle: 'Created At',
+        headerTitle: 'Created Date',
         skeleton: <Skeleton className="w-20 h-8" />
       }
     },

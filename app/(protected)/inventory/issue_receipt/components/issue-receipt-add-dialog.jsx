@@ -1,30 +1,40 @@
+
 "use client";
 
-import { useEffect, useState } from "react";
-import { toast } from "sonner";
-import { apiFetch } from "@/lib/api";
+import { useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
+import { toast } from "sonner";
+import { format } from "date-fns";
+import { Calendar as CalendarIcon } from "lucide-react";
+import {
+  RiCheckboxCircleFill,
+  RiErrorWarningFill,
+} from "@remixicon/react";
+
+import { apiFetch } from "@/lib/api";
+import { useRoleSelectQuery } from "../../../user-management/roles/hooks/use-role-select-query";
 
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogBody,
   DialogTitle,
-  DialogDescription,
+  DialogBody,
 } from "@/components/ui/dialog";
 
 import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
 import { Input } from "@/components/ui/input";
+import { Calendar } from "@/components/ui/calendar";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { format } from "date-fns";
-import { Calendar as CalendarIcon, ChevronDown } from "lucide-react";
+
 import {
   Select,
   SelectContent,
@@ -32,12 +42,88 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
+import {
+  RadioGroup,
+  RadioGroupItem,
+} from "@/components/ui/radio-group";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Alert, AlertIcon, AlertTitle } from "@/components/ui/alert";
-import { RiCheckboxCircleFill, RiErrorWarningFill } from "@remixicon/react";
-import { Textarea } from "@/components/ui/textarea";
-import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
-import { useRoleSelectQuery } from "../../../user-management/roles/hooks/use-role-select-query";
+
+// --------------------------------------------------
+// HELPERS
+// --------------------------------------------------
+
+const getToday = () => format(new Date(), "yyyy-MM-dd");
+
+const getInitialForm = () => ({
+  ItemGroupid: "",
+  GroupName: [],
+  ItemMasterid: "",
+  ItemTypeid: "",
+  TransactionTypeid: "",
+  IssueDate: `${getToday()}T10:00`,
+
+  Qty: "",
+  PreviousBalance: 0,
+  Balance: 0,
+  Issue_by: "",
+  RecivedBy: "",
+
+  // Optional receipt details
+  ReciptChallanNo: "",
+  ReceiptDate: "",
+
+  // Optional requisition details
+  RequisitionSupplyNo: "",
+  RequisitionSupplyDate: "",
+
+  // Optional purchase order details
+  PurchaseNo: "",
+  PurchaseDate: "",
+
+  GetPassNo: "",
+  DateOfRecive: "",
+  Comment: "",
+  Price: "",
+  Particuler: "",
+  DestinationType: "",
+  DestinationId: "",
+});
+
+const getArray = (data) => {
+  if (Array.isArray(data)) return data;
+  return [];
+};
+
+const getItemGroupId = (item) =>
+  String(
+    item?.ItemGroupid ??
+    item?.itemGroupId ??
+    item?.ItemGroupId ??
+    item?.groupId ??
+    ""
+  );
+
+const getItemConditionId = (item) => String(item?.ItemConditionid ?? item?.itemConditionId ?? "");
+const getItemUnitId = (item) =>
+  String(
+    item?.Unitid ??
+    item?.unitId ??
+    item?.UnitId ??
+    item?.unitid ??
+    ""
+  );
+const getStaffName = (staff) =>
+  staff?.name ||
+  [staff?.firstName, staff?.lastName].filter(Boolean).join(" ") ||
+  staff?.username ||
+  staff?.email ||
+  `User #${staff?.id}`;
+
+// --------------------------------------------------
+// TOAST
+// --------------------------------------------------
+
 const showSuccessToast = (message) => {
   toast.custom(
     () => (
@@ -48,7 +134,7 @@ const showSuccessToast = (message) => {
         <AlertTitle>{message}</AlertTitle>
       </Alert>
     ),
-    { position: "top-center" },
+    { position: "top-center" }
   );
 };
 
@@ -58,7 +144,7 @@ const showErrorToast = (message) => {
       <Alert
         variant="mono"
         icon="destructive"
-        close={true}
+        close
         onClose={() => toast.dismiss(t)}
       >
         <AlertIcon>
@@ -67,63 +153,182 @@ const showErrorToast = (message) => {
         <AlertTitle>{message}</AlertTitle>
       </Alert>
     ),
-    { position: "top-center" },
+    { position: "top-center" }
   );
 };
-const getToday = () => {
-  const date = new Date();
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
 
-  return `${year}-${month}-${day}`;
-};
-const getInitialForm = () => ({
-  ItemGroupid: [],
-  ItemMasterid: "",
-  ItemTypeid: "",
-  TransactionTypeid: "",
-  IssueDate: getToday(),
-  Qty: "",
-  PreviousBalance: 0,
-  Balance: 0,
-  Issue_by: "",
-  GetPassNo: "",
-  DateOfRecive: "",
-  ReciptChallanNo: "",
-  RecivedBy: "",
-  Comment: "",
-  Price: "",
-  Particuler: "",
-});
+function DateTimePicker({
+  value,
+  onChange,
+  disabled = false,
+  placeholder = "Pick a date and time",
+  disableFuture = false,
+}) {
+  const today = new Date();
+
+  const selectedDate = value
+    ? new Date(`${value.slice(0, 10)}T00:00:00`)
+    : undefined;
+
+  const selectedTime = value?.includes("T")
+    ? value.slice(11, 16)
+    : undefined;
+
+  const timeSlots = Array.from({ length: 30 }, (_, index) => {
+    const hour = 9 + Math.floor(index / 2);
+    const minute = index % 2 === 0 ? "00" : "30";
+
+    return `${String(hour).padStart(2, "0")}:${minute}`;
+  });
+
+  const handleDateChange = (newDate) => {
+    if (!newDate) return;
+
+    const dateString = format(newDate, "yyyy-MM-dd");
+    const timeString = selectedTime || "10:00";
+
+    onChange(`${dateString}T${timeString}`);
+  };
+
+  const handleTimeChange = (newTime) => {
+    if (!selectedDate) return;
+
+    onChange(
+      `${format(selectedDate, "yyyy-MM-dd")}T${newTime}`
+    );
+  };
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full justify-start text-left font-normal"
+          disabled={disabled}
+        >
+          <CalendarIcon className="mr-2 size-4" />
+
+          {value ? (
+            `${format(
+              new Date(`${value.slice(0, 10)}T00:00:00`),
+              "PPP"
+            )} - ${selectedTime || "Select time"}`
+          ) : (
+            <span>{placeholder}</span>
+          )}
+        </Button>
+      </PopoverTrigger>
+
+      <PopoverContent
+        className="w-auto p-0"
+        align="start"
+      >
+        <div className="flex max-sm:flex-col">
+          <Calendar
+            mode="single"
+            selected={selectedDate}
+            onSelect={handleDateChange}
+            disabled={
+              disableFuture
+                ? [{ after: today }]
+                : undefined
+            }
+            className="p-2 sm:pe-5"
+          />
+
+          <div className="relative w-full sm:w-40 max-sm:h-48">
+            <div className="absolute inset-0 py-4 max-sm:border-t">
+              <ScrollArea className="h-full sm:border-s">
+                <div className="space-y-3">
+                  <div className="flex h-5 shrink-0 items-center px-5">
+                    <p className="text-sm font-medium">
+                      {selectedDate
+                        ? format(selectedDate, "EEEE, d")
+                        : "Pick a date"}
+                    </p>
+                  </div>
+
+                  <div className="grid gap-1.5 px-5 max-sm:grid-cols-2">
+                    {timeSlots.map((timeSlot) => {
+                      const isSelected = selectedTime === timeSlot;
+
+                      const isPast =
+                        disableFuture &&
+                        selectedDate &&
+                        format(selectedDate, "yyyy-MM-dd") ===
+                        format(today, "yyyy-MM-dd") &&
+                        timeSlot >
+                        `${String(today.getHours()).padStart(2, "0")}:${String(
+                          today.getMinutes()
+                        ).padStart(2, "0")}`;
+
+                      return (
+                        <Button
+                          key={timeSlot}
+                          type="button"
+                          variant={isSelected ? "primary" : "outline"}
+                          size="sm"
+                          className="w-full"
+                          disabled={!selectedDate || isPast}
+                          onClick={() => handleTimeChange(timeSlot)}
+                        >
+                          {timeSlot}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </ScrollArea>
+            </div>
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// --------------------------------------------------
+// COMPONENT
+// --------------------------------------------------
 
 export default function IssueReceiptAddDialog({
   open,
   closeDialog,
   onSuccess,
 }) {
-  // AUTHENTICATED USER
   const { data: session, status } = useSession();
 
   const userName = session?.user?.name || "admin";
   const userId = session?.user?.id || null;
 
+  const { data: roleList = [], isLoading: rolesLoading } =
+    useRoleSelectQuery();
+
   const [loading, setLoading] = useState(false);
   const [dropdownLoading, setDropdownLoading] = useState(false);
+  const [staffLoading, setStaffLoading] = useState(false);
 
   const [groups, setGroups] = useState([]);
   const [items, setItems] = useState([]);
-  const [types, setTypes] = useState([]);
+  const [productTypes, setProductTypes] = useState([]);
   const [transactions, setTransactions] = useState([]);
-  const [errors, setErrors] = useState({});
-  const [form, setForm] = useState(getInitialForm());
-  const { data: roleList = [], isLoading: rolesLoading } =
-    useRoleSelectQuery();
+  const [staffUsers, setStaffUsers] = useState([]);
+
   const [selectedGroups, setSelectedGroups] = useState([]);
   const [selectedRole, setSelectedRole] = useState("all");
-  const [staffUsers, setStaffUsers] = useState([]);
-  const [staffLoading, setStaffLoading] = useState(false);
-  // UPDATE FIELD
+
+  const [groupDropdownOpen, setGroupDropdownOpen] = useState(false);
+
+  const [errors, setErrors] = useState({});
+  const [form, setForm] = useState(getInitialForm());
+  const [units, setUnits] = useState([]);
+  const [destinationList, setDestinationList] = useState([]);
+  const [destinationLoading, setDestinationLoading] = useState(false);
+  // --------------------------------------------------
+  // FIELD UPDATE
+  // --------------------------------------------------
+
   const updateField = (key, value) => {
     setForm((prev) => ({
       ...prev,
@@ -136,29 +341,30 @@ export default function IssueReceiptAddDialog({
     }));
   };
 
-  // CALCULATE BALANCE
+  // --------------------------------------------------
+  // BALANCE CALCULATION
+  // --------------------------------------------------
+
   const calculateBalance = (
     previousBalance,
     qty,
     transactionTypeId,
-    transactionList = transactions,
+    transactionList = transactions
   ) => {
     const previous = Number(previousBalance) || 0;
     const quantity = Number(qty) || 0;
 
-    if (!transactionTypeId) return previous;
-
     const transaction = transactionList.find(
-      (item) => String(item.id) === String(transactionTypeId),
+      (item) => String(item.id) === String(transactionTypeId)
     );
 
     if (!transaction) return previous;
 
     const effect = String(
-      transaction.EffectOnTransaction ?? transaction.effectOnTransaction ?? "",
-    )
-      .trim()
-      .toLowerCase();
+      transaction.EffectOnTransaction ??
+      transaction.effectOnTransaction ??
+      ""
+    ).trim().toLowerCase();
 
     if (["addition", "add", "additions"].includes(effect)) {
       return previous + quantity;
@@ -166,7 +372,7 @@ export default function IssueReceiptAddDialog({
 
     if (
       ["deduction", "deductions", "deduct", "subtract", "subtraction"].includes(
-        effect,
+        effect
       )
     ) {
       return previous - quantity;
@@ -175,32 +381,342 @@ export default function IssueReceiptAddDialog({
     return previous;
   };
 
-  // FETCH PREVIOUS BALANCE
-  const fetchPreviousBalance = async (itemMasterId) => {
-    if (!itemMasterId) return 0;
+  // --------------------------------------------------
+  // FILTER ITEMS BY SELECTED GROUPS
+  // --------------------------------------------------
 
+  const filteredItems = useMemo(() => {
+    if (!selectedGroups.length) return [];
+
+    return items.filter((item) =>
+      selectedGroups.includes(getItemGroupId(item))
+    );
+  }, [items, selectedGroups]);
+
+  // --------------------------------------------------
+  // LOAD DROPDOWNS
+  // --------------------------------------------------
+  const loadDropdowns = async () => {
     try {
-      const response = await apiFetch(
-        `/api/inventory/issue-receipt/previous-balance/${itemMasterId}`,
-      );
+      setDropdownLoading(true);
 
-      const result = await response.json();
+      const [
+        groupResponse,
+        itemResponse,
+        transactionResponse,
+        productTypeResponse,
+        unitResponse,
 
-      if (!response.ok || !result.success) {
-        throw new Error(result.message || "Failed to fetch previous balance");
+      ] = await Promise.all([
+        apiFetch("/api/inventory/item-groups?limit=100&status=active"),
+        apiFetch("/api/inventory/item-master?limit=100&status=active"),
+        apiFetch("/api/inventory/transaction-type?limit=100&status=active"),
+        apiFetch("/api/inventory/product-type?limit=100&status=active"),
+        apiFetch("/api/inventory/unit?limit=100&status=active"),
+
+      ]);
+
+      const [
+        groupResult,
+        itemResult,
+        transactionResult,
+        productTypeResult,
+        unitResult,
+      ] = await Promise.all([
+        groupResponse.json(),
+        itemResponse.json(),
+        transactionResponse.json(),
+        productTypeResponse.json(),
+        unitResponse.json(),
+      ]);
+
+      if (!groupResponse.ok || !groupResult.success) {
+        throw new Error(groupResult.message || "Failed to load item groups.");
       }
 
-      return Number(result.data?.PreviousBalance ?? 0);
+      if (!itemResponse.ok || !itemResult.success) {
+        throw new Error(itemResult.message || "Failed to load items.");
+      }
+
+      if (!transactionResponse.ok || !transactionResult.success) {
+        throw new Error(
+          transactionResult.message || "Failed to load transaction types."
+        );
+      }
+
+      if (!productTypeResponse.ok || !productTypeResult.success) {
+        throw new Error(
+          productTypeResult.message || "Failed to load product types."
+        );
+      }
+
+      const groupList = getArray(groupResult.data);
+      const itemList = getArray(itemResult.data);
+      const transactionList = getArray(transactionResult.data);
+      const productTypeList = getArray(productTypeResult.data);
+      const unitList = getArray(unitResult.data);
+
+      if (!unitResponse.ok || !unitResult.success) {
+        throw new Error(unitResult.message || "Failed to load units.");
+      }
+
+      setGroups(groupList);
+      setItems(itemList);
+      setTransactions(transactionList);
+      setProductTypes(productTypeList);
+      setUnits(unitList);
+
+      // Select all groups by default.
+      const allGroupIds = groupList.map((group) => String(group.id));
+
+      setSelectedGroups(allGroupIds);
+
+      // Default transaction type.
+      const defaultTransaction =
+        transactionList.find((item) => item.isDefault === true) ||
+        transactionList[0];
+
+      setForm((prev) => ({
+        ...prev,
+        GroupName: groupList
+          .map((group) => group.groupName || group.GroupName)
+          .filter(Boolean),
+        TransactionTypeid: defaultTransaction
+          ? String(defaultTransaction.id)
+          : "",
+      }));
     } catch (error) {
-      console.error("PREVIOUS BALANCE ERROR", error);
-      showErrorToast(error.message || "Failed to fetch previous balance");
-      return 0;
+      console.error("Stock Movement DROPDOWN ERROR:", error);
+      showErrorToast(error.message || "Failed to load dropdown data.");
+    } finally {
+      setDropdownLoading(false);
     }
   };
-  const handleRoleSelection = (value) => {
+
+  // --------------------------------------------------
+  // FETCH PREVIOUS BALANCE AND RATE
+  // --------------------------------------------------
+
+  const fetchPreviousBalance = async (itemMasterId) => {
+    if (!itemMasterId) {
+      return {
+        PreviousBalance: 0,
+        Rate: 0,
+        Balance: 0,
+      };
+    }
+
+    const response = await apiFetch(
+      `/api/inventory/issue-receipt/previous-balance/${itemMasterId}`
+    );
+
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      throw new Error(
+        result.message || "Failed to fetch previous balance and rate."
+      );
+    }
+
+    return {
+      PreviousBalance: Number(result.data?.PreviousBalance) || 0,
+      Rate: Number(result.data?.Rate) || 0,
+      Balance: Number(result.data?.Balance) || 0,
+    };
+  };
+
+  // --------------------------------------------------
+  // GROUP SELECTION
+  // --------------------------------------------------
+
+  const handleGroupToggle = (groupId) => {
+    const updated = selectedGroups.includes(groupId)
+      ? selectedGroups.filter((id) => id !== groupId)
+      : [...selectedGroups, groupId];
+
+    setSelectedGroups(updated);
+
+    const selectedNames = groups
+      .filter((group) => updated.includes(String(group.id)))
+      .map((group) => group.groupName)
+      .filter(Boolean);
+
+    setForm((prev) => ({
+      ...prev,
+      GroupName: selectedNames,
+      ItemMasterid: "",
+      ItemGroupid: "",
+      ItemTypeid: "",
+      PreviousBalance: 0,
+      Balance: 0,
+    }));
+
+    setErrors((prev) => ({
+      ...prev,
+      ItemGroupid: updated.length ? "" : "Item Group is required.",
+      ItemMasterid: "",
+      ItemTypeid: "",
+    }));
+  };
+
+  const handleSelectAllGroups = () => {
+    const allGroupIds = groups.map((group) => String(group.id));
+
+    setSelectedGroups(allGroupIds);
+
+    setForm((prev) => ({
+      ...prev,
+      GroupName: groups.map((group) => group.groupName).filter(Boolean),
+      ItemMasterid: "",
+      ItemGroupid: "",
+      ItemTypeid: "",
+      PreviousBalance: 0,
+      Balance: 0,
+    }));
+
+    setErrors((prev) => ({
+      ...prev,
+      ItemGroupid: "",
+      ItemMasterid: "",
+      ItemTypeid: "",
+    }));
+  };
+
+  const handleClearAllGroups = () => {
+    setSelectedGroups([]);
+
+    setForm((prev) => ({
+      ...prev,
+      GroupName: [],
+      ItemGroupid: "",
+      ItemMasterid: "",
+      ItemTypeid: "",
+      PreviousBalance: 0,
+      Balance: 0,
+    }));
+
+    setErrors((prev) => ({
+      ...prev,
+      ItemGroupid: "Item Group is required.",
+      ItemMasterid: "",
+      ItemTypeid: "",
+    }));
+  };
+
+  // --------------------------------------------------
+  // ITEM SELECTION
+  // --------------------------------------------------
+
+  const handleItemChange = async (value) => {
+    const selectedItem = items.find(
+      (item) => String(item.id) === String(value)
+    );
+
+    if (!selectedItem) return;
+
+    const groupId = getItemGroupId(selectedItem);
+    const conditionId = getItemConditionId(selectedItem);
+
+    const matchedCondition = productTypes.find(
+      (type) => String(type.id) === conditionId
+    );
+
+    // Reset previous values while loading new item data
+    setForm((prev) => ({
+      ...prev,
+      ItemMasterid: value,
+      ItemGroupid: groupId,
+      ItemTypeid: matchedCondition ? String(matchedCondition.id) : "",
+      PreviousBalance: 0,
+      Balance: 0,
+      Price: "",
+    }));
+
+    setErrors((prev) => ({
+      ...prev,
+      ItemMasterid: "",
+      ItemTypeid: matchedCondition
+        ? ""
+        : "Item condition is missing in Item Master.",
+      Price: "",
+    }));
+
+    try {
+      const itemData = await fetchPreviousBalance(value);
+
+      setForm((prev) => {
+        // Prevent old API response from updating a newly selected item
+        if (String(prev.ItemMasterid) !== String(value)) {
+          return prev;
+        }
+
+        return {
+          ...prev,
+          PreviousBalance: itemData.PreviousBalance,
+          Price: itemData.Rate.toString(),
+          Balance: calculateBalance(
+            itemData.PreviousBalance,
+            prev.Qty,
+            prev.TransactionTypeid
+          ),
+        };
+      });
+    } catch (error) {
+      console.error("PREVIOUS BALANCE AND RATE ERROR:", error);
+      showErrorToast(
+        error.message || "Failed to fetch previous balance and rate."
+      );
+    }
+  };
+  // --------------------------------------------------
+  // TRANSACTION TYPE CHANGE
+  // --------------------------------------------------
+
+  const handleTransactionChange = (value) => {
+    setForm((prev) => ({
+      ...prev,
+      TransactionTypeid: value,
+      Balance: calculateBalance(
+        prev.PreviousBalance,
+        prev.Qty,
+        value
+      ),
+    }));
+
+    setErrors((prev) => ({
+      ...prev,
+      TransactionTypeid: "",
+    }));
+  };
+
+  // --------------------------------------------------
+  // QUANTITY CHANGE
+  // --------------------------------------------------
+
+  const handleQtyChange = (value) => {
+    setForm((prev) => ({
+      ...prev,
+      Qty: value,
+      Balance: calculateBalance(
+        prev.PreviousBalance,
+        value,
+        prev.TransactionTypeid
+      ),
+    }));
+
+    setErrors((prev) => ({
+      ...prev,
+      Qty: "",
+    }));
+  };
+
+  // --------------------------------------------------
+  // ROLE CHANGE
+  // --------------------------------------------------
+
+  const handleRoleChange = (value) => {
     setSelectedRole(value);
 
-    // Clear previous staff selections when the role changes.
     setForm((prev) => ({
       ...prev,
       Issue_by: "",
@@ -214,124 +730,24 @@ export default function IssueReceiptAddDialog({
     }));
   };
 
-  // STAFF NAME
-  const getStaffName = (staff) => {
-    return (
-      staff?.name ||
-      [staff?.firstName, staff?.lastName].filter(Boolean).join(" ") ||
-      staff?.username ||
-      staff?.email ||
-      `User #${staff?.id}`
-    );
+  const handleDestinationTypeChange = (value) => {
+    setForm((prev) => ({
+      ...prev,
+      DestinationType: value,
+      DestinationId: "",
+    }));
+
+    setDestinationList([]);
+    setErrors((prev) => ({
+      ...prev,
+      DestinationType: "",
+      DestinationId: "",
+    }));
   };
+  // --------------------------------------------------
+  // FETCH USERS BY ROLE
+  // --------------------------------------------------
 
-  // LOAD DROPDOWNS
-  const loadDropdowns = async () => {
-    try {
-      setDropdownLoading(true);
-
-      const [
-        groupResponse,
-        itemResponse,
-        typeResponse,
-        transactionResponse,
-      ] = await Promise.all([
-        apiFetch("/api/inventory/item-groups?limit=100&status=active"),
-        apiFetch("/api/inventory/item-master?limit=100&status=active"),
-        apiFetch("/api/inventory/product-type?limit=100&status=active"),
-        apiFetch("/api/inventory/transaction-type?limit=100&status=active"),
-      ]);
-
-      const groupResult = await groupResponse.json();
-      const itemResult = await itemResponse.json();
-      const typeResult = await typeResponse.json();
-      const transactionResult = await transactionResponse.json();
-
-      if (!groupResponse.ok || !groupResult.success) {
-        throw new Error(groupResult.message || "Failed loading Item Groups");
-      }
-
-      if (!itemResponse.ok || !itemResult.success) {
-        throw new Error(itemResult.message || "Failed loading Item Masters");
-      }
-
-      if (!typeResponse.ok || !typeResult.success) {
-        throw new Error(typeResult.message || "Failed loading Item Types");
-      }
-
-      if (!transactionResponse.ok || !transactionResult.success) {
-        throw new Error(
-          transactionResult.message || "Failed loading Transaction Types",
-        );
-      }
-
-
-
-      const groupList = groupResult.data || [];
-      const itemList = itemResult.data || [];
-      const typeList = typeResult.data || [];
-      const transactionList = transactionResult.data || [];
-
-
-      setGroups(groupList);
-      setItems(itemList);
-      setTypes(typeList);
-      setTransactions(transactionList);
-
-      const defaultGroup =
-        groupList.find((item) => item.isDefault === true) || groupList[0];
-
-      const defaultItem =
-        itemList.find((item) => item.isDefault === true) ||
-        itemList.find(
-          (item) =>
-            !defaultGroup?.id ||
-            String(item.ItemGroupid) === String(defaultGroup.id),
-        ) ||
-        itemList[0];
-
-      const defaultType =
-        typeList.find((item) => item.isDefault === true) || typeList[0];
-
-      const defaultTransaction =
-        transactionList.find((item) => item.isDefault === true) ||
-        transactionList[0];
-
-      const defaultGroupId = defaultGroup?.id || "";
-      const defaultItemMasterId = defaultItem?.id || "";
-      const defaultTypeId = defaultType?.id || "";
-      const defaultTransactionTypeId = defaultTransaction?.id || "";
-
-      let previousBalance = 0;
-
-      if (defaultItemMasterId) {
-        previousBalance = await fetchPreviousBalance(defaultItemMasterId);
-      }
-
-      const initialBalance = calculateBalance(
-        previousBalance,
-        "",
-        defaultTransactionTypeId,
-        transactionList,
-      );
-
-      setForm((prev) => ({
-        ...prev,
-        ItemGroupid: prev.ItemGroupid || defaultGroupId,
-        ItemMasterid: prev.ItemMasterid || defaultItemMasterId,
-        ItemTypeid: prev.ItemTypeid || defaultTypeId,
-        TransactionTypeid: prev.TransactionTypeid || defaultTransactionTypeId,
-
-        PreviousBalance: previousBalance,
-        Balance: initialBalance,
-      }));
-    } catch (error) {
-      console.error("Issue/Receipt DROPDOWN ERROR", error);
-      showErrorToast(error.message || "Failed loading dropdown data");
-    } finally {
-      setDropdownLoading(false);
-    }
-  };
   useEffect(() => {
     if (!open) return;
 
@@ -346,12 +762,12 @@ export default function IssueReceiptAddDialog({
           limit: "100",
         });
 
-        if (selectedRole && selectedRole !== "all") {
+        if (selectedRole !== "all") {
           params.set("roleId", selectedRole);
         }
 
         const response = await apiFetch(
-          `/api/user-management/users?${params.toString()}`,
+          `/api/user-management/users?${params.toString()}`
         );
 
         const result = await response.json();
@@ -360,14 +776,11 @@ export default function IssueReceiptAddDialog({
           throw new Error(result.message || "Failed to load users.");
         }
 
-        // Your API returns { data: [], pagination: {} }
-        const users = Array.isArray(result.data) ? result.data : [];
-
         if (!ignore) {
-          setStaffUsers(users);
+          setStaffUsers(getArray(result.data));
         }
       } catch (error) {
-        console.error("ROLE BASED USER FETCH ERROR:", error);
+        console.error("STAFF FETCH ERROR:", error);
 
         if (!ignore) {
           setStaffUsers([]);
@@ -386,162 +799,155 @@ export default function IssueReceiptAddDialog({
       ignore = true;
     };
   }, [open, selectedRole]);
-  // LOAD WHEN DIALOG OPENS
+
+  // --------------------------------------------------
+  // RESET AND LOAD WHEN DIALOG OPENS
+  // --------------------------------------------------
+
   useEffect(() => {
     if (!open) return;
 
     setForm(getInitialForm());
+    setErrors({});
+    setGroups([]);
+    setItems([]);
+    setTransactions([]);
+    setProductTypes([]);
+    setUnits([]);
+    setStaffUsers([]);
+    setSelectedGroups([]);
+    setSelectedRole("all");
+    setGroupDropdownOpen(false);
+
     loadDropdowns();
   }, [open]);
 
-  // ITEM GROUP CHANGE
-  const handleGroupChange = (groupId) => {
-    setSelectedGroups((prev) => {
-      const updated = prev.includes(groupId)
-        ? prev.filter((id) => id !== groupId)
-        : [...prev, groupId];
+  useEffect(() => {
+    if (!open || !form.DestinationType) {
+      setDestinationList([]);
+      return;
+    }
 
-      setForm((formPrev) => ({
-        ...formPrev,
-        ItemGroupid: updated,
-      }));
+    let ignore = false;
 
-      return updated;
-    });
+    const fetchDestinationList = async () => {
+      try {
+        setDestinationLoading(true);
 
-    setErrors((prev) => ({
-      ...prev,
-      ItemGroupid: "",
-    }));
-  };
+        const endpoint =
+          form.DestinationType === "location"
+            ? "/api/inventory/location?limit=100&status=active"
+            : "/api/inventory/machine-master?limit=100&status=active";
 
-  // ITEM CHANGE
-  const handleItemMasterChange = async (value) => {
-    setForm((prev) => ({
-      ...prev,
-      ItemMasterid: value,
-      PreviousBalance: 0,
-      Balance: 0,
-    }));
+        const response = await apiFetch(endpoint);
+        const result = await response.json();
 
-    if (!value) return;
+        if (!response.ok || !result.success) {
+          throw new Error(
+            result.message || "Failed to load destination list."
+          );
+        }
 
-    const previousBalance = await fetchPreviousBalance(value);
+        if (!ignore) {
+          setDestinationList(getArray(result.data));
+        }
+      } catch (error) {
+        console.error("DESTINATION FETCH ERROR:", error);
 
-    setForm((prev) => ({
-      ...prev,
-      ItemMasterid: value,
-      PreviousBalance: previousBalance,
-      Balance: calculateBalance(
-        previousBalance,
-        prev.Qty,
-        prev.TransactionTypeid,
-        transactions,
-      ),
-    }));
-  };
+        if (!ignore) {
+          setDestinationList([]);
+          showErrorToast(
+            error.message || "Failed to load destination list."
+          );
+        }
+      } finally {
+        if (!ignore) {
+          setDestinationLoading(false);
+        }
+      }
+    };
 
-  // TRANSACTION TYPE CHANGE
-  const handleTransactionTypeChange = (value) => {
-    setForm((prev) => ({
-      ...prev,
-      TransactionTypeid: value,
-      Balance: calculateBalance(
-        prev.PreviousBalance,
-        prev.Qty,
-        value,
-        transactions,
-      ),
-    }));
-  };
+    fetchDestinationList();
 
-  // QTY CHANGE
-  const handleQtyChange = (value) => {
-    setForm((prev) => ({
-      ...prev,
-      Qty: value,
-      Balance: calculateBalance(
-        prev.PreviousBalance,
-        value,
-        prev.TransactionTypeid,
-        transactions,
-      ),
-    }));
-  };
-
-  // RESET
-  const resetForm = () => {
-    setForm(getInitialForm());
-    setErrors({});
-  };
-
-  // CLOSE
-  const handleClose = () => {
-    if (loading) return;
-
-    resetForm();
-    closeDialog?.();
-  };
-
+    return () => {
+      ignore = true;
+    };
+  }, [open, form.DestinationType]);
+  // --------------------------------------------------
   // VALIDATION
+  // --------------------------------------------------
+
   const validateForm = () => {
     const newErrors = {};
 
-    const requiredFields = [
-      ["ItemGroupid", "Item Group"],
-      ["ItemMasterid", "Item"],
-      ["ItemTypeid", "Item Type"],
-      ["TransactionTypeid", "Transaction Type"],
-      ["IssueDate", "Date"],
-      ["Issue_by", "Issue By"],
-      ["RecivedBy", "Received By"],
-    ];
+    if (!selectedGroups.length) {
+      newErrors.ItemGroupid = "Item Group is required.";
+    }
 
-    requiredFields.forEach(([field, label]) => {
-      if (!String(form[field] ?? "").trim()) {
-        newErrors[field] = `${label} is required.`;
-      }
-    });
+    if (!form.ItemMasterid) {
+      newErrors.ItemMasterid = "Item is required.";
+    }
 
-    const qty = String(form.Qty ?? "").trim();
+    if (!form.ItemTypeid) {
+      newErrors.ItemTypeid = "Item Condition is required in Item Master.";
+    }
 
-    if (!qty) {
+    if (!form.TransactionTypeid) {
+      newErrors.TransactionTypeid = "Transaction Type is required.";
+    }
+
+    if (!form.IssueDate) {
+      newErrors.IssueDate = "Date is required.";
+    }
+
+    if (!selectedRole) {
+      newErrors.UserRole = "User Role is required.";
+    }
+
+    if (!form.Issue_by) {
+      newErrors.Issue_by = "User is required.";
+    }
+
+    if (!form.Qty.trim()) {
       newErrors.Qty = "Quantity is required.";
-    } else if (!Number.isFinite(Number(qty)) || Number(qty) <= 0) {
+    } else if (
+      !Number.isFinite(Number(form.Qty)) ||
+      Number(form.Qty) <= 0
+    ) {
       newErrors.Qty = "Quantity must be greater than 0.";
-    } else if (!Number.isInteger(Number(qty))) {
+    } else if (!Number.isInteger(Number(form.Qty))) {
       newErrors.Qty = "Quantity must be a whole number.";
     }
 
-    const price = String(form.Price ?? "").trim();
-
     if (
-      price &&
-      (!Number.isFinite(Number(price)) || Number(price) < 0)
+      form.Price !== "" &&
+      (!Number.isFinite(Number(form.Price)) || Number(form.Price) < 0)
     ) {
-      newErrors.Price = "Price must be a valid non-negative number.";
+      newErrors.Price = "Rate must be a valid non-negative number.";
     }
 
-    const textLimits = [
-      ["GetPassNo", form.GetPassNo, "Gate Pass No", 100],
-      ["ReciptChallanNo", form.ReciptChallanNo, "Receipt Challan No", 100],
-      ["Particuler", form.Particuler, "Particuler", 255],
-      ["Comment", form.Comment, "Comment", 1000],
-    ];
-
-    textLimits.forEach(([field, value, label, limit]) => {
-      if (String(value ?? "").length > limit) {
-        newErrors[field] = `${label} must not exceed ${limit} characters.`;
-      }
-    });
-
-    if (form.DateOfRecive && form.DateOfRecive > getToday()) {
-      newErrors.DateOfRecive = "Date of Receive cannot be in the future.";
+    if (form.IssueDate && new Date(form.IssueDate) > new Date()) {
+      newErrors.IssueDate = "Date and time cannot be in the future.";
     }
 
+    if (form.Comment.length > 1000) {
+      newErrors.Comment = "Comment cannot exceed 1000 characters.";
+    }
+
+    if (form.ReciptChallanNo.length > 100) {
+      newErrors.ReciptChallanNo =
+        "Challan/Bill Number cannot exceed 100 characters.";
+    }
+    if (!form.DestinationType) {
+      newErrors.DestinationType = "Please select Location or Machinery.";
+    }
+
+    if (form.DestinationType && !form.DestinationId) {
+      newErrors.DestinationId = "Please select a destination.";
+    }
     setErrors(newErrors);
 
-    if (Object.keys(newErrors).length > 0) {
+    if (Object.keys(newErrors).length) {
       showErrorToast("Please correct the highlighted fields.");
       return false;
     }
@@ -549,62 +955,114 @@ export default function IssueReceiptAddDialog({
     return true;
   };
 
+  // --------------------------------------------------
+  // RESET
+  // --------------------------------------------------
 
+  const resetForm = () => {
+    setForm(getInitialForm());
+    setErrors({});
+    setSelectedGroups([]);
+    setSelectedRole("all");
+    setGroupDropdownOpen(false);
+  };
+
+  const handleClose = () => {
+    if (loading) return;
+
+    resetForm();
+    closeDialog?.();
+  };
+
+  // --------------------------------------------------
   // SAVE
+  // --------------------------------------------------
+
   const handleSubmit = async () => {
     if (!validateForm()) return;
 
     if (status === "loading") {
-      showErrorToast("Please wait while your user session loads.");
+      showErrorToast("Please wait while your session loads.");
       return;
     }
 
     try {
       setLoading(true);
 
-      const response = await apiFetch("/api/inventory/issue-receipt", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          ...form,
-          Qty: Number(form.Qty),
-          PreviousBalance: Number(form.PreviousBalance),
-          Balance: Number(form.Balance),
-          Price: form.Price ? Number(form.Price) : null,
-
-          // Logged-in NextAuth user
-          UserName: userName,
-          UserId: userId,
-        }),
-      });
+      const response = await apiFetch(
+        "/api/inventory/issue-receipt",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            ...form,
+            Qty: Number(form.Qty),
+            PreviousBalance: Number(form.PreviousBalance),
+            Balance: Number(form.Balance),
+            Price: form.Price === "" ? null : Number(form.Price),
+            UserName: userName,
+            UserId: userId,
+          }),
+        }
+      );
 
       const result = await response.json();
 
       if (!response.ok || !result.success) {
-        throw new Error(result.message || "Failed creating Issue/Receipt");
+        throw new Error(
+          result.message || "Failed to create Stock Movement."
+        );
       }
 
-      showSuccessToast("Issue/Receipt created successfully");
+      showSuccessToast("Stock Movement created successfully.");
 
       onSuccess?.(result.data);
       resetForm();
       closeDialog?.();
     } catch (error) {
-      console.error("CREATE Issue/Receipt ERROR", error);
-      showErrorToast(error.message || "Failed creating Issue/Receipt");
+      console.error("CREATE Stock Movement ERROR:", error);
+      showErrorToast(error.message || "Failed to create stock movement.");
     } finally {
       setLoading(false);
     }
   };
 
-  // FILTER ITEMS BY GROUP
-  const filteredItems = items.filter(
-    (item) =>
-      !form.ItemGroupid ||
-      String(item.ItemGroupid) === String(form.ItemGroupid),
+  // --------------------------------------------------
+  // TOTAL
+  // --------------------------------------------------
+
+  const total = (
+    Number(form.Price || 0) * Number(form.Qty || 0)
+  ).toFixed(2);
+
+  const selectedItem = items.find(
+    (item) => String(item.id) === String(form.ItemMasterid)
   );
+
+  const selectedUnitId = getItemUnitId(selectedItem);
+
+  const selectedUnit = units.find(
+    (unit) => String(unit.id) === String(selectedUnitId)
+  );
+
+  const unitName =
+    selectedUnit?.unitName ||
+    selectedUnit?.UnitName ||
+    "";
+
+  const unitAbbreviation =
+    selectedUnit?.abbreviation ||
+    selectedUnit?.Abbreviation ||
+    "";
+
+  const unitLabel = unitAbbreviation
+    ? `${unitName} (${unitAbbreviation})`
+    : unitName;
+  // --------------------------------------------------
+  // UI
+  // --------------------------------------------------
 
   return (
     <Dialog
@@ -613,614 +1071,722 @@ export default function IssueReceiptAddDialog({
         if (!value) handleClose();
       }}
     >
-      <DialogContent className="w-[95vw] max-w-[95vw] sm:w-[90vw] sm:max-w-[600px] md:max-w-[700px] lg:max-w-[900px] xl:max-w-[1000px]">
+      <DialogContent className="max-w-4xl max-h-[95vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>
-            Add New Entry
-          </DialogTitle>
-
+          <DialogTitle>Add New Entry</DialogTitle>
           <DialogDescription>
-            Enter the issue/receipt details below.
+            Enter the item, transaction and stock details below.
           </DialogDescription>
         </DialogHeader>
-        <ScrollArea className="grow min-h-0 flex flex-col h-full max-h-[60vh] overflow-hidden">
+
+        <ScrollArea className="grow min-h-0 flex flex-col h-full max-h-[90vh] overflow-hidden">
           <DialogBody className="space-y-6 pt-0 px-0 min-h-0">
-            <div className="">
-              {/* LEFT SIDE */}
-              <div className="space-y-5">
-                <div className="border-b pb-3">
-                  <h3 className="text-sm font-semibold">Item Details</h3>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Select item and enter stock information
-                  </p>
-                </div>
 
-                {/* ITEM GROUP */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">
-                    Item Group <span className="ml-1 text-destructive">*</span>
-                  </label>
+            {/* ITEM GROUP */}
 
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="w-full justify-between font-normal"
-                        disabled={dropdownLoading}
-                      >
-                        <span className="truncate">
-                          {selectedGroups.length > 0
-                            ? `${selectedGroups.length} group(s) selected`
-                            : "Select Item Groups"}
-                        </span>
-                        <ChevronDown className="h-4 w-4 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
+            <div className="space-y-2">
+              <Label>
+                Item Group <span className="text-destructive">*</span>
+              </Label>
 
-                    <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-2">
-                      {/* Select All / Clear All links */}
-                      <div className="flex items-center justify-start gap-3 border-b pb-2 mb-2">
+              <div className="relative">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full justify-between"
+                  disabled={dropdownLoading || loading}
+                  onClick={() =>
+                    setGroupDropdownOpen((prev) => !prev)
+                  }
+                >
+                  <span className="truncate">
+                    {dropdownLoading
+                      ? "Loading groups..."
+                      : selectedGroups.length
+                        ? `${selectedGroups.length} group(s) selected`
+                        : "Select Item Groups"}
+                  </span>
+
+                  <span>▼</span>
+                </Button>
+
+                {groupDropdownOpen && (
+                  <div className="absolute z-50 mt-1 w-full rounded-md border bg-background p-3 shadow-lg">
+
+                    <div className="flex justify-between border-b pb-2">
+                      <span className="text-sm font-medium">
+                        Select Item Groups
+                      </span>
+
+                      <div className="flex gap-3">
                         <button
                           type="button"
-                          className="text-xs font-medium text-primary hover:underline"
-                          onClick={() => {
-                            const allGroupIds = groups.map((item) => String(item.id));
-
-                            setSelectedGroups(allGroupIds);
-                            setForm((prev) => ({
-                              ...prev,
-                              ItemGroupid: allGroupIds,
-                            }));
-
-                            setErrors((prev) => ({
-                              ...prev,
-                              ItemGroupid: "",
-                            }));
-                          }}
+                          className="text-xs text-primary"
+                          onClick={handleSelectAllGroups}
                         >
                           Select All
                         </button>
 
-                        <span className="text-muted-foreground">|</span>
-
                         <button
                           type="button"
-                          className="text-xs font-medium text-primary hover:underline"
-                          onClick={() => {
-                            setSelectedGroups([]);
-                            setForm((prev) => ({
-                              ...prev,
-                              ItemGroupid: [],
-                            }));
-                          }}
+                          className="text-xs text-destructive"
+                          onClick={handleClearAllGroups}
                         >
                           Clear All
                         </button>
                       </div>
+                    </div>
 
-                      {/* Item Groups */}
-                      <div className="max-h-60 space-y-2 overflow-y-auto">
-                        {groups.map((item) => {
-                          const groupId = String(item.id);
+                    <div
+                      className="max-h-[200px] overflow-y-auto overscroll-contain py-2"
+                      onWheel={(e) => e.stopPropagation()}
+                    >
+                      <div className="space-y-2">
+                        {groups.length ? (
+                          groups.map((group) => {
+                            const id = String(group.id);
 
-                          return (
-                            <label
-                              key={item.id}
-                              className="flex cursor-pointer items-center gap-2 rounded-md p-2 hover:bg-muted"
-                            >
-                              <Checkbox
-                                checked={selectedGroups.includes(groupId)}
-                                onCheckedChange={() => handleGroupChange(groupId)}
-                              />
+                            return (
+                              <label
+                                key={group.id}
+                                className="flex cursor-pointer items-center gap-2 rounded p-2 text-sm hover:bg-muted"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={selectedGroups.includes(id)}
+                                  onChange={() => handleGroupToggle(id)}
+                                  disabled={loading}
+                                />
 
-                              <span className="text-sm">
-                                {item.groupName ||
-                                  item.GroupName ||
-                                  item.name ||
-                                  `Group #${item.id}`}
-                              </span>
-                            </label>
-                          );
-                        })}
+                                {group.groupName || group.GroupName}
+                              </label>
+                            );
+                          })
+                        ) : (
+                          <p className="py-3 text-center text-sm text-muted-foreground">
+                            No groups found.
+                          </p>
+                        )}
                       </div>
-                    </PopoverContent>
-                  </Popover>
+                    </div>
 
-                  {errors.ItemGroupid && (
-                    <p className="text-sm text-destructive">
-                      {errors.ItemGroupid}
-                    </p>
-                  )}
-                </div>
-
-                {/* ITEM */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">
-                    Item <span className="ml-1 text-destructive">*</span>
-                  </label>
-
-                  <Select
-                    value={String(form.ItemMasterid || "")}
-                    onValueChange={handleItemMasterChange}
-                    disabled={dropdownLoading || filteredItems.length === 0}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select Item" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {filteredItems.map((item) => (
-                        <SelectItem key={item.id} value={String(item.id)}>
-                          {item.ItemName ||
-                            item.itemName ||
-                            item.name ||
-                            `Item #${item.id}`}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {errors.ItemMasterid && (
-                    <p className="text-sm text-destructive">{errors.ItemMasterid}</p>
-                  )}
-                </div>
-
-                {/* ITEM Condition */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">
-                    Item Condition <span className="ml-1 text-destructive">*</span>
-                  </label>
-
-                  <Select
-                    value={String(form.ItemTypeid || "")}
-                    onValueChange={(value) => updateField("ItemTypeid", value)}
-                    disabled={dropdownLoading}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select Item Type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {types.map((item) => (
-                        <SelectItem key={item.id} value={String(item.id)}>
-                          {item.ProductType ||
-                            item.productType ||
-                            item.name ||
-                            `Type #${item.id}`}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {errors.ItemTypeid && (
-                    <p className="text-sm text-destructive">{errors.ItemTypeid}</p>
-                  )}
-                </div>
-
-                {/* TRANSACTION TYPE */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">
-                    Transaction Type{" "}
-                    <span className="ml-1 text-destructive">*</span>
-                  </label>
-
-                  <Select
-                    value={String(form.TransactionTypeid || "")}
-                    onValueChange={handleTransactionTypeChange}
-                    disabled={dropdownLoading}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select Transaction Type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {transactions.map((item) => (
-                        <SelectItem key={item.id} value={String(item.id)}>
-                          {item.TransactionType ||
-                            item.transactionType ||
-                            item.name ||
-                            `Transaction #${item.id}`}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {errors.TransactionTypeid && (
-                    <p className="text-sm text-destructive">{errors.TransactionTypeid}</p>
-                  )}
-                </div>
-
-                {/* DATE */}
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">
-                    Date <span className="ml-1 text-destructive">*</span>
-                  </label>
-
-                  <Popover>
-                    <PopoverTrigger asChild>
+                    <div className="flex justify-end border-t pt-2">
                       <Button
                         type="button"
-                        variant="outline"
-                        mode="input"
-                        placeholder={!form.IssueDate}
-                        disabled={loading}
-                        className="w-full justify-start text-left font-normal"
+                        size="sm"
+                        onClick={() => setGroupDropdownOpen(false)}
                       >
-                        <CalendarIcon className="size-4" />
-                        {form.IssueDate
-                          ? format(new Date(`${form.IssueDate}T00:00:00`), "MM/dd/yyyy")
-                          : <span>MM/DD/YYYY</span>}
+                        Done
                       </Button>
-                    </PopoverTrigger>
+                    </div>
+                  </div>
+                )}
+              </div>
 
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={
-                          form.IssueDate
-                            ? new Date(`${form.IssueDate}T00:00:00`)
-                            : undefined
-                        }
-                        onSelect={(selectedDate) =>
-                          updateField(
-                            "IssueDate",
-                            selectedDate ? format(selectedDate, "yyyy-MM-dd") : ""
-                          )
-                        }
-                        autoFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
-
-                  {errors.IssueDate && (
-                    <p className="text-sm text-destructive">{errors.IssueDate}</p>
-                  )}
+              {selectedGroups.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {groups
+                    .filter((group) =>
+                      selectedGroups.includes(String(group.id))
+                    )
+                    .map((group) => (
+                      <span
+                        key={group.id}
+                        className="rounded bg-primary/10 px-2 py-1 text-xs text-primary"
+                      >
+                        {group.groupName || group.GroupName}
+                      </span>
+                    ))}
                 </div>
+              )}
 
-                {/* user Role */}
+              {errors.ItemGroupid && (
+                <p className="text-sm text-destructive">
+                  {errors.ItemGroupid}
+                </p>
+              )}
+            </div>
 
-                {/* USER ROLE */}
+            {/* ITEM */}
+
+            <div className="space-y-2">
+              <Label>
+                Item <span className="text-destructive">*</span>
+              </Label>
+
+              <Select
+                value={String(form.ItemMasterid || "")}
+                onValueChange={handleItemChange}
+                disabled={
+                  dropdownLoading ||
+                  loading ||
+                  !selectedGroups.length ||
+                  filteredItems.length === 0
+                }
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue
+                    placeholder={
+                      !selectedGroups.length
+                        ? "Select Item Group first"
+                        : filteredItems.length
+                          ? "Select Item"
+                          : "No items available"
+                    }
+                  />
+                </SelectTrigger>
+
+                <SelectContent>
+                  {filteredItems.map((item) => (
+                    <SelectItem
+                      key={item.id}
+                      value={String(item.id)}
+                    >
+                      {item.ItemName ||
+                        item.itemName ||
+                        item.name ||
+                        `Item #${item.id}`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {errors.ItemMasterid && (
+                <p className="text-sm text-destructive">
+                  {errors.ItemMasterid}
+                </p>
+              )}
+            </div>
+
+            {/* ITEM CONDITION - AUTOMATIC */}
+
+            <div className="space-y-2">
+              <Label>
+                Item Condition <span className="text-destructive">*</span>
+              </Label>
+
+              <Select
+                value={String(form.ItemTypeid || "")}
+                disabled
+              >
+                <SelectTrigger className="w-full bg-muted">
+                  <SelectValue placeholder="Automatically selected from Item Master" />
+                </SelectTrigger>
+
+                <SelectContent>
+                  {productTypes.map((type) => (
+                    <SelectItem
+                      key={type.id}
+                      value={String(type.id)}
+                    >
+                      {type.ProductType}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {errors.ItemTypeid && (
+                <p className="text-sm text-destructive">
+                  {errors.ItemTypeid}
+                </p>
+              )}
+            </div>
+
+            {/* TRANSACTION TYPE */}
+
+            <div className="space-y-2">
+              <Label>
+                Transaction Type <span className="text-destructive">*</span>
+              </Label>
+
+              <Select
+                value={String(form.TransactionTypeid || "")}
+                onValueChange={handleTransactionChange}
+                disabled={dropdownLoading || loading}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select Transaction Type" />
+                </SelectTrigger>
+
+                <SelectContent>
+                  {transactions.map((item) => (
+                    <SelectItem
+                      key={item.id}
+                      value={String(item.id)}
+                    >
+                      {item.TransactionType ||
+                        item.transactionType ||
+                        item.name ||
+                        `Transaction #${item.id}`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {errors.TransactionTypeid && (
+                <p className="text-sm text-destructive">
+                  {errors.TransactionTypeid}
+                </p>
+              )}
+            </div>
+
+            {/* ISSUE DATE & TIME */}
+
+            <div className="space-y-2">
+              <Label>
+                Date <span className="text-destructive">*</span>
+              </Label>
+
+              <DateTimePicker
+                value={form.IssueDate}
+                onChange={(value) => updateField("IssueDate", value)}
+                disabled={loading}
+                placeholder="Select Issue Date & Time"
+                disableFuture
+              />
+
+              {errors.IssueDate && (
+                <p className="text-sm text-destructive">
+                  {errors.IssueDate}
+                </p>
+              )}
+            </div>
+
+            {/* USER ROLE */}
+
+            <div className="space-y-2">
+              <Label>
+                User Role <span className="text-destructive">*</span>
+              </Label>
+
+              <Select
+                value={selectedRole}
+                onValueChange={handleRoleChange}
+                disabled={rolesLoading || loading}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select User Role" />
+                </SelectTrigger>
+
+                <SelectContent>
+                  <SelectItem value="all">All Roles</SelectItem>
+
+                  {roleList.map((role) => (
+                    <SelectItem
+                      key={role.id}
+                      value={String(role.id)}
+                    >
+                      {role.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {errors.UserRole && (
+                <p className="text-sm text-destructive">
+                  {errors.UserRole}
+                </p>
+              )}
+            </div>
+
+            {/* USER LIST */}
+
+            <div className="space-y-2">
+              <Label>
+                User <span className="text-destructive">*</span>
+              </Label>
+
+              <Select
+                value={String(form.Issue_by || "")}
+                onValueChange={(value) => updateField("Issue_by", value)}
+                disabled={staffLoading || loading || staffUsers.length === 0}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue
+                    placeholder={
+                      staffLoading
+                        ? "Loading users..."
+                        : "Select User"
+                    }
+                  />
+                </SelectTrigger>
+
+                <SelectContent>
+                  {staffUsers.map((staff) => (
+                    <SelectItem
+                      key={staff.id}
+                      value={String(staff.id)}
+                    >
+                      {getStaffName(staff)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {errors.Issue_by && (
+                <p className="text-sm text-destructive">
+                  {errors.Issue_by}
+                </p>
+              )}
+
+              {!staffLoading && staffUsers.length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  No users found for the selected role.
+                </p>
+              )}
+            </div>
+
+            {/* Issue Slip/Gate Pass - OPTIONAL */}
+
+            <div className="space-y-2">
+              <Label>Issue Slip/Gate Pass</Label>
+
+              <Input
+                placeholder="Enter Issue Slip/Gate Pass"
+                value={form.IssueNo}
+                onChange={(e) =>
+                  updateField("ChallanBillNo", e.target.value)
+                }
+                disabled={loading}
+                maxLength={100}
+              />
+            </div>
+
+            {/* Issue DATE & TIME - OPTIONAL */}
+
+            <div className="space-y-2">
+              <Label>Issue Slip/Gate Pass Date & Time</Label>
+
+              <DateTimePicker
+                value={form.IssueDate}
+                onChange={(value) => updateField("ReceiptDate", value)}
+                disabled={loading}
+                placeholder="Select Receipt Date & Time"
+              />
+            </div>
+            {/* Challan Bill Number - OPTIONAL */}
+
+            <div className="space-y-2">
+              <Label>Challan/Bill Number</Label>
+
+              <Input
+                placeholder="Enter Challan/Bill Number"
+                value={form.ChallanBillNo}
+                onChange={(e) =>
+                  updateField("ChallanBillNo", e.target.value)
+                }
+                disabled={loading}
+                maxLength={100}
+              />
+            </div>
+
+            {/* RECEIPT DATE & TIME - OPTIONAL */}
+
+            <div className="space-y-2">
+              <Label>Challan/Bill Date & Time</Label>
+
+              <DateTimePicker
+                value={form.ReceiptDate}
+                onChange={(value) => updateField("ReceiptDate", value)}
+                disabled={loading}
+                placeholder="Select Receipt Date & Time"
+              />
+            </div>
+
+            {/* REQUISITION Slip NUMBER - OPTIONAL */}
+
+            <div className="space-y-2">
+              <Label>Requisition Slip Number</Label>
+
+              <Input
+                placeholder="Enter requisition Slip number"
+                value={form.RequisitionSlipNo}
+                onChange={(e) =>
+                  updateField("RequisitionSlipNo", e.target.value)
+                }
+                disabled={loading}
+                maxLength={100}
+              />
+            </div>
+
+            {/* REQUISITION Slip DATE & TIME - OPTIONAL */}
+
+            <div className="space-y-2">
+              <Label>Requisition Slip Date & Time</Label>
+
+              <DateTimePicker
+                value={form.RequisitionSlipDate}
+                onChange={(value) =>
+                  updateField("RequisitionSlipDate", value)
+                }
+                disabled={loading}
+                placeholder="Select Requisition Date & Time"
+              />
+            </div>
+
+            {/* PURCHASE ORDER NUMBER - OPTIONAL */}
+
+            <div className="space-y-2">
+              <Label>Purchase Order Number</Label>
+
+              <Input
+                placeholder="Enter purchase order number"
+                value={form.PurchaseNo}
+                onChange={(e) =>
+                  updateField("PurchaseNo", e.target.value)
+                }
+                disabled={loading}
+                maxLength={100}
+              />
+            </div>
+
+            {/* PURCHASE ORDER DATE & TIME - OPTIONAL */}
+
+            <div className="space-y-2">
+              <Label>Purchase Order Date & Time</Label>
+
+              <DateTimePicker
+                value={form.PurchaseDate}
+                onChange={(value) => updateField("PurchaseDate", value)}
+                disabled={loading}
+                placeholder="Select Purchase Order Date & Time"
+              />
+            </div>
+
+            {/* PREVIOUS BALANCE */}
+
+            <div className="space-y-2">
+              <Label>Previous Balance</Label>
+              <Input
+                type="number"
+                value={form.PreviousBalance}
+                readOnly
+                className="bg-muted"
+              />
+            </div>
+
+            {/* QUANTITY */}
+
+            <div className="space-y-2">
+              <Label>
+                Quantity <span className="text-destructive">*</span>
+              </Label>
+
+              <div className="relative">
+                <Input
+                  type="number"
+                  min="1"
+                  step="1"
+                  placeholder="Enter quantity"
+                  value={form.Qty}
+                  onChange={(e) => handleQtyChange(e.target.value)}
+                  disabled={loading}
+                  className={unitLabel ? "pr-36" : ""}
+                />
+
+                {unitLabel && (
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground pointer-events-none">
+                    {unitLabel}
+                  </span>
+                )}
+              </div>
+
+              {errors.Qty && (
+                <p className="text-sm text-destructive">
+                  {errors.Qty}
+                </p>
+              )}
+            </div>
+
+            {/* RATE */}
+
+            <div className="space-y-2">
+              <Label>Rate (₹) <span className="text-destructive">*</span></Label>
+
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="Enter rate"
+                value={form.Price}
+                onChange={(e) => updateField("Price", e.target.value)}
+                disabled={loading}
+              />
+
+              {errors.Price && (
+                <p className="text-sm text-destructive">
+                  {errors.Price}
+                </p>
+              )}
+            </div>
+
+            {/* TOTAL */}
+
+            <div className="space-y-2">
+              <Label>Total (Rate × Quantity)</Label>
+              <Input
+                type="number"
+                value={total}
+                readOnly
+                className="bg-muted font-medium"
+              />
+            </div>
+
+            {/* BALANCE */}
+
+            <div className="space-y-2">
+              <Label>Balance</Label>
+              <Input
+                type="number"
+                value={form.Balance}
+                readOnly
+                className="bg-muted font-medium"
+              />
+            </div>
+            {/* DESTINATION DETAILS - SINGLE BORDER BOX */}
+
+            <div className="rounded-lg border p-4 space-y-4">
+              <div className="space-y-3">
+                <Label className="font-semibold">
+                  Issue/Receive Details
+                </Label>
+
+                <RadioGroup
+                  value={form.DestinationType}
+                  onValueChange={handleDestinationTypeChange}
+                  disabled={loading}
+                  className="flex flex-wrap gap-6"
+                >
+                  <div className="flex items-center gap-2">
+                    <RadioGroupItem
+                      value="location"
+                      id="destination-location"
+                    />
+                    <Label
+                      htmlFor="destination-location"
+                      className="cursor-pointer font-normal"
+                    >
+                      Location
+                    </Label>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <RadioGroupItem
+                      value="machinery"
+                      id="destination-machinery"
+                    />
+                    <Label
+                      htmlFor="destination-machinery"
+                      className="cursor-pointer font-normal"
+                    >
+                      Machinery
+                    </Label>
+                  </div>
+                </RadioGroup>
+
+                {errors.DestinationType && (
+                  <p className="text-sm text-destructive">
+                    {errors.DestinationType}
+                  </p>
+                )}
+              </div>
+
+              {form.DestinationType && (
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">
-                    User Role <span className="ml-1 text-destructive">*</span>
-                  </label>
+                  <Label>
+                    {form.DestinationType === "location"
+                      ? "Select Location"
+                      : "Select Machinery"}
+                    <span className="text-destructive"> *</span>
+                  </Label>
 
                   <Select
-                    value={selectedRole}
-                    onValueChange={handleRoleSelection}
-                    disabled={rolesLoading || staffLoading || loading}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select User Role" />
-                    </SelectTrigger>
-
-                    <SelectContent>
-                      <SelectItem value="all">All Roles</SelectItem>
-
-                      {roleList.map((role) => (
-                        <SelectItem key={role.id} value={String(role.id)}>
-                          {role.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* User list */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">
-                    Users
-                  </label>
-
-                  <Select
-                    value={String(form.Issue_by || "")}
-                    onValueChange={(value) => updateField("Issue_by", value)}
-                    disabled={staffLoading || loading}
+                    value={String(form.DestinationId || "")}
+                    onValueChange={(value) =>
+                      updateField("DestinationId", value)
+                    }
+                    disabled={
+                      destinationLoading ||
+                      loading ||
+                      destinationList.length === 0
+                    }
                   >
                     <SelectTrigger className="w-full">
                       <SelectValue
                         placeholder={
-                          staffLoading ? "Loading users..." : "Select staff member"
+                          destinationLoading
+                            ? "Loading..."
+                            : destinationList.length
+                              ? form.DestinationType === "location"
+                                ? "Select Location"
+                                : "Select Machinery"
+                              : "No records found"
                         }
                       />
                     </SelectTrigger>
 
                     <SelectContent>
-                      {staffUsers.map((staff) => (
-                        <SelectItem key={staff.id} value={String(staff.id)}>
-                          {getStaffName(staff)}
+                      {destinationList.map((item) => (
+                        <SelectItem
+                          key={item.id}
+                          value={String(item.id)}
+                        >
+                          {form.DestinationType === "location"
+                            ? item.locationName ||
+                            item.LocationName ||
+                            `Location #${item.id}`
+                            : item.machineName ||
+                            item.MachineName ||
+                            item.machineNumber ||
+                            item.MachineNumber ||
+                            `Machine #${item.id}`}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
 
-                  {errors.Issue_by && (
-                    <p className="text-sm text-destructive">{errors.Issue_by}</p>
-                  )}
-
-                  {!staffLoading && staffUsers.length === 0 && (
-                    <p className="text-xs text-muted-foreground">
-                      No users found for the selected role.
+                  {errors.DestinationId && (
+                    <p className="text-sm text-destructive">
+                      {errors.DestinationId}
                     </p>
                   )}
                 </div>
-                { /*user list based on role selected */}
+              )}
+            </div>
 
-                {/* RECEIPT CHALLAN NO  Not Required */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">
-                    Receipt Challan Number
-                  </label>
-                  <Input
-                    placeholder="Enter receipt challan number"
-                    value={form.ReciptChallanNo}
-                    onChange={(e) =>
-                      updateField("ReciptChallanNo", e.target.value)
-                    }
-                    disabled={loading}
-                  />
-                </div>
-                {/* RECEIPT Date  Not Required */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">
-                    Receipt Date <span className="ml-1 text-destructive">*</span>
-                  </label>
+            {/* COMMENT */}
 
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        mode="input"
-                        placeholder={!form.IssueDate}
-                        disabled={loading}
-                        className="w-full justify-start text-left font-normal"
-                      >
-                        <CalendarIcon className="size-4" />
-                        {form.IssueDate
-                          ? format(new Date(`${form.IssueDate}T00:00:00`), "MM/dd/yyyy")
-                          : <span>MM/DD/YYYY</span>}
-                      </Button>
-                    </PopoverTrigger>
+            <div className="space-y-2">
+              <Label>Comment</Label>
 
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={
-                          form.IssueDate
-                            ? new Date(`${form.IssueDate}T00:00:00`)
-                            : undefined
-                        }
-                        onSelect={(selectedDate) =>
-                          updateField(
-                            "IssueDate",
-                            selectedDate ? format(selectedDate, "yyyy-MM-dd") : ""
-                          )
-                        }
-                        autoFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
+              <Textarea
+                placeholder="Enter additional comments..."
+                value={form.Comment}
+                onChange={(e) => updateField("Comment", e.target.value)}
+                maxLength={1000}
+                rows={4}
+                disabled={loading}
+                className="resize-none"
+              />
 
-                  {errors.IssueDate && (
-                    <p className="text-sm text-destructive">{errors.IssueDate}</p>
-                  )}
-                </div>
-                {/* requisition slip number  Not Required */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">
-                    Requisition Supply Number
-                  </label>
-                  <Input
-                    placeholder="Enter receipt challan number"
-                    value={form.ReciptChallanNo}
-                    onChange={(e) =>
-                      updateField("ReciptChallanNo", e.target.value)
-                    }
-                    disabled={loading}
-                  />
-                </div>
-                {/* requisition slip  Date  Not Required */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">
-                    Requisition Supply Date
-                  </label>
-
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        mode="input"
-                        placeholder={!form.IssueDate}
-                        disabled={loading}
-                        className="w-full justify-start text-left font-normal"
-                      >
-                        <CalendarIcon className="size-4" />
-                        {form.IssueDate
-                          ? format(new Date(`${form.IssueDate}T00:00:00`), "MM/dd/yyyy")
-                          : <span>MM/DD/YYYY</span>}
-                      </Button>
-                    </PopoverTrigger>
-
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={
-                          form.IssueDate
-                            ? new Date(`${form.IssueDate}T00:00:00`)
-                            : undefined
-                        }
-                        onSelect={(selectedDate) =>
-                          updateField(
-                            "IssueDate",
-                            selectedDate ? format(selectedDate, "yyyy-MM-dd") : ""
-                          )
-                        }
-                        autoFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
-
-                  {errors.IssueDate && (
-                    <p className="text-sm text-destructive">{errors.IssueDate}</p>
-                  )}
-                </div>
-                {/* purchase order number  Not Required */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">
-                    Purchase Order Number
-                  </label>
-                  <Input
-                    placeholder="Enter receipt challan number"
-                    value={form.PurchaseNo}
-                    onChange={(e) =>
-                      updateField("PurchaseNo", e.target.value)
-                    }
-                    disabled={loading}
-                  />
-                </div>
-                {/* purchase order Date  Not Required */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">
-                    Purchase Order Date
-                  </label>
-
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        mode="input"
-                        placeholder={!form.PurchaseDate}
-                        disabled={loading}
-                        className="w-full justify-start text-left font-normal"
-                      >
-                        <CalendarIcon className="size-4" />
-                        {form.PurchaseDate
-                          ? format(new Date(`${form.PurchaseDate}T00:00:00`), "MM/dd/yyyy")
-                          : <span>MM/DD/YYYY</span>}
-                      </Button>
-                    </PopoverTrigger>
-
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={
-                          form.PurchaseDate
-                            ? new Date(`${form.PurchaseDate}T00:00:00`)
-                            : undefined
-                        }
-                        onSelect={(selectedDate) =>
-                          updateField(
-                            "PurchaseDate",
-                            selectedDate ? format(selectedDate, "yyyy-MM-dd") : ""
-                          )
-                        }
-                        autoFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
-
-                  {errors.PurchaseDate && (
-                    <p className="text-sm text-destructive">{errors.PurchaseDate}</p>
-                  )}
-                </div>
-                {/* PREVIOUS BALANCE */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Previous Balance</label>
-                  <Input
-                    type="number"
-                    value={form.PreviousBalance ?? 0}
-                    readOnly
-                    className="bg-muted"
-                  />
-                </div>
-
-                {/* QTY */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">
-                    Qty <span className="ml-1 text-destructive">*</span>
-                  </label>
-                  <Input
-                    type="number"
-                    min="1"
-                    step="1"
-                    placeholder="Enter quantity"
-                    value={form.Qty}
-                    onChange={(e) => handleQtyChange(e.target.value)}
-                    disabled={loading}
-                  />
-                  {errors.Qty && (
-                    <p className="text-sm text-destructive">{errors.Qty}</p>
-                  )}
-                </div>
-
-                {/* Rate get from item selected with editable */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Rate</label>
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    placeholder="Enter price"
-                    value={form.Price || ""}
-                    onChange={(e) => updateField("Price", e.target.value)}
-                    disabled={loading}
-                  />
-                </div>
-                {/* Total = Rate * QTY  read only and on change based on rate and qty */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Total</label>
-                  <Input
-                    type="number"
-                    value={form.Balance ?? 0}
-                    readOnly
-                    className="bg-muted font-medium"
-                  />
-                </div>
-                {/* Balance */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Balance</label>
-                  <Input
-                    type="number"
-                    value={form.Balance ?? 0}
-                    readOnly
-                    className="bg-muted font-medium"
-                  />
-                </div>
-              </div>
-
-              {/* RIGHT SIDE */}
-              <div className="space-y-5">
-
-
-
-                {/* add radio button to selected location or machine */}
-
-                {/* based on selection get dropdown list of location or machine*/}
-
-                {/* COMMENT */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Comment</label>
-                  <Textarea
-                    placeholder="Enter any additional comments..."
-                    value={form.Comment}
-                    onChange={(e) => updateField("Comment", e.target.value)}
-                    rows={6}
-                    maxLength={1000}
-                    disabled={loading}
-                    className="resize-none"
-                  />
-
-                  {errors.Comment && (
-                    <p className="text-sm text-destructive">{errors.Comment}</p>
-                  )}
-
-                  <p className="text-xs text-muted-foreground">
-                    {form.Comment.length}/1000 characters
+              <div className="flex justify-between">
+                {errors.Comment ? (
+                  <p className="text-sm text-destructive">
+                    {errors.Comment}
                   </p>
-                </div>
+                ) : (
+                  <span />
+                )}
+
+                <p className="text-xs text-muted-foreground">
+                  {form.Comment.length}/1000
+                </p>
               </div>
             </div>
+
           </DialogBody>
         </ScrollArea>
+
         <DialogFooter className="gap-2">
           <Button
             type="button"
@@ -1236,7 +1802,7 @@ export default function IssueReceiptAddDialog({
             onClick={handleSubmit}
             disabled={loading || dropdownLoading || status === "loading"}
           >
-            {loading ? "Saving..." : "Save Issue/Receipt"}
+            {loading ? "Saving..." : "Save"}
           </Button>
         </DialogFooter>
       </DialogContent>

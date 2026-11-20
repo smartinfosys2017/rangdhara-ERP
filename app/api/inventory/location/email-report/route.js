@@ -283,8 +283,8 @@ export async function POST(request) {
         "Location Name": location.locationName ?? "",
         "Location Code": location.locationCode ?? "",
         Status: location.status ? "Active" : "Inactive",
-        "Created At": formatDate(location.createdAt),
-        "Updated At": formatDate(location.updatedAt),
+        "Created Date": formatDate(location.createdAt),
+        "Updated Date": formatDate(location.updatedAt),
       }));
 
       const worksheet = XLSX.utils.json_to_sheet(rows);

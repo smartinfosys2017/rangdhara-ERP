@@ -1241,9 +1241,9 @@ async function syncIssueReceipt({ sourceDb, targetDb, sourceName, targetName }) 
     sourceName,
     targetName,
     modelName: "issueReceipt",
-    label: "Issue/Receipt",
+    label: "Stock Movement",
     validate: (record) => {
-      if (!record.id) throw new Error("Issue/Receipt ID missing");
+      if (!record.id) throw new Error("Stock Movement ID missing");
     },
   });
 }

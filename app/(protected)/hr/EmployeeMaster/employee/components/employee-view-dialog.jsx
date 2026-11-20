@@ -1023,7 +1023,7 @@ const EmployeeViewDialog = ({
               description="Employee record timestamps."
             >
               <InfoItem
-                label="Created At"
+                label="Created Date"
                 value={
                   employeeData.createdAt
                     ? formatDateTime(new Date(employeeData.createdAt))
@@ -1032,7 +1032,7 @@ const EmployeeViewDialog = ({
               />
 
               <InfoItem
-                label="Updated At"
+                label="Updated Date"
                 value={
                   employeeData.updatedAt
                     ? formatDateTime(new Date(employeeData.updatedAt))

@@ -331,7 +331,7 @@ const menus = [
                 menuType: "item",
             },
             {
-                title: "Inventory Issue/Receipt",
+                title: "Stock Movement",
                 path: "/inventory/issue_receipt",
                 permission: "issue_receipt.list",
                 menuType: "item",

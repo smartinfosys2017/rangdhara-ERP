@@ -1465,7 +1465,7 @@ const ItemGroupList = () => {
                 accessorKey: "id",
                 id: "id",
                 header: ({ column }) => (
-                    <DataGridColumnHeader title="#" column={column} visibility />
+                    <DataGridColumnHeader title="ID" column={column} visibility />
                 ),
                 cell: ({ row }) => (
                     <span>#{String(row.original.id).substring(0, 8)}</span>

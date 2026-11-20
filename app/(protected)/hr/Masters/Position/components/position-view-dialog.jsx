@@ -114,7 +114,7 @@ export default function PositionViewDialog({
                 <div className="rounded-lg border p-4">
                   <div className="mb-2 flex items-center gap-2 font-semibold">
                     <Calendar className="h-4 w-4" />
-                    Created At
+                    Created Date
                   </div>
 
                   <p className="text-sm">{formatDate(Position.createdAt)}</p>
@@ -125,7 +125,7 @@ export default function PositionViewDialog({
                 <div className="rounded-lg border p-4">
                   <div className="mb-2 flex items-center gap-2 font-semibold">
                     <Calendar className="h-4 w-4" />
-                    Updated At
+                    Updated Date
                   </div>
 
                   <p className="text-sm">{formatDate(Position.updatedAt)}</p>

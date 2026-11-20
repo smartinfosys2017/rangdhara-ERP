@@ -81,7 +81,7 @@ const contract_typeViewDialog = ({
           />
 
           <InfoItem
-            label="Created At"
+            label="Created Date"
             value={
               contract_type.createdAt
                 ? formatDate(
@@ -94,7 +94,7 @@ const contract_typeViewDialog = ({
           />
 
           <InfoItem
-            label="Updated At"
+            label="Updated Date"
             value={
               contract_type.updatedAt
                 ? formatDate(
