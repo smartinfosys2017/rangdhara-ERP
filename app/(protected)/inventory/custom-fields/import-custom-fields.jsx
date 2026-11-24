@@ -13,7 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { apiFetch } from "@/lib/api";
 
 import CustomFieldInput from "./custom-field-input";
-
+import { MultiSelect } from "@/components/ui/multi-select";
 const EMPTY_FIELDS = [];
 
 /*
@@ -253,7 +253,6 @@ export default function TransactionCustomFields({
 }) {
   const [fields, setFields] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [dropdownOpen, setDropdownOpen] = useState(false);
 
   /*
   |--------------------------------------------------------------------------
@@ -357,73 +356,17 @@ export default function TransactionCustomFields({
       fields.some((field) => field.slug === slug)
     );
   }, [normalizedValues, fields]);
-
-  /*
-  |--------------------------------------------------------------------------
-  | Select / Deselect Field
-  |--------------------------------------------------------------------------
-  */
-
-  const handleFieldSelection = (field, checked) => {
-    if (disabled || !field?.slug) return;
-
-    const updatedValues = {
-      ...normalizedValues,
-    };
-
-    if (checked) {
-      if (
-        !Object.prototype.hasOwnProperty.call(updatedValues, field.slug)
-      ) {
-        updatedValues[field.slug] = getDefaultValue(field);
-      }
-    } else {
-      delete updatedValues[field.slug];
-    }
-
-    onChange?.(updatedValues);
-  };
-
-  /*
-  |--------------------------------------------------------------------------
-  | Select All
-  |--------------------------------------------------------------------------
-  */
-
-  const handleSelectAll = () => {
-    if (disabled) return;
-
-    const updatedValues = {
-      ...normalizedValues,
-    };
-
-    fields.forEach((field) => {
-      if (!field?.slug) return;
-
-      if (
-        !Object.prototype.hasOwnProperty.call(
-          updatedValues,
-          field.slug,
-        )
-      ) {
-        updatedValues[field.slug] = getDefaultValue(field);
-      }
-    });
-
-    onChange?.(updatedValues);
-  };
-
-  /*
-  |--------------------------------------------------------------------------
-  | Clear All
-  |--------------------------------------------------------------------------
-  */
-
-  const handleClearAll = () => {
-    if (disabled) return;
-
-    onChange?.({});
-  };
+  const fieldOptions = useMemo(
+    () =>
+      fields
+        .filter((field) => field?.slug)
+        .map((field) => ({
+          label: `${field.name} (${field.type})${isRequiredField(field) ? " *" : ""}`,
+          value: field.slug,
+          disabled: Boolean(field.disabled),
+        })),
+    [fields],
+  );
 
   /*
   |--------------------------------------------------------------------------
@@ -481,78 +424,52 @@ export default function TransactionCustomFields({
     <Card>
       <CardContent className="space-y-5 pt-5">
 
-        {/* Field Selection Dropdown */}
+        {/* Field Selection MultiSelect */}
 
-        <div className="relative">
-          <button
-            type="button"
-            disabled={disabled}
-            onClick={() => setDropdownOpen((prev) => !prev)}
-            className="flex w-full items-center justify-between rounded-md border px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <span>
-              {selectedFieldSlugs.length
-                ? `${selectedFieldSlugs.length} fields selected`
-                : "Select Custom Fields"}
-            </span>
+        <div className="space-y-2">
+          <MultiSelect
+            options={fieldOptions}
+            value={selectedFieldSlugs}
+            onValueChange={(selectedSlugs) => {
+              if (disabled) return;
 
-            <span>{dropdownOpen ? "▲" : "▼"}</span>
-          </button>
+              const updatedValues = { ...normalizedValues };
 
-          {dropdownOpen && (
-            <div className="absolute z-50 mt-1 max-h-60 w-full overflow-y-auto rounded-md border bg-background p-2 shadow-md">
-              {/* Select All / Clear All */}
-              <div className="sticky bottom-0 flex justify-right gap-3 border-t bg-background px-2 py-3">
-                <button
-                  type="button"
-                  disabled={disabled}
-                  className="text-xs font-medium text-primary hover:underline disabled:opacity-50"
-                  onClick={handleSelectAll}
-                >
-                  Select All
-                </button>
+              // Remove deselected fields.
+              Object.keys(updatedValues).forEach((slug) => {
+                if (!selectedSlugs.includes(slug)) {
+                  delete updatedValues[slug];
+                }
+              });
 
-                <button
-                  type="button"
-                  disabled={disabled}
-                  className="text-xs font-medium text-destructive hover:underline disabled:opacity-50"
-                  onClick={handleClearAll}
-                >
-                  Clear All
-                </button>
-              </div>
-              {/* Field Options */}
-              {fields.map((field) => (
-                <label
-                  key={field.id}
-                  className="flex cursor-pointer items-center gap-2 rounded px-2 py-2 hover:bg-muted"
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedFieldSlugs.includes(field.slug)}
-                    disabled={disabled}
-                    onChange={(event) =>
-                      handleFieldSelection(field, event.target.checked)
-                    }
-                  />
+              // Add newly selected fields with their default values.
+              selectedSlugs.forEach((slug) => {
+                if (
+                  !Object.prototype.hasOwnProperty.call(
+                    updatedValues,
+                    slug,
+                  )
+                ) {
+                  const field = fields.find(
+                    (item) => item.slug === slug,
+                  );
 
-                  <span className="text-sm">
-                    {field.name}
+                  if (field) {
+                    updatedValues[slug] = getDefaultValue(field);
+                  }
+                }
+              });
 
-                    <span className="ml-2 text-xs text-muted-foreground">
-                      ({field.type})
-                    </span>
+              onChange?.(updatedValues);
+            }}
+            placeholder="Select Custom Fields"
+            searchPlaceholder="Search Custom Fields..."
+            disabled={disabled || fields.length === 0}
+          />
 
-                    {field.required && (
-                      <span className="ml-1 text-destructive">*</span>
-                    )}
-                  </span>
-                </label>
-              ))}
-
-
-            </div>
-          )}
+          <p className="text-xs text-muted-foreground">
+            {selectedFieldSlugs.length} custom field(s) selected
+          </p>
         </div>
 
         {/* Selected Custom Fields */}

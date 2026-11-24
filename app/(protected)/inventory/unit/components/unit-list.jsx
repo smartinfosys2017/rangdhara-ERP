@@ -19,6 +19,7 @@ import {
   Plus,
   RefreshCw,
   Search,
+  Settings2,
   Trash2,
   X,
   XCircle,
@@ -39,7 +40,7 @@ import { DataGrid } from "@/components/ui/data-grid";
 import { DataGridColumnHeader } from "@/components/ui/data-grid-column-header";
 import { DataGridPagination } from "@/components/ui/data-grid-pagination";
 import { DataGridTable } from "@/components/ui/data-grid-table";
-
+import { DataGridColumnVisibility } from '@/components/ui/data-grid-column-visibility';
 import {
   Dialog,
   DialogBody,
@@ -1561,6 +1562,7 @@ const UnitList = () => {
         ),
 
         size: 120,
+        enableHiding: false,
       },
 
       {
@@ -2006,7 +2008,18 @@ const UnitList = () => {
           setCreatedByFilter={setCreatedByFilter}
           updatedByFilter={updatedByFilter}
           setUpdatedByFilter={setUpdatedByFilter}
+          searchInput={searchInput}
+          setSearchInput={setSearchInput}
+          handleSearch={handleSearch}
         />
+        <DataGridColumnVisibility
+          table={table}
+          trigger={
+            <Button variant="outline">
+              <Settings2 />
+              Columns
+            </Button>
+          } />
       </div>
     </CardHeader>
   );

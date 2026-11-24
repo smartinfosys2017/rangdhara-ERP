@@ -157,16 +157,16 @@ export default function LocationAddDialog({
     const locationCode = form.locationCode.trim();
 
     if (!locationName) {
-      newErrors.locationName = "Location name is required.";
+      newErrors.locationName = "Warehouse name is required.";
     } else if (locationName.length > 255) {
-      newErrors.locationName = "Location name must not exceed 255 characters.";
+      newErrors.locationName = "Warehouse name must not exceed 255 characters.";
     }
 
     if (!locationCode) {
-      newErrors.locationCode = "Location code is required.";
+      newErrors.locationCode = "Warehouse code is required.";
     } else if (locationCode.length > 25) {
-      newErrors.locationCode = "Location code must not exceed 25 characters.";
-    }
+      newErrors.locationCode = "Warehouse code must not exceed 25 characters.";
+    }Warehouse
 
     setErrors(newErrors);
 
@@ -183,7 +183,7 @@ export default function LocationAddDialog({
   };
 
   // ======================================================
-  // SAVE LOCATION
+  // SAVE Warehouse
   // ======================================================
 
   const handleSave = async () => {
@@ -268,123 +268,115 @@ export default function LocationAddDialog({
   // ======================================================
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(value) => {
-        if (!value) handleClose();
-      }}
-    >
-      <DialogContent>
-        <div className="flex h-full max-h-[90vh] flex-col overflow-hidden">
-          <DialogHeader>
-            <DialogTitle>{item ? "Edit Warehouse" : "Add Warehouse"}</DialogTitle>
+    <Dialog open={open} onOpenChange={closeDialog}>
+      <DialogContent className="mx-auto flex w-[calc(100%-2rem)] max-w-[486px] max-h-[90vh] flex-col gap-0 overflow-hidden  px-4 sm:px-6 md:px-10 " variant="fullscreen">
+        <DialogHeader>
+          <DialogTitle>Add Warehouse</DialogTitle>
+          <DialogDescription>
+            Create a new warehouse.
+          </DialogDescription>
+        </DialogHeader>
 
-            <DialogDescription>
-              {item ? "Update warehouse information." : "Create a new warehouse."}
-            </DialogDescription>
-          </DialogHeader>
+        <ScrollArea className="min-h-0 flex-1 py-0 mb-5 ps-0 pe-3 -me-7">
+          <DialogBody>
+            {/* Warehouse CODE */}
+            <div>
+              <label className="mb-2 block text-sm font-medium">
+                Warehouse Code <span className="text-destructive">*</span>
+              </label>
 
-          <ScrollArea className="grow min-h-0 flex flex-col h-full max-h-[90vh] overflow-hidden">
-            <DialogBody className="space-y-6 pt-0 px-0 min-h-0">
-              {/* Warehouse CODE */}
+              <Input
+                value={form.locationCode}
+                placeholder="Auto Generated"
+                readOnly
+                maxLength={25}
+              />
+
+              {errors.locationCode && (
+                <p className="mt-1 text-xs text-destructive">
+                  {errors.locationCode}
+                </p>
+              )}
+            </div>
+
+            {/* Warehouse NAME */}
+            <div>
+              <label className="mb-2 block text-sm font-medium">
+                Warehouse Name <span className="text-destructive">*</span>
+              </label>
+
+              <Input
+                value={form.locationName}
+                placeholder="Enter warehouse name"
+                maxLength={255}
+                onChange={(e) => updateField("locationName", e.target.value)}
+              />
+
+              {errors.locationName && (
+                <p className="mt-1 text-xs text-destructive">
+                  {errors.locationName}
+                </p>
+              )}
+            </div>
+
+            {/* STATUS */}
+            <div>
+              <label className="mb-2 block text-sm font-medium">
+                Status <span className="text-destructive">*</span>
+              </label>
+
+              <Select
+                value={form.status}
+                onValueChange={(value) => updateField("status", value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select status" />
+                </SelectTrigger>
+
+                <SelectContent>
+                  <SelectItem value="true">Active</SelectItem>
+
+                  <SelectItem value="false">Inactive</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {/* CUSTOM FIELDS */}
+
+            <div className="space-y-4 border-t pt-5">
               <div>
-                <label className="mb-2 block text-sm font-medium">
-                  Warehouse Code <span className="text-destructive">*</span>
-                </label>
+                <h3 className="text-base font-semibold">Custom Fields</h3>
 
-                <Input
-                  value={form.locationCode}
-                  placeholder="Auto Generated"
-                  readOnly
-                  maxLength={25}
-                />
-
-                {errors.locationCode && (
-                  <p className="mt-1 text-xs text-destructive">
-                    {errors.locationCode}
-                  </p>
-                )}
+                <p className="text-sm text-muted-foreground">
+                  Additional warehouse information.
+                </p>
               </div>
 
-              {/* Warehouse NAME */}
-              <div>
-                <label className="mb-2 block text-sm font-medium">
-                  Warehouse Name <span className="text-destructive">*</span>
-                </label>
+              <LocationCustomFields
+                values={customFields}
+                onChange={setCustomFields}
+                onFieldsLoaded={(loadedFields) => {
+                  setCustomFieldDefinitions(loadedFields);
+                  setCustomFieldsReady(true);
+                }}
+              />
+            </div>
+          </DialogBody>
+        </ScrollArea>
+        <DialogFooter className="gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleClose}
+            disabled={saving}
+          >
+            Close
+          </Button>
 
-                <Input
-                  value={form.locationName}
-                  placeholder="Enter warehouse name"
-                  maxLength={255}
-                  onChange={(e) => updateField("locationName", e.target.value)}
-                />
-
-                {errors.locationName && (
-                  <p className="mt-1 text-xs text-destructive">
-                    {errors.locationName}
-                  </p>
-                )}
-              </div>
-
-              {/* STATUS */}
-              <div>
-                <label className="mb-2 block text-sm font-medium">
-                  Status <span className="text-destructive">*</span>
-                </label>
-
-                <Select
-                  value={form.status}
-                  onValueChange={(value) => updateField("status", value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select status" />
-                  </SelectTrigger>
-
-                  <SelectContent>
-                    <SelectItem value="true">Active</SelectItem>
-
-                    <SelectItem value="false">Inactive</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              {/* CUSTOM FIELDS */}
-
-              <div className="space-y-4 border-t pt-5">
-                <div>
-                  <h3 className="text-base font-semibold">Custom Fields</h3>
-
-                  <p className="text-sm text-muted-foreground">
-                    Additional warehouse information.
-                  </p>
-                </div>
-
-                <LocationCustomFields
-                  values={customFields}
-                  onChange={setCustomFields}
-                  onFieldsLoaded={(loadedFields) => {
-                    setCustomFieldDefinitions(loadedFields);
-                    setCustomFieldsReady(true);
-                  }}
-                />
-              </div>
-            </DialogBody>
-          </ScrollArea>
-          <DialogFooter className="gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleClose}
-              disabled={saving}
-            >
-              Close
-            </Button>
-
-            <Button type="button" onClick={handleSave} disabled={saving}>
-              {saving ? "Saving..." : item ? "Update" : "Save"}
-            </Button>
-          </DialogFooter>
-        </div>
+          <Button type="button" onClick={handleSave} disabled={saving}>
+            {saving ? "Saving..." : item ? "Update" : "Save"}
+          </Button>
+        </DialogFooter>
       </DialogContent>
-    </Dialog>
+    </Dialog >
   );
 }

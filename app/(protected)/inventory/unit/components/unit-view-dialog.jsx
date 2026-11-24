@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 
-import { Calendar, CheckCircle, FileText, Layers, PlusCircle, MinusCircle, XCircle, Settings2,} from "lucide-react";
+import { Calendar, CheckCircle, FileText, Layers, PlusCircle, MinusCircle, XCircle, Settings2, } from "lucide-react";
 
 import {
   Dialog,
@@ -95,129 +95,122 @@ export default function UnitViewDialog({ open, closeDialog, Unit }) {
       ? "true"
       : "false";
 
-  const customFields =  Unit.custom_field_values || Unit.customFields || {};
-  const hasCustomFields =  customFields && typeof customFields === "object" && !Array.isArray(customFields) && Object.keys(customFields).length > 0;
+  const customFields = Unit.custom_field_values || Unit.customFields || {};
+  const hasCustomFields = customFields && typeof customFields === "object" && !Array.isArray(customFields) && Object.keys(customFields).length > 0;
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(value) => {
-        if (!value) closeDialog?.();
-      }}
-    >
-      <DialogContent>
-        <div className="flex flex-col h-full max-h-[90vh] overflow-hidden">
-          <DialogHeader>
-            <DialogTitle>View Unit</DialogTitle>
-            <DialogDescription>View unit information below.</DialogDescription>
-          </DialogHeader>
-          <ScrollArea className="grow min-h-0 flex flex-col h-full max-h-[90vh] overflow-hidden">
-            <DialogBody>
-              {/* UNIT NAME */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Unit Name</label>
+    <Dialog open={open} onOpenChange={closeDialog}>
+      <DialogContent className="mx-auto flex w-[calc(100%-2rem)] max-w-[486px] max-h-[90vh] flex-col gap-0 overflow-hidden  px-4 sm:px-6 md:px-10 " variant="fullscreen">
+        <DialogHeader>
+          <DialogTitle>View Unit</DialogTitle>
+          <DialogDescription>View unit information below.</DialogDescription>
+        </DialogHeader>
+        <ScrollArea className="min-h-0 flex-1 py-0 mb-5 ps-0 pe-3 -me-7">
+          <DialogBody className="space-y-6">
+            {/* UNIT NAME */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Unit Name</label>
 
-                <Input
-                  value={Unit.unitName || ""}
-                  readOnly
-                  placeholder="Enter unit name"
-                />
-              </div>
+              <Input
+                value={Unit.unitName || ""}
+                readOnly
+                placeholder="Enter unit name"
+              />
+            </div>
 
-              {/* ABBREVIATION */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Abbreviation</label>
+            {/* ABBREVIATION */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Abbreviation</label>
 
-                <Input
-                  value={Unit.abbreviation || ""}
-                  readOnly
-                  placeholder="Enter abbreviation"
-                />
-              </div>
+              <Input
+                value={Unit.abbreviation || ""}
+                readOnly
+                placeholder="Enter abbreviation"
+              />
+            </div>
 
-              {/* STATUS */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Status</label>
+            {/* STATUS */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Status</label>
 
-                <Select value={status} disabled>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select status" />
-                  </SelectTrigger>
+              <Select value={status} disabled>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select status" />
+                </SelectTrigger>
 
-                  <SelectContent>
-                    <SelectItem value="true">Active</SelectItem>
-                    <SelectItem value="false">Inactive</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              {hasCustomFields && (
-                <div className="rounded-lg border mt-3 mb-3">
-                  <div className="flex items-center gap-2 border-b p-4 font-semibold">
-                    <Settings2 className="h-4 w-4" />
-                    Custom Fields
-                  </div>
+                <SelectContent>
+                  <SelectItem value="true">Active</SelectItem>
+                  <SelectItem value="false">Inactive</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {hasCustomFields && (
+              <div className="rounded-lg border mt-3 mb-3">
+                <div className="flex items-center gap-2 border-b p-4 font-semibold">
+                  <Settings2 className="h-4 w-4" />
+                  Custom Fields
+                </div>
 
-                  <div className="grid grid-cols-1 gap-4 p-4 sm:grid-cols-2">
-                    {Object.entries(customFields).map(([key, value]) => (
-                      <div key={key} className="rounded-lg border bg-muted/30 p-4">
-                        <div className="mb-2 text-sm font-medium">{key}</div>
+                <div className="grid grid-cols-1 gap-4 p-4 sm:grid-cols-2">
+                  {Object.entries(customFields).map(([key, value]) => (
+                    <div key={key} className="rounded-lg border bg-muted/30 p-4">
+                      <div className="mb-2 text-sm font-medium">{key}</div>
 
-                        <div className="break-words text-sm text-muted-foreground">
-                          {formatCustomFieldValue(value)}
-                        </div>
+                      <div className="break-words text-sm text-muted-foreground">
+                        {formatCustomFieldValue(value)}
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  ))}
                 </div>
-              )}
+              </div>
+            )}
 
-              {!hasCustomFields && (
-                <div className="rounded-lg border p-4">
-                  <div className="mb-2 flex items-center gap-2 font-semibold">
-                    <Settings2 className="h-4 w-4" />
-                    Custom Fields
-                  </div>
-
-                  <p className="text-sm text-muted-foreground">
-                    No custom fields available.
-                  </p>
+            {!hasCustomFields && (
+              <div className="rounded-lg border p-4">
+                <div className="mb-2 flex items-center gap-2 font-semibold">
+                  <Settings2 className="h-4 w-4" />
+                  Custom Fields
                 </div>
-              )}
-              {/* CREATED Date */}
-              <div className="space-y-2">
-                <label className="flex items-center gap-2 text-sm font-medium">
-                  <Calendar className="h-4 w-4" />
-                  Created Date
-                </label>
 
-                <Input value={formatDate(Unit.createdAt)} readOnly />
+                <p className="text-sm text-muted-foreground">
+                  No custom fields available.
+                </p>
               </div>
+            )}
+            {/* CREATED Date */}
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-sm font-medium">
+                <Calendar className="h-4 w-4" />
+                Created Date
+              </label>
 
-              {/* UPDATED Date */}
-              <div className="space-y-2">
-                <label className="flex items-center gap-2 text-sm font-medium">
-                  <Calendar className="h-4 w-4" />
-                  Updated Date
-                </label>
+              <Input value={formatDate(Unit.createdAt)} readOnly />
+            </div>
 
-                <Input value={formatDate(Unit.updatedAt)} readOnly />
-              </div>
+            {/* UPDATED Date */}
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-sm font-medium">
+                <Calendar className="h-4 w-4" />
+                Updated Date
+              </label>
 
-              {/* ID */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium">ID</label>
+              <Input value={formatDate(Unit.updatedAt)} readOnly />
+            </div>
 
-                <Input value={Unit.id ?? ""} readOnly />
-              </div>
-            </DialogBody>
-          </ScrollArea>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={closeDialog}>
-              Close
-            </Button>
-          </DialogFooter>
-        </div>
+            {/* ID */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">ID</label>
+
+              <Input value={Unit.id ?? ""} readOnly />
+            </div>
+          </DialogBody>
+        </ScrollArea>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={closeDialog}>
+            Close
+          </Button>
+        </DialogFooter>
       </DialogContent>
-    </Dialog>
+    </Dialog >
   );
 }

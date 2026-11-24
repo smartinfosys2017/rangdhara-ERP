@@ -15,6 +15,7 @@ import {
   MapPin,
   Truck,
   Calculator,
+  ArrowLeftRight,
 } from "lucide-react";
 
 import {
@@ -35,7 +36,11 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 // =======================================================
 
 const displayValue = (value) => {
-  if (value === null || value === undefined || value === "") {
+  if (
+    value === null ||
+    value === undefined ||
+    value === ""
+  ) {
     return "-";
   }
 
@@ -89,7 +94,11 @@ const formatDateOnly = (value) => {
 // =======================================================
 
 const formatCurrency = (value) => {
-  if (value === null || value === undefined || value === "") {
+  if (
+    value === null ||
+    value === undefined ||
+    value === ""
+  ) {
     return "-";
   }
 
@@ -106,16 +115,81 @@ const formatCurrency = (value) => {
 };
 
 // =======================================================
+// NORMALIZE LOCATION TYPE
+// =======================================================
+
+const normalizeLocationType = (value) => {
+  const type = String(value || "")
+    .trim()
+    .toUpperCase();
+
+  if (type === "MACHINE" || type === "MACHINERY") {
+    return "MACHINE";
+  }
+
+  if (type === "LOCATION") {
+    return "LOCATION";
+  }
+
+  return type;
+};
+
+// =======================================================
+// GET LOCATION TYPE LABEL
+// =======================================================
+
+const getLocationTypeLabel = (value) => {
+  const type = normalizeLocationType(value);
+
+  if (type === "LOCATION") return "Location";
+  if (type === "MACHINE") return "Machinery";
+  if (type === "VENDOR") return "Vendor";
+
+  return displayValue(value);
+};
+
+// =======================================================
+// GET MOVEMENT TYPE
+// =======================================================
+
+const getMovementType = (record) => {
+  const movementType = String(
+    record?.MovementType || ""
+  )
+    .trim()
+    .toUpperCase();
+
+  if (movementType) {
+    return movementType;
+  }
+
+  if (
+    String(record?.FromType || "").toUpperCase() ===
+    "VENDOR"
+  ) {
+    return "INWARD";
+  }
+
+  if (record?.FromType && record?.ToType) {
+    return "INTERNAL_TRANSFER";
+  }
+
+  return "INWARD";
+};
+
+// =======================================================
 // GET DESTINATION NAME
 // =======================================================
 
 const getDestinationName = (record) => {
-  const destinationType = String(
-    record?.DestinationType || ""
-  ).toLowerCase();
+  const destinationType = normalizeLocationType(
+    record?.DestinationType || record?.ToType
+  );
 
-  if (destinationType === "location") {
+  if (destinationType === "LOCATION") {
     return (
+      record?.ToLocationName ||
+      record?.DestinationLocationName ||
       record?.LocationName ||
       record?.DestinationName ||
       record?.locationName ||
@@ -125,8 +199,10 @@ const getDestinationName = (record) => {
     );
   }
 
-  if (destinationType === "machinery") {
+  if (destinationType === "MACHINE") {
     return (
+      record?.ToMachineName ||
+      record?.DestinationMachineName ||
       record?.MachineName ||
       record?.DestinationName ||
       record?.machineName ||
@@ -142,6 +218,48 @@ const getDestinationName = (record) => {
 };
 
 // =======================================================
+// GET SOURCE NAME
+// =======================================================
+
+const getSourceName = (record) => {
+  const sourceType = normalizeLocationType(
+    record?.FromType || record?.IssueFromType
+  );
+
+  if (sourceType === "LOCATION") {
+    return (
+      record?.FromLocationName ||
+      record?.SourceLocationName ||
+      record?.SourceName ||
+      record?.FromLocation?.locationName ||
+      record?.FromLocation?.LocationName ||
+      record?.SourceLocation?.locationName ||
+      record?.SourceLocation?.LocationName ||
+      "-"
+    );
+  }
+
+  if (sourceType === "MACHINE") {
+    return (
+      record?.FromMachineName ||
+      record?.SourceMachineName ||
+      record?.SourceName ||
+      record?.FromMachine?.machineName ||
+      record?.FromMachine?.MachineName ||
+      record?.SourceMachine?.machineName ||
+      record?.SourceMachine?.MachineName ||
+      "-"
+    );
+  }
+
+  if (sourceType === "VENDOR") {
+    return "Vendor";
+  }
+
+  return record?.SourceName || "-";
+};
+
+// =======================================================
 // INFORMATION CARD
 // =======================================================
 
@@ -152,9 +270,12 @@ function DetailCard({
   valueClassName = "",
 }) {
   return (
-    <div className="rounded-lg border p-4 min-w-0">
-      <div className="mb-2 flex items-center gap-2 font-semibold text-sm">
-        {Icon && <Icon className="h-4 w-4 shrink-0" />}
+    <div className="min-w-0 rounded-lg border p-4">
+      <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
+        {Icon && (
+          <Icon className="h-4 w-4 shrink-0" />
+        )}
+
         <span>{label}</span>
       </div>
 
@@ -181,12 +302,85 @@ function SectionHeader({
       <Icon className="h-5 w-5 shrink-0" />
 
       <div>
-        <h3 className="text-sm font-semibold">{title}</h3>
+        <h3 className="text-sm font-semibold">
+          {title}
+        </h3>
 
         <p className="text-xs text-muted-foreground">
           {description}
         </p>
       </div>
+    </div>
+  );
+}
+
+// =======================================================
+// LOCATION / MACHINE DETAILS
+// =======================================================
+
+function StockLocationCard({
+  title,
+  type,
+  name,
+  id,
+  previousBalance,
+  quantity,
+  finalBalance,
+  isSource = false,
+}) {
+  const normalizedType = normalizeLocationType(type);
+
+  const LocationIcon =
+    normalizedType === "MACHINE" ? Truck : MapPin;
+
+  return (
+    <div className="min-w-0 space-y-4 rounded-lg border p-4">
+      <div className="flex items-center gap-2 border-b pb-3 text-sm font-semibold">
+        {isSource ? (
+          <ArrowUp className="h-4 w-4 text-destructive" />
+        ) : (
+          <ArrowDown className="h-4 w-4 text-green-600" />
+        )}
+
+        {title}
+      </div>
+
+      <DetailCard
+        label="Type"
+        value={getLocationTypeLabel(type)}
+        icon={MapPin}
+      />
+
+      <DetailCard
+        label="Name"
+        value={name}
+        icon={LocationIcon}
+      />
+
+      <DetailCard
+        label="ID"
+        value={id}
+        icon={Hash}
+      />
+
+      <DetailCard
+        label="Previous Stock"
+        value={previousBalance}
+        icon={ArrowDown}
+      />
+
+      <DetailCard
+        label={isSource ? "Stock Issued" : "Stock Received"}
+        value={quantity}
+        icon={Package}
+      />
+
+      <DetailCard
+        label={isSource ? "Remaining Stock" : "Final Stock"}
+        value={finalBalance}
+        icon={ArrowUp}
+        valueClassName="font-semibold"
+      />
     </div>
   );
 }
@@ -206,22 +400,70 @@ export default function IssueReceiptViewDialog({
 
   const record = IssueReceipt;
 
+  const movementType = getMovementType(record);
+  const isInternalTransfer =
+    movementType === "INTERNAL_TRANSFER";
+
   const quantity = Number(record.Qty || 0);
   const rate = Number(record.Price || 0);
   const total = quantity * rate;
 
-  const destinationType = String(
-    record.DestinationType || ""
-  ).toLowerCase();
+  // =====================================================
+  // SOURCE DETAILS
+  // =====================================================
 
-  const destinationName = getDestinationName(record);
+  const sourceType =
+    record.FromType || record.IssueFromType;
 
-  const destinationLabel =
-    destinationType === "location"
-      ? "Location"
-      : destinationType === "machinery"
-        ? "Machinery"
-        : "Destination";
+  const sourceId =
+    record.FromId || record.IssueFromId;
+
+  const sourceName = getSourceName(record);
+
+  // Main IssueReceipt PreviousBalance and Balance
+  // represent source balances for internal transfers.
+  const sourcePreviousBalance = Number(
+    record.PreviousBalance || 0
+  );
+
+  const sourceFinalBalance = Number(
+    record.Balance || 0
+  );
+
+  // =====================================================
+  // DESTINATION DETAILS
+  // =====================================================
+
+  const destinationType = isInternalTransfer
+    ? record.ToType || record.ReceiveToType
+    : record.DestinationType || record.ToType;
+
+  const destinationId = isInternalTransfer
+    ? record.ToId || record.ReceiveToId
+    : record.DestinationId || record.ToId;
+
+  const destinationName = isInternalTransfer
+    ? getDestinationName({
+      ...record,
+      DestinationType: destinationType,
+    })
+    : getDestinationName(record);
+
+  // Destination balance values should preferably come
+  // from the destination stock ledger in the GET API.
+  const destinationPreviousBalance =
+    record.DestinationPreviousBalance ??
+    record.ReceiveToPreviousQty ??
+    null;
+
+  const destinationFinalBalance =
+    record.DestinationNewBalance ??
+    record.ReceiveToBalance ??
+    (
+      destinationPreviousBalance !== null
+        ? Number(destinationPreviousBalance) + quantity
+        : null
+    );
 
   return (
     <Dialog
@@ -234,9 +476,16 @@ export default function IssueReceiptViewDialog({
     >
       <DialogContent className="w-[95vw] max-w-[95vw] sm:w-[90vw] sm:max-w-[600px] md:max-w-[700px] lg:max-w-[900px] xl:max-w-[1000px] max-h-[95vh]">
 
+        {/* HEADER */}
+
         <DialogHeader>
-          <DialogTitle>
-            
+          <DialogTitle className="flex items-center gap-2">
+            {isInternalTransfer ? (
+              <ArrowLeftRight className="h-5 w-5" />
+            ) : (
+              <Package className="h-5 w-5" />
+            )}
+
             Stock Movement Details
           </DialogTitle>
 
@@ -245,9 +494,25 @@ export default function IssueReceiptViewDialog({
           </DialogDescription>
         </DialogHeader>
 
+        {/* CONTENT */}
+
         <ScrollArea className="grow min-h-0 flex flex-col h-full max-h-[70vh] overflow-hidden">
           <DialogBody className="space-y-6 pt-0 px-0 min-h-0">
             <div className="space-y-6 py-4">
+
+              {/* MOVEMENT TYPE */}
+
+              <div className="rounded-lg border p-4">
+                <div className="mb-2 text-sm font-semibold">
+                  Movement Type
+                </div>
+
+                <p className="text-sm font-semibold text-primary">
+                  {movementType === "INTERNAL_TRANSFER"
+                    ? "Internal Transfer"
+                    : "Inward"}
+                </p>
+              </div>
 
               {/* ITEM DETAILS */}
 
@@ -259,7 +524,6 @@ export default function IssueReceiptViewDialog({
                 />
 
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-
                   <DetailCard
                     label="Item Group"
                     value={record.ItemGroupName}
@@ -283,7 +547,6 @@ export default function IssueReceiptViewDialog({
                     value={record.TransactionTypeName}
                     icon={Receipt}
                   />
-
                 </div>
               </div>
 
@@ -297,10 +560,13 @@ export default function IssueReceiptViewDialog({
                 />
 
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-
                   <DetailCard
-                    label="Previous Balance"
-                    value={record.PreviousBalance}
+                    label={
+                      isInternalTransfer
+                        ? "Issue From Previous Balance"
+                        : "Previous Balance"
+                    }
+                    value={sourcePreviousBalance}
                     icon={ArrowDown}
                     valueClassName="text-lg font-semibold"
                   />
@@ -327,12 +593,33 @@ export default function IssueReceiptViewDialog({
                   />
 
                   <DetailCard
-                    label="Balance"
-                    value={record.Balance}
+                    label={
+                      isInternalTransfer
+                        ? "Issue From Final Balance"
+                        : "Final Balance"
+                    }
+                    value={sourceFinalBalance}
                     icon={ArrowUp}
                     valueClassName="text-lg font-semibold"
                   />
 
+                  {isInternalTransfer && (
+                    <>
+                      <DetailCard
+                        label="Receive To Previous Balance"
+                        value={destinationPreviousBalance}
+                        icon={ArrowDown}
+                        valueClassName="text-lg font-semibold"
+                      />
+
+                      <DetailCard
+                        label="Receive To Final Balance"
+                        value={destinationFinalBalance}
+                        icon={ArrowUp}
+                        valueClassName="text-lg font-semibold"
+                      />
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -346,7 +633,6 @@ export default function IssueReceiptViewDialog({
                 />
 
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-
                   <DetailCard
                     label="Issue Date & Time"
                     value={formatDate(record.IssueDate)}
@@ -376,7 +662,6 @@ export default function IssueReceiptViewDialog({
                     value={formatDate(record.PurchaseDate)}
                     icon={Calendar}
                   />
-
                 </div>
               </div>
 
@@ -390,7 +675,6 @@ export default function IssueReceiptViewDialog({
                 />
 
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-
                   <DetailCard
                     label="Issue By"
                     value={record.IssueByName}
@@ -414,7 +698,6 @@ export default function IssueReceiptViewDialog({
                     value={record.ReceivedByName}
                     icon={User}
                   />
-
                 </div>
               </div>
 
@@ -428,7 +711,6 @@ export default function IssueReceiptViewDialog({
                 />
 
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-
                   <DetailCard
                     label="Requisition Supply Number"
                     value={record.RequisitionSupplyNo}
@@ -440,7 +722,6 @@ export default function IssueReceiptViewDialog({
                     value={formatDate(record.RequisitionSupplyDate)}
                     icon={Calendar}
                   />
-
                 </div>
               </div>
 
@@ -454,7 +735,6 @@ export default function IssueReceiptViewDialog({
                 />
 
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-
                   <DetailCard
                     label="Purchase Order Number"
                     value={record.PurchaseNo}
@@ -466,47 +746,70 @@ export default function IssueReceiptViewDialog({
                     value={formatDate(record.PurchaseDate)}
                     icon={Calendar}
                   />
-
                 </div>
               </div>
 
-              {/* DESTINATION DETAILS */}
+              {/* SOURCE & DESTINATION DETAILS */}
 
               <div>
                 <SectionHeader
                   icon={MapPin}
-                  title="Destination Details"
-                  description="Selected location or machinery"
+                  title={
+                    isInternalTransfer
+                      ? "Transfer Location Details"
+                      : "Destination Details"
+                  }
+                  description={
+                    isInternalTransfer
+                      ? "Stock transfer source and receiving destination"
+                      : "Selected receiving location or machinery"
+                  }
                 />
 
-                <div className="rounded-lg border p-4 space-y-4">
+                <div
+                  className={`grid grid-cols-1 gap-4 ${isInternalTransfer
+                      ? "lg:grid-cols-2"
+                      : "sm:grid-cols-2"
+                    }`}
+                >
+                  {/* SOURCE */}
 
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-
-                    <DetailCard
-                      label="Destination Type"
-                      value={
-                        destinationType === "location"
-                          ? "Location"
-                          : destinationType === "machinery"
-                            ? "Machinery"
-                            : record.DestinationType
-                      }
-                      icon={MapPin}
+                  {isInternalTransfer && (
+                    <StockLocationCard
+                      title="Issue From (Source)"
+                      type={sourceType}
+                      name={sourceName}
+                      id={sourceId}
+                      previousBalance={sourcePreviousBalance}
+                      quantity={quantity}
+                      finalBalance={sourceFinalBalance}
+                      isSource
                     />
+                  )}
 
-                    <DetailCard
-                      label={destinationLabel}
-                      value={destinationName}
-                      icon={
-                        destinationType === "machinery"
-                          ? Truck
-                          : MapPin
-                      }
-                    />
+                  {/* DESTINATION */}
 
-                  </div>
-
+                  <StockLocationCard
+                    title={
+                      isInternalTransfer
+                        ? "Receive To (Destination)"
+                        : "Destination"
+                    }
+                    type={destinationType}
+                    name={destinationName}
+                    id={destinationId}
+                    previousBalance={
+                      isInternalTransfer
+                        ? destinationPreviousBalance
+                        : null
+                    }
+                    quantity={quantity}
+                    finalBalance={
+                      isInternalTransfer
+                        ? destinationFinalBalance
+                        : null
+                    }
+                  />
                 </div>
               </div>
 
@@ -515,7 +818,7 @@ export default function IssueReceiptViewDialog({
               <div className="rounded-lg border p-4">
                 <div className="mb-2 flex items-center gap-2 font-semibold">
                   <FileText className="h-4 w-4" />
-                  Particuler
+                  Particular
                 </div>
 
                 <p className="whitespace-pre-wrap text-sm text-muted-foreground">
@@ -546,7 +849,6 @@ export default function IssueReceiptViewDialog({
                 />
 
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-
                   <DetailCard
                     label="Created By"
                     value={record.CreatedByName}
@@ -570,7 +872,6 @@ export default function IssueReceiptViewDialog({
                     value={formatDate(record.updatedAt)}
                     icon={Calendar}
                   />
-
                 </div>
               </div>
 

@@ -93,16 +93,8 @@ export default function LocationViewDialog({ open, closeDialog, Location }) {
   const hasCustomFields = customFields && typeof customFields === "object" && !Array.isArray(customFields) && Object.keys(customFields).length > 0;
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(value) => {
-        if (!value) {
-          closeDialog?.();
-        }
-      }}
-    >
-      <DialogContent>
-        <div className="flex h-full max-h-[90vh] flex-col overflow-hidden">
+    <Dialog open={open} onOpenChange={closeDialog}>
+      <DialogContent className="mx-auto flex w-[calc(100%-2rem)] max-w-[486px] max-h-[90vh] flex-col gap-0 overflow-hidden  px-4 sm:px-6 md:px-10 " variant="fullscreen">
           <DialogHeader>
             <DialogTitle>Warehouse Details</DialogTitle>
 
@@ -111,9 +103,9 @@ export default function LocationViewDialog({ open, closeDialog, Location }) {
             </DialogDescription>
           </DialogHeader>
 
-          <ScrollArea className="grow min-h-0 flex flex-col h-full max-h-[90vh] overflow-hidden">
-            <DialogBody className="space-y-6 pt-0 px-0 min-h-0">
-              {/* LOCATION CODE */}
+          <ScrollArea className="min-h-0 flex-1 py-0 mb-5 ps-0 pe-3 -me-7">
+            <DialogBody className="space-y-6">
+              {/* Warehouse CODE */}
               <div className="rounded-lg border p-4">
                 <div className="mb-2 flex items-center gap-2 font-semibold">
                   <Layers className="h-4 w-4" />
@@ -125,7 +117,7 @@ export default function LocationViewDialog({ open, closeDialog, Location }) {
                 </p>
               </div>
 
-              {/* LOCATION NAME */}
+              {/* Warehouse NAME */}
               <div className="rounded-lg border p-4">
                 <div className="mb-2 flex items-center gap-2 font-semibold">
                   <Layers className="h-4 w-4" />
@@ -226,7 +218,6 @@ export default function LocationViewDialog({ open, closeDialog, Location }) {
               Close
             </Button>
           </DialogFooter>
-        </div>
       </DialogContent>
     </Dialog>
   );

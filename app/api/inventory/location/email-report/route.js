@@ -128,7 +128,7 @@ export async function POST(request) {
       return NextResponse.json(
         {
           success: false,
-          message: "selectedIds must be an array of location IDs.",
+          message: "selectedIds must be an array of warehouse IDs.",
         },
         { status: 400 },
       );
@@ -280,8 +280,8 @@ export async function POST(request) {
     if (attachExcel) {
       const rows = locations.map((location) => ({
         ID: location.id,
-        "Location Name": location.locationName ?? "",
-        "Location Code": location.locationCode ?? "",
+        "Warehouse Name": location.locationName ?? "",
+        "Warehouse Code": location.locationCode ?? "",
         Status: location.status ? "Active" : "Inactive",
         "Created Date": formatDate(location.createdAt),
         "Updated Date": formatDate(location.updatedAt),
@@ -307,7 +307,7 @@ export async function POST(request) {
         bookType: "xlsx",
       });
 
-      fileName = `inventory-locations-${new Date()
+      fileName = `inventory-warehouses-${new Date()
         .toISOString()
         .slice(0, 10)}.xlsx`;
 
@@ -324,12 +324,12 @@ export async function POST(request) {
     // 7. Build email content
     const plainMessage = String(message || "").trim();
 
-    const defaultMessage = "Please find the Location report for your review.";
+    const defaultMessage = "Please find the Warehouse report for your review.";
 
     const emailText = [
       plainMessage || defaultMessage,
       "",
-      `Total locations: ${locations.length}`,
+      `Total warehouses: ${locations.length}`,
       attachExcel ? `Attachment: ${fileName}` : "No Excel attachment included.",
       "",
       "Regards,",
@@ -343,12 +343,12 @@ export async function POST(request) {
 
     const emailHtml = `
             <div style="font-family:Arial,sans-serif;color:#333;line-height:1.7">
-                <h2 style="margin-bottom:16px">Location Report</h2>
+                <h2 style="margin-bottom:16px">Warehouse Report</h2>
 
                 <p>${safeMessage}</p>
 
                 <p>
-                    <strong>Total locations:</strong>
+                    <strong>Total warehouses:</strong>
                     ${locations.length}
                 </p>
 
@@ -377,8 +377,8 @@ export async function POST(request) {
     return NextResponse.json({
       success: true,
       message: result.queued
-        ? "Location report email added to the queue."
-        : "Location report email sent successfully.",
+        ? "Warehouse report email added to the queue."
+        : "Warehouse report email sent successfully.",
       status: result.status,
       queued: result.queued,
       sent: result.sent,
@@ -403,7 +403,7 @@ export async function POST(request) {
       {
         success: false,
         message:
-          error.message || "Failed to generate or send the location report.",
+          error.message || "Failed to generate or send the warehouse report.",
       },
       { status: 500 },
     );

@@ -249,21 +249,16 @@ export default function LocationEditDialog({
   };
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(value) => {
-        if (!value) handleClose();
-      }}
-    >
-      <DialogContent className="max-h-[75vh] overflow-y-auto">
-        <div className="flex h-full max-h-[90vh] flex-col overflow-hidden">
+    <Dialog open={open} onOpenChange={closeDialog}>
+      <DialogContent className="mx-auto flex w-[calc(100%-2rem)] max-w-[486px] max-h-[90vh] flex-col gap-0 overflow-hidden  px-4 sm:px-6 md:px-10 " variant="fullscreen">
+  
           <DialogHeader>
             <DialogTitle>Edit Warehouse</DialogTitle>
             <DialogDescription>Update warehouse information.</DialogDescription>
           </DialogHeader>
 
-          <ScrollArea className="grow min-h-0 flex flex-col h-full max-h-[90vh] overflow-hidden">
-            <DialogBody className="space-y-6 pt-0 px-0 min-h-0">
+          <ScrollArea className="min-h-0 flex-1 py-0 mb-5 ps-0 pe-3 -me-7">
+            <DialogBody>
               {/* Warehouse CODE */}
               <div>
                 <label className="mb-2 block text-sm font-medium">
@@ -293,7 +288,7 @@ export default function LocationEditDialog({
                 <Input
                   value={form.locationName}
                   maxLength={255}
-                  placeholder="Enter location name"
+                  placeholder="Enter warehouse name"
                   onChange={(e) => handleChange("locationName", e.target.value)}
                 />
 
@@ -361,7 +356,6 @@ export default function LocationEditDialog({
               {saving ? "Updating..." : "Update"}
             </Button>
           </DialogFooter>
-        </div>
       </DialogContent>
     </Dialog>
   );

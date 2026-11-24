@@ -12,7 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Trash2 } from "lucide-react";
 
-const InventoryRregistersDeleteDialog = ({
+const InventoryRegistersDeleteDialog = ({
   open,
   onOpenChange,
   selectedCount = 0,
@@ -32,13 +32,13 @@ const InventoryRregistersDeleteDialog = ({
             <span className="flex size-9 items-center justify-center rounded-full bg-destructive/10">
               <Trash2 className="size-5 text-destructive" />
             </span>
-            Delete Inventory Rregister
+            Delete Stock Register
           </DialogTitle>
 
           <DialogDescription>
             Are you sure you want to delete{" "}
             <strong className="text-foreground">
-              {selectedCount} inventory rregister
+              {selectedCount} stock register
               {selectedCount !== 1 ? "s" : ""}
             </strong>
             ? This action cannot be undone.
@@ -70,4 +70,4 @@ const InventoryRregistersDeleteDialog = ({
   );
 };
 
-export default InventoryRregistersDeleteDialog;
+export default InventoryRegistersDeleteDialog;

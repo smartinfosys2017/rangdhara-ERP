@@ -9,10 +9,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+
 import { Button } from "@/components/ui/button";
+
 import { CheckCircle } from "lucide-react";
 
-const Brand/ManufacturerActiveDialog = ({
+// =======================================================
+// COMPONENT
+// =======================================================
+
+const BrandManufacturerActiveDialog = ({
   open,
   onOpenChange,
   selectedCount = 0,
@@ -23,7 +29,9 @@ const Brand/ManufacturerActiveDialog = ({
     <Dialog
       open={open}
       onOpenChange={(nextOpen) => {
-        if (!loading) onOpenChange(nextOpen);
+        if (!loading) {
+          onOpenChange?.(nextOpen);
+        }
       }}
     >
       <DialogContent className="sm:max-w-md">
@@ -36,10 +44,13 @@ const Brand/ManufacturerActiveDialog = ({
           <DialogDescription>
             Are you sure you want to mark{" "}
             <strong className="text-foreground">
-              {selectedCount} brand/manufacturer
+              {selectedCount} Brand/Manufacturer
               {selectedCount !== 1 ? "s" : ""}
             </strong>{" "}
             as active?
+            <span className="mt-2 block">
+              The selected records will have their status updated to Active.
+            </span>
           </DialogDescription>
         </DialogHeader>
 
@@ -48,7 +59,7 @@ const Brand/ManufacturerActiveDialog = ({
             type="button"
             variant="outline"
             disabled={loading}
-            onClick={() => onOpenChange(false)}
+            onClick={() => onOpenChange?.(false)}
           >
             Cancel
           </Button>
@@ -59,6 +70,7 @@ const Brand/ManufacturerActiveDialog = ({
             onClick={onConfirm}
           >
             <CheckCircle className="mr-2 size-4" />
+
             {loading ? "Updating..." : "Mark Active"}
           </Button>
         </DialogFooter>
@@ -67,4 +79,4 @@ const Brand/ManufacturerActiveDialog = ({
   );
 };
 
-export default Brand/ManufacturerActiveDialog;
+export default BrandManufacturerActiveDialog;

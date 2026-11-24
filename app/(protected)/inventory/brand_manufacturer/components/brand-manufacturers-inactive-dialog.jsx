@@ -9,6 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+
 import { Button } from "@/components/ui/button";
 import { XCircle } from "lucide-react";
 
@@ -19,13 +20,14 @@ const BrandManufacturersInactiveDialog = ({
   loading = false,
   onConfirm,
 }) => {
+  const handleOpenChange = (nextOpen) => {
+    if (!loading) {
+      onOpenChange?.(nextOpen);
+    }
+  };
+
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(nextOpen) => {
-        if (!loading) onOpenChange(nextOpen);
-      }}
-    >
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -48,7 +50,7 @@ const BrandManufacturersInactiveDialog = ({
             type="button"
             variant="outline"
             disabled={loading}
-            onClick={() => onOpenChange(false)}
+            onClick={() => handleOpenChange(false)}
           >
             Cancel
           </Button>

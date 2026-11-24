@@ -20,6 +20,7 @@ import {
   RefreshCw,
   Search,
   Trash2,
+  Settings2,
   X,
 } from "lucide-react";
 import {
@@ -56,9 +57,10 @@ import { DataGrid } from "@/components/ui/data-grid";
 import { DataGridColumnHeader } from "@/components/ui/data-grid-column-header";
 import { DataGridPagination } from "@/components/ui/data-grid-pagination";
 import { DataGridTable } from "@/components/ui/data-grid-table";
+import { DataGridColumnVisibility } from '@/components/ui/data-grid-column-visibility';
 import { Alert, AlertIcon, AlertTitle } from "@/components/ui/alert";
 import { RiCheckboxCircleFill, RiErrorWarningFill } from "@remixicon/react";
-import InventoryRregisterAddDialog from "./inventory-register-add-dialog";
+import InventoryRegisterAddDialog from "../../issue_receipt/components/issue-receipt-add-dialog";
 import { StoreClientFiltersSheet } from "./sheet/filters-sheet";
 
 const showSuccessToast = (message) => {
@@ -396,7 +398,7 @@ const InventoryRegisterList = () => {
     const result = await response.json();
 
     if (!response.ok || !result.success) {
-      throw new Error(result.message || "Failed loading Inventory Register");
+      throw new Error(result.message || "Failed loading Stock Register");
     }
 
     return result;
@@ -448,7 +450,7 @@ const InventoryRegisterList = () => {
     const result = await response.json();
 
     if (!response.ok || !result.success) {
-      throw new Error(result.message || "Failed to load Inventory Register");
+      throw new Error(result.message || "Failed to load Stock Register");
     }
 
     return result.data || [];
@@ -480,13 +482,13 @@ const InventoryRegisterList = () => {
 
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, "Inventory Register");
-      XLSX.writeFile(workbook, "inventory-register.xlsx");
+      XLSX.writeFile(workbook, "stock-register.xlsx");
 
       showSuccessToast(`${items.length} register record(s) exported`, {
         id: "inventory-register-export",
       });
     } catch (error) {
-      console.error("INVENTORY REGISTER EXPORT ERROR", error);
+      console.error("Stock REGISTER EXPORT ERROR", error);
       showErrorToast(error.message || "Excel export failed", {
         id: "inventory-register-export",
       });
@@ -546,7 +548,7 @@ const InventoryRegisterList = () => {
       <!doctype html>
       <html>
         <head>
-          <title>Inventory Register Report</title>
+          <title>Stock Register Report</title>
           <meta charset="utf-8">
           <style>
             @page { size: landscape; margin: 10mm; }
@@ -561,7 +563,7 @@ const InventoryRegisterList = () => {
           </style>
         </head>
         <body>
-          <h1>Inventory Register Report</h1>
+          <h1>Stock Register Report</h1>
           <p>Generated: ${escapeHtml(new Date().toLocaleString())}</p>
           <p>Total records: ${items.length}</p>
           <table>
@@ -580,7 +582,7 @@ const InventoryRegisterList = () => {
       printWindow.document.close();
     } catch (error) {
       printWindow.close();
-      console.error("INVENTORY REGISTER PRINT ERROR", error);
+      console.error("Stock REGISTER PRINT ERROR", error);
       showErrorToast(error.message || "Unable to prepare print report");
     }
   }, [getReportRows]);
@@ -773,13 +775,13 @@ const InventoryRegisterList = () => {
   const handleOpenEmailDialog = useCallback(() => {
     setSelectedRecipientEmails([]);
     setAttachExcel(true);
-    setEmailSubject("Inventory Register Report");
+    setEmailSubject("Stock Register Report");
 
     setEmailMessage(
       [
         "Dear Team,",
         "",
-        "Please find the Inventory Register report for your review.",
+        "Please find the Stock Register report for your review.",
         "",
         "The report includes the group name, item name, unit of measure, balance, restock level, and who added and last updated each record.",
         "",
@@ -963,9 +965,10 @@ const InventoryRegisterList = () => {
       makeColumn({
         id: "id",
         title: "ID",
-        size: 120,
+        size: 120,        
+        enableHiding: false,
         render: (r) => (
-          <span className="font-mono text-xs">
+          <span>
             #{r?.id ? String(r.id).substring(0, 8) : "-"}
           </span>
         ),
@@ -987,6 +990,80 @@ const InventoryRegisterList = () => {
         render: (r) => (
           <span className="font-medium">{getDisplayValue(r?.ItemName)}</span>
         ),
+      }),
+      makeColumn({
+        id: "LocationQty",
+        title: "Warehouse",
+        size: 230,
+        skeleton: "w-32",
+        render: (r) => {
+          const locations = (r?.manageQtyByLocation || []).filter(
+            (stock) => stock.LocationType === "LOCATION",
+          );
+
+          return (
+            <div className="space-y-2">
+              {locations.length > 0 ? (
+                locations.map((stock, index) => (
+                  <div
+                    key={`${stock.LocationId}-${index}`}
+                    className="flex items-center justify-between gap-3"
+                  >
+                    <span
+                      className="min-w-0 truncate font-medium"
+                      title={stock.LocationName || "-"}
+                    >
+                      {getDisplayValue(stock.LocationName)}
+                    </span>
+
+                    <span className="shrink-0 rounded-md bg-muted px-2 py-0.5 text-xs font-semibold">
+                      {Number(stock.ManageQty) || 0}
+                    </span>
+                  </div>
+                ))
+              ) : (
+                "-"
+              )}
+            </div>
+          );
+        },
+      }),
+      makeColumn({
+        id: "MachineQty",
+        title: "Machine",
+        size: 220,
+        skeleton: "w-32",
+        render: (r) => {
+          const machines = (r?.manageQtyByLocation || []).filter(
+            (stock) => stock.LocationType === "MACHINE",
+          );
+
+          return (
+            <div className="space-y-2">
+              {machines.length > 0 ? (
+                machines.map((stock, index) => (
+                  <div
+                    key={`${stock.LocationId}-${index}`}
+                    className="flex items-center justify-between gap-3"
+                  >
+                    <span
+                      className="min-w-0 truncate font-medium"
+                      title={stock.MachineName || "-"}
+                    >
+                      {getDisplayValue(stock.MachineName)}
+                    </span>
+
+                    <span className="shrink-0 rounded-md bg-muted px-2 py-0.5 text-xs font-semibold">
+                      {Number(stock.ManageQty) || 0}
+                    </span>
+                  </div>
+                ))
+              ) : (
+                "-"
+              )}
+            </div>
+          );
+        },
       }),
       makeColumn({
         id: "UnitMeasure",
@@ -1090,7 +1167,7 @@ const InventoryRegisterList = () => {
 
             <Input
               type="text"
-              placeholder="Search inventory register"
+              placeholder="Search Stock register"
               value={searchInput}
               onChange={(event) => setSearchInput(event.target.value)}
               onKeyDown={(event) => {
@@ -1132,7 +1209,7 @@ const InventoryRegisterList = () => {
             </TooltipTrigger>
 
             <TooltipContent>
-              <p>Search by item name, item code or inventory details.</p>
+              <p>Search by item name, item code or stock details.</p>
             </TooltipContent>
           </Tooltip>
         </div>
@@ -1239,6 +1316,14 @@ const InventoryRegisterList = () => {
             updatedTo={updatedTo}
             setUpdatedTo={setUpdatedTo}
           />
+          <DataGridColumnVisibility
+            table={table}
+            trigger={
+              <Button variant="outline">
+                <Settings2 />
+                Columns
+              </Button>
+            } />
         </div>
       </CardHeader>
     );
@@ -1250,7 +1335,7 @@ const InventoryRegisterList = () => {
           <div>
             <h3 className="text-lg font-semibold">Access Denied</h3>
             <p className="mt-1 text-sm text-muted-foreground">
-              You do not have permission to view the Inventory Register.
+              You do not have permission to view the Stock Register.
             </p>
           </div>
         </CardHeader>
@@ -1289,7 +1374,7 @@ const InventoryRegisterList = () => {
       </DataGrid>
 
       {/* ADD ENTRY */}
-      <InventoryRregisterAddDialog
+      <InventoryRegisterAddDialog
         open={addDialogOpen}
         closeDialog={() => setAddDialogOpen(false)}
         onSuccess={async () => {
@@ -1313,9 +1398,9 @@ const InventoryRegisterList = () => {
             }}
           >
             <DialogHeader className="px-6 pt-6 pb-4 shrink-0">
-              <DialogTitle>Email Inventory Register</DialogTitle>
+              <DialogTitle>Email Stock Register</DialogTitle>
               <DialogDescription>
-                Select recipients and send the inventory register report.
+                Select recipients and send the Stock register report.
               </DialogDescription>
             </DialogHeader>
 

@@ -18,6 +18,7 @@ import {
   Info,
   Search,
   Trash2,
+  Settings2,
   ChevronDown,
   Funnel,
   X,
@@ -40,6 +41,7 @@ import { DataGrid } from "@/components/ui/data-grid";
 import { DataGridColumnHeader } from "@/components/ui/data-grid-column-header";
 import { DataGridPagination } from "@/components/ui/data-grid-pagination";
 import { DataGridTable } from "@/components/ui/data-grid-table";
+import { DataGridColumnVisibility } from '@/components/ui/data-grid-column-visibility';
 import {
   Dialog,
   DialogContent,
@@ -103,13 +105,13 @@ const showErrorToast = (message) => {
   );
 };
 const formatDate = (value) => {
-    if (!value) return "-";
+  if (!value) return "-";
 
-    const date = new Date(value);
+  const date = new Date(value);
 
-    return Number.isNaN(date.getTime())
-        ? "-"
-        : date.toLocaleDateString();
+  return Number.isNaN(date.getTime())
+    ? "-"
+    : date.toLocaleDateString();
 };
 const createIssueReceiptNotification = async ({
   action,
@@ -1375,7 +1377,7 @@ const IssueReceiptList = () => {
         title: "Updated Date",
         size: 175,
         render: (r) => <span>{formatDate(r?.updatedAt)}</span>,
-      }),      
+      }),
 
       {
         accessorKey: "updatedByName",
@@ -1686,6 +1688,14 @@ const IssueReceiptList = () => {
             setUpdatedBy={setUpdatedByFilter}
             setPagination={setPagination}
           />
+          <DataGridColumnVisibility
+            table={table}
+            trigger={
+              <Button variant="outline">
+                <Settings2 />
+                Columns
+              </Button>
+            } />
         </div>
       </CardHeader >
 

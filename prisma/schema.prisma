@@ -634,6 +634,7 @@ model ItemGroup {
   description  String?
   status       Boolean   @default(true)
   isDefault    Boolean   @default(false)
+  parentId     String?
   createby     String?
   updateby     String?
   createdAt    DateTime  @default(now())
@@ -697,21 +698,26 @@ model TransactionType {
 }
 
 model ItemMaster {
-  id                         String  @id @default(uuid())
-  ItemGroupid                String
-  ItemName                   String  @db.VarChar(255)
-  Description                String? @db.VarChar(255)
-  openingBalance             String? @db.VarChar(255)
-  Unitid                     String
-  rather                     Int
-  Tax1                       String
-  Tax2                       String
+  id             String            @id @default(uuid())
+  ItemGroupid    String
+  brands         ItemMasterBrand[]
+  ItemName       String            @db.VarChar(255)
+  Description    String?           @db.VarChar(255)
+  openingBalance String?           @db.VarChar(255)
+  Unitid         String
+  rather         Int
+  Tax1           String
+  Tax2           String
+
+  RestockLevelType String @default("ITEM") @db.VarChar(20)
+
   ApplicableForRelocateLevel Boolean @default(false)
   RelocateLevel              String? @db.VarChar(255)
-
-  Locationid      String?
-  Machineid       String?
-  ItemConditionid String?
+  SKU                        String? @unique @db.VarChar(100)
+  Barcode                    String? @unique @db.VarChar(100)
+  Locationid                 String?
+  Machineid                  String?
+  ItemConditionid            String?
 
   status     Boolean   @default(true)
   isDefault  Boolean   @default(false)
@@ -724,6 +730,24 @@ model ItemMaster {
 
   @@unique([ItemName, ItemConditionid])
   @@map("ItemMaster")
+}
+
+model ItemMasterBrand {
+  id           String @id @default(uuid()) @db.VarChar(36)
+  ItemMasterid String @db.VarChar(36)
+  ItemBrandid  String @db.VarChar(36)
+
+  RestockLevel String? @db.VarChar(255)
+
+  createdAt DateTime @default(now())
+
+  itemMaster ItemMaster        @relation(fields: [ItemMasterid], references: [id], onDelete: Cascade)
+  brand      BrandManufacturer @relation(fields: [ItemBrandid], references: [id], onDelete: Restrict)
+
+  @@unique([ItemMasterid, ItemBrandid])
+  @@index([ItemMasterid])
+  @@index([ItemBrandid])
+  @@map("ItemMasterBrand")
 }
 
 model Country {
@@ -749,11 +773,12 @@ model Country {
 }
 
 model IssueReceipt {
-  id                String @id @default(uuid())
-  ItemGroupid       String @db.VarChar(36)
-  ItemMasterid      String @db.VarChar(36)
-  ItemTypeid        String @db.VarChar(36)
-  TransactionTypeid String @db.VarChar(36)
+  id                String  @id @default(uuid())
+  ItemGroupid       String  @db.VarChar(36)
+  ItemMasterid      String  @db.VarChar(36)
+  ItemBrandid       String? @db.VarChar(36)
+  ItemTypeid        String  @db.VarChar(36)
+  TransactionTypeid String  @db.VarChar(36)
 
   // Date and time
   IssueDate DateTime
@@ -783,7 +808,13 @@ model IssueReceipt {
   // Location / Machinery
   DestinationType String? @db.VarChar(20)
   DestinationId   String? @db.VarChar(36)
+  // Stock source
+  FromType        String? @db.VarChar(20) // VENDOR, LOCATION, MACHINE
+  FromId          String? @db.VarChar(36)
 
+  // Stock destination
+  ToType     String?   @db.VarChar(20) // VENDOR, LOCATION, MACHINE
+  ToId       String?   @db.VarChar(36)
   Comment    String?
   createby   String?
   updateby   String?
@@ -794,13 +825,15 @@ model IssueReceipt {
 
   @@index([ItemGroupid])
   @@index([ItemMasterid])
+  @@index([ItemBrandid])
   @@index([ItemTypeid])
   @@index([TransactionTypeid])
   @@index([Issue_by])
   @@index([RecivedBy])
   @@index([IssueDate])
   @@index([DestinationType, DestinationId])
-  @@map("IssueReceipt")
+  @@index([FromType, FromId])
+  @@index([ToType, ToId])
 }
 
 model ExtensionModule {
@@ -1597,19 +1630,96 @@ model Location {
 }
 
 model BrandManufacturer {
-  id           String    @id @default(uuid())
-  brandName    String    @db.VarChar(255)
-  manufacturerName String    @db.VarChar(255)
-  websiteURL   String    @db.VarChar(255)
-  description  String?
-  status       Boolean   @default(true)
-  createby     String?
-  updateby     String?
+  id               String            @id @default(uuid())
+  brandName        String            @db.VarChar(255)
+  manufacturerName String            @db.VarChar(255)
+  websiteURL       String?           @db.VarChar(255)
+  description      String?
+  status           Boolean           @default(true)
+  createby         String?
+  updateby         String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  deletedAt        DateTime?
+  lastSyncAt       DateTime?
+  customFields     Json?             @default("{}")
+  itemMasters      ItemMasterBrand[]
+
+  @@map("BrandManufacturer")
+}
+
+model InventoryStockBalance {
+  id           String    @id @default(uuid()) @db.VarChar(36)
+  ItemMasterid String    @db.VarChar(36)
+  ItemTypeid   String    @db.VarChar(36)
+  LocationType String    @db.VarChar(20) // VENDOR, LOCATION, MACHINE
+  LocationId   String    @db.VarChar(36)
+  Quantity     Int       @default(0)
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   deletedAt    DateTime?
-  lastSyncAt   DateTime?
-  customFields Json?     @default("{}")
 
-  @@map("BrandManufacturer")
+  @@unique([ItemMasterid, ItemTypeid, LocationType, LocationId])
+  @@index([ItemMasterid])
+  @@index([LocationType, LocationId])
+  @@map("InventoryStockBalance")
+}
+
+model InventoryStockLedger {
+  id             String @id @default(uuid()) @db.VarChar(36)
+  IssueReceiptId String @db.VarChar(36)
+
+  ItemGroupid  String @db.VarChar(36)
+  ItemMasterid String @db.VarChar(36)
+  ItemTypeid   String @db.VarChar(36)
+
+  LocationType String @db.VarChar(20) // VENDOR, LOCATION, MACHINE
+  LocationId   String @db.VarChar(36)
+
+  QtyIn  Int @default(0)
+  QtyOut Int @default(0)
+
+  PreviousBalance Int @default(0)
+  Balance         Int @default(0)
+
+  Price           Decimal? @db.Decimal(12, 2)
+  TransactionDate DateTime
+  Comment         String?
+
+  createby  String?
+  createdAt DateTime  @default(now())
+  deletedAt DateTime?
+
+  @@index([IssueReceiptId])
+  @@index([ItemMasterid, ItemTypeid, LocationType, LocationId])
+  @@index([LocationType, LocationId, TransactionDate])
+  @@map("InventoryStockLedger")
+}
+
+model ItemRates {
+  id                  String    @id @default(uuid()) @db.VarChar(36)
+  ItemGroupid         String
+  ItemMasterid        String    @db.VarChar(36)
+  BrandManufacturerid String
+  ItemConditionid     String
+  ApplicableFromDate  DateTime
+  ApplicableToDate    DateTime?
+  Rate                Float
+  Unitid              String
+  Comments            String?
+  createby            String?
+  updateby            String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  deletedAt           DateTime?
+  lastSyncAt          DateTime?
+  customFields        Json?
+
+  @@index([ItemGroupid])
+  @@index([ItemMasterid])
+  @@index([BrandManufacturerid])
+  @@index([ItemConditionid])
+  @@index([Unitid])
+  @@index([ApplicableFromDate])
+  @@map("ItemRates")
 }

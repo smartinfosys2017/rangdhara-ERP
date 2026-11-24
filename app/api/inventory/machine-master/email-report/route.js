@@ -1,4 +1,3 @@
-
 import { NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 
@@ -61,6 +60,55 @@ function normalizeRecipients(input) {
     ];
 }
 
+function parseGroupNames(value) {
+    if (!value) return "";
+
+    try {
+        const parsed = JSON.parse(value);
+
+        if (Array.isArray(parsed)) {
+            return parsed.join(", ");
+        }
+
+        return String(parsed);
+    } catch {
+        return String(value);
+    }
+}
+
+// Format all item details into a comma-separated string.
+function formatItemDetails(itemDetails = []) {
+    if (!Array.isArray(itemDetails) || itemDetails.length === 0) {
+        return "";
+    }
+
+    return itemDetails
+        .map((item) => {
+            const group = item.SelectedGroupName ?? "";
+            const itemName = item.Selecteditem ?? "";
+            const unit = item.itemUnit ?? "";
+            const quantity = item.itemQty ?? "";
+            const description = item.itemdescription ?? "";
+
+            return [
+                group,
+                itemName,
+                unit,
+                quantity,
+                description,
+            ]
+                .filter(
+                    (value) =>
+                        value !== null &&
+                        value !== undefined &&
+                        String(value).trim() !== ""
+                )
+                .join(" - ");
+        })
+        .filter(Boolean)
+        .join(", ");
+}
+
 export async function POST(request) {
     try {
         // 1. Authentication
@@ -89,7 +137,6 @@ export async function POST(request) {
             filters = {},
         } = body;
 
-        // Support both recipients and to.
         const recipientEmails = normalizeRecipients(recipients ?? to);
 
         if (recipientEmails.length === 0) {
@@ -133,13 +180,13 @@ export async function POST(request) {
                 (id) =>
                     id === null ||
                     id === undefined ||
-                    !["string", "number"].includes(typeof id)
+                    typeof id !== "string"
             )
         ) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: "selectedIds must be an array of item group IDs.",
+                    message: "selectedIds must be an array of machine IDs.",
                 },
                 { status: 400 }
             );
@@ -157,6 +204,7 @@ export async function POST(request) {
 
         // 3. Read filters
         const query = String(filters?.query ?? "").trim();
+
         const status = String(filters?.status ?? "all")
             .trim()
             .toLowerCase();
@@ -211,8 +259,7 @@ export async function POST(request) {
             );
         }
 
-        // 4. Build Prisma filters.
-        // This assumes deletedAt exists and null means not deleted.
+        // 4. Build Prisma filters
         const where = {
             deletedAt: null,
         };
@@ -220,13 +267,31 @@ export async function POST(request) {
         if (query) {
             where.OR = [
                 {
-                    groupName: {
+                    machineNumber: {
                         contains: query,
                         mode: "insensitive",
                     },
                 },
                 {
-                    description: {
+                    machineName: {
+                        contains: query,
+                        mode: "insensitive",
+                    },
+                },
+                {
+                    machineCode: {
+                        contains: query,
+                        mode: "insensitive",
+                    },
+                },
+                {
+                    GroupName: {
+                        contains: query,
+                        mode: "insensitive",
+                    },
+                },
+                {
+                    OperateId: {
                         contains: query,
                         mode: "insensitive",
                     },
@@ -234,7 +299,6 @@ export async function POST(request) {
             ];
         }
 
-        // Assumes status is a Boolean field.
         if (status === "active") {
             where.status = true;
         } else if (status === "inactive") {
@@ -271,56 +335,68 @@ export async function POST(request) {
             }
         }
 
-        // 5. Fetch item groups.
-        const itemGroups = await prisma.ItemGroup.findMany({
+        // 5. Fetch machines and non-deleted item details
+        const machines = await prisma.machineMaster.findMany({
             where,
             orderBy: {
                 createdAt: "desc",
             },
-            select: {
-                id: true,
-                groupName: true,
-                description: true,
-                status: true,
-                isDefault: true,
-                createdAt: true,
-                updatedAt: true,
+            include: {
+                itemDetails: {
+                    where: {
+                        deletedAt: null,
+                    },
+                    orderBy: {
+                        createdAt: "asc",
+                    },
+                },
             },
         });
 
-        if (itemGroups.length === 0) {
+        if (machines.length === 0) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: "No item groups match the selected IDs and filters.",
+                    message: "No machines match the selected IDs and filters.",
                 },
                 { status: 404 }
             );
         }
 
-        // 6. Generate Excel attachment when requested.
+        // 6. Generate Excel attachment
         let attachments = [];
         let fileName = null;
 
         if (attachExcel) {
-            const rows = itemGroups.map((item) => ({
-                ID: item.id,
-                "Group Name": item.groupName ?? "",
-                Description: item.description ?? "",
-                Status: item.status ? "Active" : "Inactive",
-                "Default Group": item.isDefault ? "Yes" : "No",
-                "Created Date": formatDate(item.createdAt),
-                "Updated Date": formatDate(item.updatedAt),
+            // Main Machine Master sheet
+            const rows = machines.map((machine) => ({
+                ID: machine.id,
+                "Machine Number": machine.machineNumber ?? "",
+                "Machine Code": machine.machineCode ?? "",
+                "Machine Name": machine.machineName ?? "",
+                "Item Groups": parseGroupNames(machine.GroupName),
+                "Operator ID": machine.OperateId ?? "",
+                Specification:  formatItemDetails(machine.itemDetails),
+                Comment: machine.comment ?? "",
+                Status: machine.status ? "Active" : "Inactive",
+                "Total Items": machine.itemDetails?.length ?? 0,
+                "Created Date": formatDate(machine.createdAt),
+                "Updated Date": formatDate(machine.updatedAt),
             }));
 
             const worksheet = XLSX.utils.json_to_sheet(rows);
 
             worksheet["!cols"] = [
                 { wch: 38 },
-                { wch: 28 },
-                { wch: 45 },
-                { wch: 16 },
-                { wch: 18 },
+                { wch: 22 },
+                { wch: 22 },
+                { wch: 30 },
+                { wch: 35 },
+                { wch: 25 },
+                { wch: 60 },
+                { wch: 35 },
+                { wch: 15 },
+                { wch: 15 },
                 { wch: 24 },
                 { wch: 24 },
             ];
@@ -330,15 +406,49 @@ export async function POST(request) {
             XLSX.utils.book_append_sheet(
                 workbook,
                 worksheet,
-                "Item Groups"
+                "Machine Master"
             );
+
+            // Separate sheet for machine item details
+            const itemRows = machines.flatMap((machine) =>
+                (machine.itemDetails ?? []).map((item) => ({
+                    "Machine Number": machine.machineNumber ?? "",
+                    "Machine Name": machine.machineName ?? "",
+                    "Selected Group": item.SelectedGroupName ?? "",
+                    "Selected Item": item.Selecteditem ?? "",
+                    "Item Unit": item.itemUnit ?? "",
+                    "Item Quantity": item.itemQty ?? "",
+                    "Item Description": item.itemdescription ?? "",
+                }))
+            );
+
+            if (itemRows.length > 0) {
+                const itemWorksheet =
+                    XLSX.utils.json_to_sheet(itemRows);
+
+                itemWorksheet["!cols"] = [
+                    { wch: 22 },
+                    { wch: 30 },
+                    { wch: 28 },
+                    { wch: 30 },
+                    { wch: 20 },
+                    { wch: 18 },
+                    { wch: 40 },
+                ];
+
+                XLSX.utils.book_append_sheet(
+                    workbook,
+                    itemWorksheet,
+                    "Machine Items"
+                );
+            }
 
             const excelBuffer = XLSX.write(workbook, {
                 type: "buffer",
                 bookType: "xlsx",
             });
 
-            fileName = `inventory-item-groups-${new Date()
+            fileName = `inventory-machine-master-${new Date()
                 .toISOString()
                 .slice(0, 10)}.xlsx`;
 
@@ -352,15 +462,17 @@ export async function POST(request) {
             ];
         }
 
-        // 7. Build email content.
+        // 7. Build email content
         const plainMessage = String(message || "").trim();
 
         const emailText = [
             plainMessage ||
-            "Please find the Item Groups report for your review.",
+            "Please find the Machine Master report for your review.",
             "",
-            `Total item groups: ${itemGroups.length}`,
-            attachExcel ? `Attachment: ${fileName}` : "No Excel attachment included.",
+            `Total machines: ${machines.length}`,
+            attachExcel
+                ? `Attachment: ${fileName}`
+                : "No Excel attachment included.",
             "",
             "Regards,",
             "Inventory Management Team",
@@ -368,32 +480,32 @@ export async function POST(request) {
 
         const safeMessage = escapeHtml(
             plainMessage ||
-            "Please find the Item Groups report for your review."
+            "Please find the Machine Master report for your review."
         ).replace(/\r\n|\r|\n/g, "<br>");
 
         const emailHtml = `
-      <div style="font-family:Arial,sans-serif;color:#333;line-height:1.7">
-        <h2 style="margin-bottom:16px">Item Groups Report</h2>
+            <div style="font-family:Arial,sans-serif;color:#333;line-height:1.7">
+                <h2 style="margin-bottom:16px">Machine Master Report</h2>
 
-        <p>${safeMessage}</p>
+                <p>${safeMessage}</p>
 
-        <p>
-          <strong>Total item groups:</strong>
-          ${itemGroups.length}
-        </p>
+                <p>
+                    <strong>Total machines:</strong>
+                    ${machines.length}
+                </p>
 
-        <p>
-          ${attachExcel
+                <p>
+                    ${attachExcel
                 ? "The Excel report is attached to this email."
                 : "No Excel attachment was requested."
             }
-        </p>
+                </p>
 
-        <p>Regards,<br>Inventory Management Team</p>
-      </div>
-    `;
+                <p>Regards,<br>Inventory Management Team</p>
+            </div>
+        `;
 
-        // 8. Send using your existing SMTP/queue helper.
+        // 8. Send email
         const result = await sendEmail({
             to: recipientEmails.join(", "),
             subject: String(subject).trim(),
@@ -402,18 +514,18 @@ export async function POST(request) {
             attachments,
         });
 
-        // 9. Return result.
+        // 9. Return result
         return NextResponse.json({
             success: true,
             message: result.queued
-                ? "Email report added to the queue."
-                : "Email report sent successfully.",
+                ? "Machine Master report added to the queue."
+                : "Machine Master report sent successfully.",
             status: result.status,
             queued: result.queued,
             sent: result.sent,
             queueId: result.queueId,
             recipients: recipientEmails,
-            itemGroupCount: itemGroups.length,
+            machineCount: machines.length,
             attachmentIncluded: attachments.length > 0,
             fileName,
             filters: {
@@ -426,14 +538,14 @@ export async function POST(request) {
             },
         });
     } catch (error) {
-        console.error("[ITEM_GROUP_EMAIL_REPORT]", error);
+        console.error("[MACHINE_MASTER_EMAIL_REPORT]", error);
 
         return NextResponse.json(
             {
                 success: false,
                 message:
                     error.message ||
-                    "Failed to generate or send the item groups report.",
+                    "Failed to generate or send the Machine Master report.",
             },
             { status: 500 }
         );

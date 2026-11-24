@@ -1,4 +1,3 @@
-
 import { NextResponse } from "next/server";
 
 import prisma from "@/lib/prisma";
@@ -16,6 +15,8 @@ const ENTITY_TYPE = "inventory.item-master";
 const ALLOWED_SORT_FIELDS = [
   "id",
   "ItemName",
+  "SKU",
+  "Barcode",
   "Description",
   "rather",
   "status",
@@ -73,6 +74,25 @@ const matchesName = (value, search) => {
 };
 
 // ======================================================
+// SKU AND BARCODE VALIDATION
+// ======================================================
+
+const validateSkuBarcode = (body) => {
+  const SKU = String(body.SKU ?? "").trim();
+  const Barcode = String(body.Barcode ?? "").trim();
+
+  if (SKU.length > 100) {
+    return "SKU must not exceed 100 characters.";
+  }
+
+  if (Barcode.length > 100) {
+    return "Barcode must not exceed 100 characters.";
+  }
+
+  return null;
+};
+
+// ======================================================
 // BUILD ITEM WHERE CONDITIONS
 // ======================================================
 
@@ -95,6 +115,18 @@ const getItemMasterWhere = (searchParams, options = {}) => {
     const searchConditions = [
       {
         ItemName: {
+          contains: query,
+          mode: "insensitive",
+        },
+      },
+      {
+        SKU: {
+          contains: query,
+          mode: "insensitive",
+        },
+      },
+      {
+        Barcode: {
           contains: query,
           mode: "insensitive",
         },
@@ -146,14 +178,14 @@ const getItemMasterWhere = (searchParams, options = {}) => {
     });
   }
 
-  // Created by filter - Prisma field: createby
+  // Created by filter
   if (options.createdBy) {
     andConditions.push({
       createby: String(options.createdBy),
     });
   }
 
-  // Updated by filter - Prisma field: updateby
+  // Updated by filter
   if (options.updatedBy) {
     andConditions.push({
       updateby: String(options.updatedBy),
@@ -226,6 +258,20 @@ const buildItemData = (body) => {
     data.ItemGroupid = body.ItemGroupid;
   }
 
+  if (body.ItemName !== undefined) {
+    data.ItemName = String(body.ItemName ?? "").trim();
+  }
+
+  // SKU
+  if (body.SKU !== undefined) {
+    data.SKU = String(body.SKU ?? "").trim() || null;
+  }
+
+  // Barcode
+  if (body.Barcode !== undefined) {
+    data.Barcode = String(body.Barcode ?? "").trim() || null;
+  }
+
   if (body.Description !== undefined) {
     data.Description = String(body.Description ?? "").trim() || null;
   }
@@ -251,9 +297,7 @@ const buildItemData = (body) => {
   }
 
   if (body.ApplicableForRelocateLevel !== undefined) {
-    data.ApplicableForRelocateLevel = Boolean(
-      body.ApplicableForRelocateLevel,
-    );
+    data.ApplicableForRelocateLevel = Boolean(body.ApplicableForRelocateLevel);
   }
 
   if (body.RelocateLevel !== undefined) {
@@ -292,13 +336,7 @@ const unauthorized = () =>
 // SYSTEM LOG
 // ======================================================
 
-const logItemMaster = async ({
-  request,
-  event,
-  itemMaster,
-  user,
-  text,
-}) => {
+const logItemMaster = async ({ request, event, itemMaster, user, text }) => {
   if (!itemMaster || !user?.id) return;
 
   const action =
@@ -350,11 +388,9 @@ export async function GET(request) {
     const sort = searchParams.get("sort") || "createdAt";
     const dir = searchParams.get("dir") === "asc" ? "asc" : "desc";
 
-    const sortField = ALLOWED_SORT_FIELDS.includes(sort)
-      ? sort
-      : "createdAt";
+    const sortField = ALLOWED_SORT_FIELDS.includes(sort) ? sort : "createdAt";
 
-    // Filter parameters
+    // Filters
     const query = searchParams.get("query")?.trim() || "";
     const unitName = searchParams.get("unitName")?.trim() || "";
     const groupName = searchParams.get("groupName")?.trim() || "";
@@ -429,7 +465,6 @@ export async function GET(request) {
       prisma.unit.findMany({
         where: { deletedAt: null },
       }),
-
       prisma.itemGroup.findMany({
         where: { deletedAt: null },
       }),
@@ -439,10 +474,7 @@ export async function GET(request) {
     const searchUnitIds = query
       ? units
         .filter((unit) =>
-          matchesName(
-            unit.unitName || unit.name || unit.abbreviation,
-            query,
-          ),
+          matchesName(unit.unitName || unit.name || unit.abbreviation, query),
         )
         .map((unit) => unit.id)
       : [];
@@ -450,9 +482,7 @@ export async function GET(request) {
     // Global search: group name
     const searchGroupIds = query
       ? itemGroups
-        .filter((group) =>
-          matchesName(group.groupName || group.name, query),
-        )
+        .filter((group) => matchesName(group.groupName || group.name, query))
         .map((group) => group.id)
       : [];
 
@@ -477,11 +507,10 @@ export async function GET(request) {
         .map((group) => group.id)
       : undefined;
 
-    // Created by / Updated by - same user IDs as Unit API
     const createdById = createdBy || undefined;
     const updatedById = updatedBy || undefined;
 
-    // Return empty when a lookup filter has no matching record
+    // Return empty when lookup filter has no matching record
     if (
       (unitName && unitIds.length === 0) ||
       (groupName && groupNameIds.length === 0)
@@ -521,13 +550,11 @@ export async function GET(request) {
 
     let where = filterResult.where;
 
-    // ======================================================
-    // NUMERIC RESTOCK LEVEL FILTER
-    // RelocateLevel is stored as String, so compare as Number
-    // ======================================================
-
-    if (restockLevelMin !== null && restockLevelMin !== "" ||
-      restockLevelMax !== null && restockLevelMax !== "") {
+    // Numeric restock level filter
+    if (
+      (restockLevelMin !== null && restockLevelMin !== "") ||
+      (restockLevelMax !== null && restockLevelMax !== "")
+    ) {
       const min =
         restockLevelMin !== null && restockLevelMin !== ""
           ? Number(restockLevelMin)
@@ -538,27 +565,48 @@ export async function GET(request) {
           ? Number(restockLevelMax)
           : null;
 
+      // Fetch item-level and brand-level restock configurations
       const allItems = await prisma.itemMaster.findMany({
         where: {
           deletedAt: null,
-          ApplicableForRelocateLevel: true,
-          RelocateLevel: { not: null },
         },
         select: {
           id: true,
+          RestockLevelType: true,
+          ApplicableForRelocateLevel: true,
           RelocateLevel: true,
+          brands: {
+            select: {
+              RestockLevel: true,
+            },
+          },
         },
       });
 
       const matchingIds = allItems
         .filter((item) => {
-          const level = Number(item.RelocateLevel);
+          let levels = [];
 
-          if (!Number.isFinite(level)) return false;
-          if (min !== null && level < min) return false;
-          if (max !== null && level > max) return false;
+          if (item.RestockLevelType === "BRAND") {
+            levels = item.brands
+              .map((brand) => Number(brand.RestockLevel))
+              .filter((level) => Number.isFinite(level));
+          } else if (
+            item.ApplicableForRelocateLevel &&
+            item.RelocateLevel !== null
+          ) {
+            const level = Number(item.RelocateLevel);
 
-          return true;
+            if (Number.isFinite(level)) {
+              levels = [level];
+            }
+          }
+
+          return levels.some((level) => {
+            if (min !== null && level < min) return false;
+            if (max !== null && level > max) return false;
+            return true;
+          });
         })
         .map((item) => item.id);
 
@@ -586,6 +634,13 @@ export async function GET(request) {
         },
         skip: (page - 1) * limit,
         take: limit,
+        include: {
+          brands: {
+            include: {
+              brand: true,
+            },
+          },
+        },
       }),
     ]);
 
@@ -595,7 +650,7 @@ export async function GET(request) {
         String(unit.id),
         `${unit.unitName || unit.name || "-"}${unit.abbreviation ? ` (${unit.abbreviation})` : ""
         }`,
-      ])
+      ]),
     );
 
     // Item group map
@@ -616,7 +671,7 @@ export async function GET(request) {
       ),
     ];
 
-    // Fetch users - same as Unit API
+    // Fetch users
     const users = userIds.length
       ? await prisma.user.findMany({
         where: {
@@ -633,25 +688,16 @@ export async function GET(request) {
 
     // User ID-to-name map
     const userMap = new Map(
-      users.map((user) => [
-        String(user.id).trim(),
-        user.name || "-",
-      ]),
+      users.map((user) => [String(user.id).trim(), user.name || "-"]),
     );
 
     // Add display names
     const data = items.map((item) => ({
       ...item,
-
       UnitName: unitMap.get(String(item.Unitid)) || "-",
-
       GroupName: groupMap.get(String(item.ItemGroupid)) || "-",
-
-      createdByName:
-        userMap.get(String(item.createby || "").trim()) || "-",
-
-      updatedByName:
-        userMap.get(String(item.updateby || "").trim()) || "-",
+      createdByName: userMap.get(String(item.createby || "").trim()) || "-",
+      updatedByName: userMap.get(String(item.updateby || "").trim()) || "-",
     }));
 
     return NextResponse.json({
@@ -688,6 +734,20 @@ export async function POST(request) {
     if (accessError) return accessError;
 
     const body = await request.json();
+
+    // Validate SKU and Barcode
+    const skuBarcodeError = validateSkuBarcode(body);
+
+    if (skuBarcodeError) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: skuBarcodeError,
+        },
+        { status: 400 },
+      );
+    }
+
     const ItemName = body.ItemName?.trim();
 
     if (!ItemName) {
@@ -700,15 +760,25 @@ export async function POST(request) {
       );
     }
 
+    // Authenticated user
     const user = await getAuthenticatedUser();
+
     if (!user) return unauthorized();
+
+    // Opening Balance validation
     const openingBalance = Number(body.openingBalance || 0);
 
-    if (
-      openingBalance > 0 &&
-      !body.Locationid &&
-      !body.Machineid
-    ) {
+    if (!Number.isFinite(openingBalance) || openingBalance < 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Opening Balance must be a valid non-negative number.",
+        },
+        { status: 400 },
+      );
+    }
+
+    if (openingBalance > 0 && !body.Locationid && !body.Machineid) {
       return NextResponse.json(
         {
           success: false,
@@ -718,10 +788,118 @@ export async function POST(request) {
         { status: 400 },
       );
     }
-    // Location and ItemCondition IDs
+
     const Locationid = body.Locationid || null;
     const Machineid = body.Machineid || null;
     const ItemConditionid = body.ItemConditionid || null;
+
+    // Restock configuration
+    const RestockLevelType = String(
+      body.RestockLevelType || "ITEM",
+    ).toUpperCase();
+
+    if (!["ITEM", "BRAND"].includes(RestockLevelType)) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Invalid Restock Level Type.",
+        },
+        { status: 400 },
+      );
+    }
+
+    // Selected brand IDs
+    const BrandManufacturerids = Array.isArray(body.BrandManufacturerids)
+      ? body.BrandManufacturerids.map(String)
+      : [];
+
+    const brandIds = [...new Set(BrandManufacturerids)];
+
+    if (brandIds.length !== BrandManufacturerids.length) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Duplicate brands are not allowed.",
+        },
+        { status: 400 },
+      );
+    }
+
+    // Individual brand restock levels
+    const BrandRestockLevels =
+      body.BrandRestockLevels &&
+        typeof body.BrandRestockLevels === "object" &&
+        !Array.isArray(body.BrandRestockLevels)
+        ? body.BrandRestockLevels
+        : {};
+
+    // BRAND restock validation
+    if (RestockLevelType === "BRAND") {
+      if (brandIds.length === 0) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Please select at least one brand.",
+          },
+          { status: 400 },
+        );
+      }
+
+      for (const brandId of brandIds) {
+        const restockLevel = BrandRestockLevels[brandId];
+
+        if (
+          restockLevel === undefined ||
+          restockLevel === null ||
+          String(restockLevel).trim() === "" ||
+          !Number.isFinite(Number(restockLevel)) ||
+          Number(restockLevel) < 0
+        ) {
+          return NextResponse.json(
+            {
+              success: false,
+              message:
+                "Please enter a valid restock level for every selected brand.",
+            },
+            { status: 400 },
+          );
+        }
+      }
+    }
+
+    // Validate selected brands
+    if (brandIds.length > 0) {
+      const existingBrands = await prisma.brandManufacturer.findMany({
+        where: {
+          id: {
+            in: brandIds,
+          },
+          status: true,
+          deletedAt: null,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      const existingBrandIds = new Set(
+        existingBrands.map((brand) => String(brand.id)),
+      );
+
+      const invalidBrand = brandIds.find(
+        (brandId) => !existingBrandIds.has(brandId),
+      );
+
+      if (invalidBrand) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "One or more selected brands are invalid or inactive.",
+          },
+          { status: 400 },
+        );
+      }
+    }
 
     // Validate selected Location
     if (Locationid) {
@@ -770,7 +948,8 @@ export async function POST(request) {
         );
       }
     }
-    // Validate selected ItemCondition
+
+    // Validate selected Item Condition
     if (ItemConditionid) {
       const itemCondition = await prisma.PtoductType.findFirst({
         where: {
@@ -793,7 +972,8 @@ export async function POST(request) {
         );
       }
     }
-    // Check duplicate Item Name + Item Condition combination.
+
+    // Check duplicate Item Name + Item Condition
     const duplicateItem = await prisma.itemMaster.findFirst({
       where: {
         ItemName: {
@@ -818,7 +998,30 @@ export async function POST(request) {
         { status: 409 },
       );
     }
+
+    // Remove frontend-only fields
+    const {
+      BrandManufacturerids: ignoredBrandIds,
+      BrandRestockLevels: ignoredBrandRestockLevels,
+      ...itemBody
+    } = body;
+
+    // Prepare ItemMaster data
+    const itemData = buildItemData({
+      ...itemBody,
+
+      ApplicableForRelocateLevel:
+        RestockLevelType === "ITEM"
+          ? Boolean(body.ApplicableForRelocateLevel)
+          : false,
+
+      RelocateLevel:
+        RestockLevelType === "ITEM" ? body.RelocateLevel || null : null,
+    });
+
+    // Create item with brand records
     const item = await prisma.$transaction(async (tx) => {
+      // Remove previous default item
       if (body.isDefault === true) {
         await tx.itemMaster.updateMany({
           where: {
@@ -835,25 +1038,54 @@ export async function POST(request) {
 
       return tx.itemMaster.create({
         data: {
-          ...buildItemData(body),
+          ...itemData,
 
           ItemName,
-
           Locationid,
           Machineid,
           ItemConditionid,
+
+          RestockLevelType,
+
+          ApplicableForRelocateLevel:
+            RestockLevelType === "ITEM"
+              ? Boolean(body.ApplicableForRelocateLevel)
+              : false,
+
+          RelocateLevel:
+            RestockLevelType === "ITEM" ? body.RelocateLevel || null : null,
+
+          // Create selected brands and their restock levels
+          brands: {
+            create: brandIds.map((brandId) => ({
+              ItemBrandid: brandId,
+
+              RestockLevel:
+                RestockLevelType === "BRAND"
+                  ? String(BrandRestockLevels[brandId]).trim()
+                  : null,
+            })),
+          },
 
           status: body.status ?? true,
           isDefault: body.isDefault ?? false,
 
           createby: String(user.id),
           updateby: String(user.id),
-
           lastSyncAt: new Date(),
+        },
+
+        include: {
+          brands: {
+            include: {
+              brand: true,
+            },
+          },
         },
       });
     });
 
+    // System log
     await logItemMaster({
       request,
       event: "create",
@@ -880,6 +1112,10 @@ export async function POST(request) {
   }
 }
 
+// ======================================================
+// UPDATE ITEM
+// ======================================================
+
 export async function PUT(request) {
   try {
     const accessError = await checkMenuAccess(MENU_KEY);
@@ -891,41 +1127,28 @@ export async function PUT(request) {
       return NextResponse.json(
         {
           success: false,
-          message: "Item ID required.",
+          message: "Item ID is required.",
         },
         { status: 400 },
       );
     }
-    const openingBalance = Number(body.openingBalance || 0);
 
-    if (
-      openingBalance > 0 &&
-      !body.Locationid &&
-      !body.Machineid
-    ) {
-      return NextResponse.json(
-        {
-          success: false,
-          message:
-            "Please select either Location or Machine when Opening Balance is greater than 0.",
-        },
-        { status: 400 },
-      );
-    }
     const user = await getAuthenticatedUser();
+
     if (!user) return unauthorized();
 
-    const existing = await prisma.itemMaster.findFirst({
+    // Find existing item
+    const existingItem = await prisma.itemMaster.findFirst({
       where: {
         id: body.id,
         deletedAt: null,
       },
-      select: {
-        id: true,
+      include: {
+        brands: true,
       },
     });
 
-    if (!existing) {
+    if (!existingItem) {
       return NextResponse.json(
         {
           success: false,
@@ -935,124 +1158,339 @@ export async function PUT(request) {
       );
     }
 
-    const updateData = {
-      ...buildItemData(body),
-      updateby: String(user.id),
-      lastSyncAt: new Date(),
+    // Validate SKU and Barcode
+    const skuBarcodeError = validateSkuBarcode(body);
+
+    if (skuBarcodeError) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: skuBarcodeError,
+        },
+        { status: 400 },
+      );
+    }
+
+    // Resolve values
+    const ItemName =
+      body.ItemName !== undefined
+        ? body.ItemName.trim()
+        : existingItem.ItemName;
+
+    if (!ItemName) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Item Name is required.",
+        },
+        { status: 400 },
+      );
+    }
+
+    const ItemConditionid =
+      body.ItemConditionid !== undefined
+        ? body.ItemConditionid || null
+        : existingItem.ItemConditionid;
+
+    const Locationid =
+      body.Locationid !== undefined
+        ? body.Locationid || null
+        : existingItem.Locationid;
+
+    const Machineid =
+      body.Machineid !== undefined
+        ? body.Machineid || null
+        : existingItem.Machineid;
+
+    const openingBalance =
+      body.openingBalance !== undefined
+        ? Number(body.openingBalance || 0)
+        : Number(existingItem.openingBalance || 0);
+
+    if (!Number.isFinite(openingBalance) || openingBalance < 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Opening Balance must be a valid non-negative number.",
+        },
+        { status: 400 },
+      );
+    }
+
+    if (openingBalance > 0 && !Locationid && !Machineid) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Please select either Location or Machine when Opening Balance is greater than 0.",
+        },
+        { status: 400 },
+      );
+    }
+
+    // Restock configuration
+    const RestockLevelType = String(
+      body.RestockLevelType !== undefined
+        ? body.RestockLevelType
+        : existingItem.RestockLevelType || "ITEM",
+    ).toUpperCase();
+
+    if (!["ITEM", "BRAND"].includes(RestockLevelType)) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Invalid Restock Level Type.",
+        },
+        { status: 400 },
+      );
+    }
+
+    // Resolve selected brand IDs
+    const BrandManufacturerids =
+      body.BrandManufacturerids !== undefined
+        ? Array.isArray(body.BrandManufacturerids)
+          ? body.BrandManufacturerids.map(String)
+          : []
+        : existingItem.brands.map((brand) => String(brand.ItemBrandid));
+
+    const brandIds = [...new Set(BrandManufacturerids)];
+
+    if (brandIds.length !== BrandManufacturerids.length) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Duplicate brands are not allowed.",
+        },
+        { status: 400 },
+      );
+    }
+
+    // Resolve brand restock levels
+    const BrandRestockLevels =
+      body.BrandRestockLevels &&
+        typeof body.BrandRestockLevels === "object" &&
+        !Array.isArray(body.BrandRestockLevels)
+        ? body.BrandRestockLevels
+        : {};
+
+    const existingBrandLevels = Object.fromEntries(
+      existingItem.brands.map((brand) => [
+        String(brand.ItemBrandid),
+        brand.RestockLevel,
+      ]),
+    );
+
+    const finalBrandLevels = {
+      ...existingBrandLevels,
+      ...BrandRestockLevels,
     };
 
-    // Update Location only when provided
-    if (body.Locationid !== undefined) {
-      const Locationid = body.Locationid || null;
-
-      if (Locationid) {
-        const location = await prisma.location.findFirst({
-          where: {
-            id: Locationid,
-            status: true,
-            deletedAt: null,
-          },
-          select: {
-            id: true,
-          },
-        });
-
-        if (!location) {
-          return NextResponse.json(
-            {
-              success: false,
-              message: "Selected Location is invalid or inactive.",
-            },
-            { status: 400 },
-          );
-        }
-      }
-
-      updateData.Locationid = Locationid;
-    }
-
-    // Update Machine only when provided
-    if (body.Machineid !== undefined) {
-      const Machineid = body.Machineid || null;
-
-      if (Machineid) {
-        const machine = await prisma.machineMaster.findFirst({
-          where: {
-            id: Machineid,
-            status: true,
-            deletedAt: null,
-          },
-          select: {
-            id: true,
-          },
-        });
-
-        if (!machine) {
-          return NextResponse.json(
-            {
-              success: false,
-              message: "Selected Machine is invalid or inactive.",
-            },
-            { status: 400 },
-          );
-        }
-      }
-
-      updateData.Machineid = Machineid;
-    }
-
-    // Update Item Condition only when provided
-    if (body.ItemConditionid !== undefined || body.ItemConditionid !== undefined) {
-      const ItemConditionid =
-        body.ItemConditionid || body.ItemConditionid || null;
-
-      if (ItemConditionid) {
-        const itemCondition = await prisma.PtoductType.findFirst({
-          where: {
-            id: ItemConditionid,
-            status: true,
-            deletedAt: null,
-          },
-          select: {
-            id: true,
-          },
-        });
-
-        if (!itemCondition) {
-          return NextResponse.json(
-            {
-              success: false,
-              message: "Selected item condition is invalid or inactive.",
-            },
-            { status: 400 },
-          );
-        }
-      }
-
-      updateData.ItemConditionid = ItemConditionid;
-    }
-
-    if (body.ItemName !== undefined) {
-      const ItemName = body.ItemName?.trim();
-
-      if (!ItemName) {
+    // Validate BRAND restock configuration
+    if (RestockLevelType === "BRAND") {
+      if (brandIds.length === 0) {
         return NextResponse.json(
           {
             success: false,
-            message: "Item Name is required.",
+            message: "Please select at least one brand.",
           },
           { status: 400 },
         );
       }
 
-      updateData.ItemName = ItemName;
+      for (const brandId of brandIds) {
+        const restockLevel = finalBrandLevels[brandId];
+
+        if (
+          restockLevel === undefined ||
+          restockLevel === null ||
+          String(restockLevel).trim() === "" ||
+          !Number.isFinite(Number(restockLevel)) ||
+          Number(restockLevel) < 0
+        ) {
+          return NextResponse.json(
+            {
+              success: false,
+              message:
+                "Please enter a valid restock level for every selected brand.",
+            },
+            { status: 400 },
+          );
+        }
+      }
     }
 
-    const updated = await prisma.$transaction(async (tx) => {
+    // Validate brands
+    if (brandIds.length > 0) {
+      const existingBrands = await prisma.brandManufacturer.findMany({
+        where: {
+          id: {
+            in: brandIds,
+          },
+          status: true,
+          deletedAt: null,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      const validBrandIds = new Set(
+        existingBrands.map((brand) => String(brand.id)),
+      );
+
+      const invalidBrand = brandIds.find((id) => !validBrandIds.has(id));
+
+      if (invalidBrand) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "One or more selected brands are invalid or inactive.",
+          },
+          { status: 400 },
+        );
+      }
+    }
+
+    // Validate Location
+    if (Locationid) {
+      const location = await prisma.location.findFirst({
+        where: {
+          id: Locationid,
+          status: true,
+          deletedAt: null,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      if (!location) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Selected Location is invalid or inactive.",
+          },
+          { status: 400 },
+        );
+      }
+    }
+
+    // Validate Machine
+    if (Machineid) {
+      const machine = await prisma.machineMaster.findFirst({
+        where: {
+          id: Machineid,
+          status: true,
+          deletedAt: null,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      if (!machine) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Selected Machine is invalid or inactive.",
+          },
+          { status: 400 },
+        );
+      }
+    }
+
+    // Validate Item Condition
+    if (ItemConditionid) {
+      const itemCondition = await prisma.PtoductType.findFirst({
+        where: {
+          id: ItemConditionid,
+          status: true,
+          deletedAt: null,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      if (!itemCondition) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Selected Item Condition is invalid or inactive.",
+          },
+          { status: 400 },
+        );
+      }
+    }
+
+    // Duplicate Item Name + Item Condition
+    const duplicateItem = await prisma.itemMaster.findFirst({
+      where: {
+        id: {
+          not: existingItem.id,
+        },
+        ItemName: {
+          equals: ItemName,
+          mode: "insensitive",
+        },
+        ItemConditionid,
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (duplicateItem) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "This Item Name already exists with the selected Item Condition.",
+        },
+        { status: 409 },
+      );
+    }
+
+    // Remove frontend-only fields
+    const {
+      id,
+      BrandManufacturerids: ignoredBrandIds,
+      BrandRestockLevels: ignoredBrandRestockLevels,
+      RestockLevelType: ignoredRestockType,
+      ...itemBody
+    } = body;
+
+    // Build update data
+    const itemData = buildItemData({
+      ...itemBody,
+      ItemName,
+      openingBalance: String(openingBalance),
+
+      ApplicableForRelocateLevel:
+        RestockLevelType === "ITEM"
+          ? body.ApplicableForRelocateLevel !== undefined
+            ? Boolean(body.ApplicableForRelocateLevel)
+            : existingItem.ApplicableForRelocateLevel
+          : false,
+
+      RelocateLevel:
+        RestockLevelType === "ITEM"
+          ? body.RelocateLevel !== undefined
+            ? body.RelocateLevel || null
+            : existingItem.RelocateLevel
+          : null,
+    });
+
+    // Update transaction
+    const updatedItem = await prisma.$transaction(async (tx) => {
+      // Remove previous default item
       if (body.isDefault === true) {
         await tx.itemMaster.updateMany({
           where: {
-            id: { not: body.id },
+            id: {
+              not: existingItem.id,
+            },
             isDefault: true,
             deletedAt: null,
           },
@@ -1064,25 +1502,77 @@ export async function PUT(request) {
         });
       }
 
-      return tx.itemMaster.update({
+      // Update item
+      await tx.itemMaster.update({
         where: {
-          id: body.id,
+          id: existingItem.id,
         },
-        data: updateData,
+        data: {
+          ...itemData,
+          Locationid,
+          Machineid,
+          ItemConditionid,
+          RestockLevelType,
+          updateby: String(user.id),
+          lastSyncAt: new Date(),
+        },
+      });
+
+      // Synchronize brand assignments when brand fields are supplied
+      const shouldUpdateBrands =
+        body.BrandManufacturerids !== undefined ||
+        body.BrandRestockLevels !== undefined ||
+        body.RestockLevelType !== undefined;
+
+      if (shouldUpdateBrands) {
+        await tx.itemMasterBrand.deleteMany({
+          where: {
+            ItemMasterid: existingItem.id,
+          },
+        });
+
+        if (brandIds.length > 0) {
+          await tx.itemMasterBrand.createMany({
+            data: brandIds.map((brandId) => ({
+              ItemMasterid: existingItem.id,
+              ItemBrandid: brandId,
+
+              RestockLevel:
+                RestockLevelType === "BRAND"
+                  ? String(finalBrandLevels[brandId]).trim()
+                  : null,
+            })),
+          });
+        }
+      }
+
+      // Return updated item
+      return tx.itemMaster.findUnique({
+        where: {
+          id: existingItem.id,
+        },
+        include: {
+          brands: {
+            include: {
+              brand: true,
+            },
+          },
+        },
       });
     });
 
+    // System log
     await logItemMaster({
       request,
       event: "update",
-      itemMaster: updated,
+      itemMaster: updatedItem,
       user,
     });
 
     return NextResponse.json({
       success: true,
       message: "Item updated successfully.",
-      data: updated,
+      data: updatedItem,
       sync: true,
     });
   } catch (error) {
@@ -1110,56 +1600,65 @@ export async function PATCH(request) {
 
     const body = await request.json();
 
+    const user = await getAuthenticatedUser();
+
+    if (!user) return unauthorized();
+
+    // Accept either a single ID or multiple IDs
+    const ids = Array.isArray(body.ids)
+      ? normalizeIds(body.ids)
+      : body.id
+        ? normalizeIds([body.id])
+        : [];
+
+    if (ids.length === 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Please provide at least one valid Item ID.",
+        },
+        { status: 400 },
+      );
+    }
+
+    // Validate status
     if (typeof body.status !== "boolean") {
       return NextResponse.json(
         {
           success: false,
-          message: "A valid status (true or false) is required.",
+          message: "Status must be true or false.",
         },
         { status: 400 },
       );
     }
 
-    const ids = normalizeIds(body);
-
-    if (!ids.length) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "At least one item ID is required.",
-        },
-        { status: 400 },
-      );
-    }
-
-    const user = await getAuthenticatedUser();
-    if (!user) return unauthorized();
-
+    // Find existing items
     const existingItems = await prisma.itemMaster.findMany({
       where: {
-        id: { in: ids },
+        id: {
+          in: ids,
+        },
         deletedAt: null,
-      },
-      select: {
-        id: true,
-        ItemName: true,
       },
     });
 
-    if (!existingItems.length) {
+    if (existingItems.length === 0) {
       return NextResponse.json(
         {
           success: false,
-          message: "No active items were found.",
+          message: "No active Item records found.",
         },
         { status: 404 },
       );
     }
 
-    const updateResult = await prisma.itemMaster.updateMany({
+    const existingIds = existingItems.map((item) => item.id);
+
+    // Update status
+    await prisma.itemMaster.updateMany({
       where: {
         id: {
-          in: existingItems.map((item) => item.id),
+          in: existingIds,
         },
         deletedAt: null,
       },
@@ -1170,20 +1669,39 @@ export async function PATCH(request) {
       },
     });
 
-    for (const item of existingItems) {
-      await logItemMaster({
-        request,
-        event: "update",
-        itemMaster: item,
-        user,
-        text: `marked ${body.status ? "active" : "inactive"}`,
-      });
-    }
+    // Fetch updated records
+    const updatedItems = await prisma.itemMaster.findMany({
+      where: {
+        id: {
+          in: existingIds,
+        },
+      },
+      include: {
+        brands: {
+          include: {
+            brand: true,
+          },
+        },
+      },
+    });
+
+    // System logs
+    await Promise.all(
+      updatedItems.map((item) =>
+        logItemMaster({
+          request,
+          event: "update",
+          itemMaster: item,
+          user,
+        }),
+      ),
+    );
 
     return NextResponse.json({
       success: true,
-      message: `Item(s) marked ${body.status ? "active" : "inactive"}.`,
-      count: updateResult.count,
+      message: `Item status ${body.status ? "activated" : "deactivated"
+        } successfully.`,
+      data: updatedItems,
       sync: true,
     });
   } catch (error) {
@@ -1192,7 +1710,7 @@ export async function PATCH(request) {
     return NextResponse.json(
       {
         success: false,
-        message: error.message || "Failed to update item status.",
+        message: error.message || "Failed to update Item status.",
       },
       { status: 500 },
     );
@@ -1209,73 +1727,111 @@ export async function DELETE(request) {
     const accessError = await checkMenuAccess(MENU_KEY);
     if (accessError) return accessError;
 
-    const body = await request.json();
-    const ids = normalizeIds(body);
+    const { searchParams } = new URL(request.url);
 
-    if (!ids.length) {
+    const body = await request.json().catch(() => ({}));
+
+    // Accept IDs from request body or query parameters
+    const rawIds = Array.isArray(body.ids)
+      ? body.ids
+      : body.id
+        ? [body.id]
+        : searchParams.get("ids")
+          ? searchParams.get("ids").split(",")
+          : searchParams.get("id")
+            ? [searchParams.get("id")]
+            : [];
+
+    const ids = normalizeIds(rawIds);
+
+    if (ids.length === 0) {
       return NextResponse.json(
         {
           success: false,
-          message: "At least one item ID is required.",
+          message: "Please provide at least one valid Item ID.",
         },
         { status: 400 },
       );
     }
 
+    // Authenticated user
     const user = await getAuthenticatedUser();
+
     if (!user) return unauthorized();
 
+    // Find active items
     const existingItems = await prisma.itemMaster.findMany({
       where: {
-        id: { in: ids },
+        id: {
+          in: ids,
+        },
         deletedAt: null,
       },
-      select: {
-        id: true,
-        ItemName: true,
+      include: {
+        brands: {
+          include: {
+            brand: true,
+          },
+        },
       },
     });
 
-    if (!existingItems.length) {
+    if (existingItems.length === 0) {
       return NextResponse.json(
         {
           success: false,
-          message: "No active items were found to delete.",
+          message: "No active Item records found to delete.",
         },
         { status: 404 },
       );
     }
 
-    const deleteResult = await prisma.itemMaster.updateMany({
-      where: {
-        id: {
-          in: existingItems.map((item) => item.id),
+    const now = new Date();
+
+    // Soft delete transaction
+    await prisma.$transaction(async (tx) => {
+      await tx.itemMaster.updateMany({
+        where: {
+          id: {
+            in: existingItems.map((item) => item.id),
+          },
+          deletedAt: null,
         },
-        deletedAt: null,
-      },
-      data: {
-        deletedAt: new Date(),
-        updateby: String(user.id),
-        lastSyncAt: new Date(),
-      },
+        data: {
+          deletedAt: now,
+          updateby: String(user.id),
+          lastSyncAt: now,
+        },
+      });
     });
 
-    for (const item of existingItems) {
-      await logItemMaster({
-        request,
-        event: "delete",
-        itemMaster: item,
-        user,
-      });
-    }
+    // Fetch deleted items
+    const deletedItems = existingItems.map((item) => ({
+      ...item,
+      deletedAt: now,
+      updateby: String(user.id),
+      lastSyncAt: now,
+    }));
+
+    // System logs
+    await Promise.all(
+      deletedItems.map((item) =>
+        logItemMaster({
+          request,
+          event: "delete",
+          itemMaster: item,
+          user,
+        }),
+      ),
+    );
 
     return NextResponse.json({
       success: true,
       message:
-        deleteResult.count === 1
+        deletedItems.length === 1
           ? "Item deleted successfully."
-          : `${deleteResult.count} item(s) deleted successfully.`,
-      count: deleteResult.count,
+          : `${deletedItems.length} items deleted successfully.`,
+      data: deletedItems,
       sync: true,
     });
   } catch (error) {

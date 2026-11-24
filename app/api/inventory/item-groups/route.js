@@ -36,13 +36,13 @@ const getDateRange = (from, to) => {
     range:
       start || end
         ? {
-          ...(start ? { gte: start } : {}),
-          ...(end
-            ? {
-              lt: new Date(end.getTime() + 24 * 60 * 60 * 1000),
-            }
-            : {}),
-        }
+            ...(start ? { gte: start } : {}),
+            ...(end
+              ? {
+                  lt: new Date(end.getTime() + 24 * 60 * 60 * 1000),
+                }
+              : {}),
+          }
         : undefined,
   };
 };
@@ -76,21 +76,21 @@ const getItemGroupWhere = (searchParams) => {
 
       ...(query
         ? {
-          OR: [
-            {
-              groupName: {
-                contains: query,
-                mode: "insensitive",
+            OR: [
+              {
+                groupName: {
+                  contains: query,
+                  mode: "insensitive",
+                },
               },
-            },
-            {
-              description: {
-                contains: query,
-                mode: "insensitive",
+              {
+                description: {
+                  contains: query,
+                  mode: "insensitive",
+                },
               },
-            },
-          ],
-        }
+            ],
+          }
         : {}),
 
       ...(status === "active"
@@ -99,13 +99,9 @@ const getItemGroupWhere = (searchParams) => {
           ? { status: false }
           : {}),
 
-      ...(createdRange.range
-        ? { createdAt: createdRange.range }
-        : {}),
+      ...(createdRange.range ? { createdAt: createdRange.range } : {}),
 
-      ...(updatedRange.range
-        ? { updatedAt: updatedRange.range }
-        : {}),
+      ...(updatedRange.range ? { updatedAt: updatedRange.range } : {}),
 
       ...(createdBy ? { createby: createdBy } : {}),
       ...(updatedBy ? { updateby: updatedBy } : {}),
@@ -113,12 +109,7 @@ const getItemGroupWhere = (searchParams) => {
   };
 };
 
-const logItemGroup = async ({
-  request,
-  event,
-  itemGroup,
-  user,
-}) => {
+const logItemGroup = async ({ request, event, itemGroup, user }) => {
   if (!itemGroup || !user?.id) return;
 
   await systemLog({
@@ -126,14 +117,94 @@ const logItemGroup = async ({
     userId: String(user.id),
     entityId: String(itemGroup.id),
     entityType: "inventory.item-group",
-    description: `Item Group ${event === "create"
-      ? "created"
-      : event === "update"
-        ? "updated"
-        : "deleted"
-      }: ${itemGroup.groupName}`,
+    description: `Item Group ${
+      event === "create"
+        ? "created"
+        : event === "update"
+          ? "updated"
+          : "deleted"
+    }: ${itemGroup.groupName}`,
     ipAddress: getClientIp(request),
   });
+};
+
+// ======================================================
+// VALIDATE PARENT CATEGORY
+// ======================================================
+
+const validateParentCategory = async (tx, parentId, currentId = null) => {
+  // Root category: no parent.
+  if (!parentId) {
+    return { valid: true };
+  }
+
+  const parent = await tx.itemGroup.findFirst({
+    where: {
+      id: parentId,
+      deletedAt: null,
+    },
+    select: {
+      id: true,
+      groupName: true,
+    },
+  });
+
+  if (!parent) {
+    return {
+      valid: false,
+      message: "Selected parent category does not exist or has been deleted.",
+    };
+  }
+
+  // No circular validation required for a new category.
+  if (!currentId) {
+    return { valid: true };
+  }
+
+  if (parentId === currentId) {
+    return {
+      valid: false,
+      message: "A category cannot be its own parent.",
+    };
+  }
+
+  // Fetch all active categories to check descendants.
+  const categories = await tx.itemGroup.findMany({
+    where: {
+      deletedAt: null,
+    },
+    select: {
+      id: true,
+      parentId: true,
+    },
+  });
+
+  const descendants = new Set();
+  const queue = [currentId];
+
+  while (queue.length > 0) {
+    const currentParentId = queue.shift();
+
+    const children = categories.filter(
+      (category) => category.parentId === currentParentId,
+    );
+
+    for (const child of children) {
+      if (!descendants.has(child.id)) {
+        descendants.add(child.id);
+        queue.push(child.id);
+      }
+    }
+  }
+
+  if (descendants.has(parentId)) {
+    return {
+      valid: false,
+      message: "You cannot select a child category as its parent.",
+    };
+  }
+
+  return { valid: true };
 };
 
 // ======================================================
@@ -176,9 +247,7 @@ export async function GET(request) {
       "updatedAt",
     ];
 
-    const sortField = allowedSortFields.includes(sort)
-      ? sort
-      : "createdAt";
+    const sortField = allowedSortFields.includes(sort) ? sort : "createdAt";
 
     const filterResult = getItemGroupWhere(searchParams);
 
@@ -218,14 +287,14 @@ export async function GET(request) {
     // Fetch corresponding user names.
     const users = userIds.length
       ? await prisma.user.findMany({
-        where: {
-          id: { in: userIds },
-        },
-        select: {
-          id: true,
-          name: true,
-        },
-      })
+          where: {
+            id: { in: userIds },
+          },
+          select: {
+            id: true,
+            name: true,
+          },
+        })
       : [];
 
     const userMap = new Map(
@@ -292,10 +361,10 @@ export async function POST(request) {
           success: false,
           message: "Group name cannot exceed 255 characters.",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
-    // Validate customFields. 
+    // Validate customFields.
     let submittedCustomFields = {};
 
     if (body.customFields !== undefined) {
@@ -326,6 +395,10 @@ export async function POST(request) {
         { status: 401 },
       );
     }
+    const parentId =
+      typeof body.parentId === "string" && body.parentId.trim()
+        ? body.parentId.trim()
+        : null;
     // Check duplicate itemGroup name (case-insensitive)
     const existingGroup = await prisma.itemGroup.findFirst({
       where: {
@@ -340,9 +413,10 @@ export async function POST(request) {
       return NextResponse.json(
         {
           success: false,
-          message: "This Group name already exists. Please enter a unique Group name.",
+          message:
+            "This Group name already exists. Please enter a unique Group name.",
         },
-        { status: 409 }
+        { status: 409 },
       );
     }
     const itemGroup = await prisma.$transaction(async (tx) => {
@@ -363,13 +437,19 @@ export async function POST(request) {
             success: false,
             message: "Authenticated user not found.",
           },
-          { status: 401 }
+          { status: 401 },
         );
+      }
+      const parentValidation = await validateParentCategory(tx, parentId);
+
+      if (!parentValidation.valid) {
+        throw new Error(parentValidation.message);
       }
       return tx.itemGroup.create({
         data: {
           groupName,
           description: body.description?.trim() || null,
+          parentId,
           status: body.status ?? true,
           isDefault: body.isDefault ?? false,
           customFields: submittedCustomFields,
@@ -463,7 +543,7 @@ export async function PUT(request) {
           mode: "insensitive",
         },
         NOT: {
-          id: body.id
+          id: body.id,
         },
       },
     });
@@ -475,17 +555,19 @@ export async function PUT(request) {
           message:
             "This item Group name already exists. Please enter a unique item Group name.",
         },
-        { status: 409 }
+        { status: 409 },
       );
     }
+    const parentId =
+      typeof body.parentId === "string" && body.parentId.trim()
+        ? body.parentId.trim()
+        : null;
     // Validate customFields.
     if (
       body.customFields !== undefined &&
-      (
-        body.customFields === null ||
+      (body.customFields === null ||
         typeof body.customFields !== "object" ||
-        Array.isArray(body.customFields)
-      )
+        Array.isArray(body.customFields))
     ) {
       return NextResponse.json(
         {
@@ -536,7 +618,7 @@ export async function PUT(request) {
       const updatedCustomFields =
         body.customFields !== undefined
           ? body.customFields
-          : existing.customFields ?? {};
+          : (existing.customFields ?? {});
       if (body.customFields !== undefined) {
         updateData.customFields = updatedCustomFields;
       }
@@ -548,10 +630,24 @@ export async function PUT(request) {
             success: false,
             message: "Authenticated user not found.",
           },
-          { status: 401 }
+          { status: 401 },
         );
       }
       updateData.updateby = String(user.id);
+      // Update parent category only when parentId is supplied.
+      if (Object.prototype.hasOwnProperty.call(body, "parentId")) {
+        const parentValidation = await validateParentCategory(
+          tx,
+          parentId,
+          body.id,
+        );
+
+        if (!parentValidation.valid) {
+          throw new Error(parentValidation.message);
+        }
+
+        updateData.parentId = parentId;
+      }
       return tx.itemGroup.update({
         where: { id: body.id },
         data: updateData,
@@ -676,8 +772,9 @@ export async function PATCH(request) {
         userId: String(user.id),
         entityId: String(item.id),
         entityType: "inventory.item-group",
-        description: `Item Group marked ${body.status ? "active" : "inactive"
-          }: ${item.groupName}`,
+        description: `Item Group marked ${
+          body.status ? "active" : "inactive"
+        }: ${item.groupName}`,
         ipAddress: getClientIp(request),
       });
     }

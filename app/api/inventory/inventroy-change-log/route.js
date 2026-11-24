@@ -1,6 +1,21 @@
+
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { checkMenuAccess } from "@/lib/module-access";
+
+// =====================================================
+// HELPERS
+// =====================================================
+
+const CHANGE_LOG_SORT_FIELDS = [
+  "id",
+  "createdAt",
+  "UserName",
+  "Action",
+  "ItemName",
+  "ItemType",
+  "Details",
+];
 
 const parseChangeLogDay = (value) => {
   if (!value) return null;
@@ -10,13 +25,61 @@ const parseChangeLogDay = (value) => {
   return Number.isNaN(date.getTime()) ? null : date;
 };
 
+const buildChangeLogDateRange = (from, to) => {
+  const start = parseChangeLogDay(from);
+  const end = parseChangeLogDay(to);
+
+  if ((from && !start) || (to && !end)) {
+    return {
+      error: "Invalid date filter.",
+    };
+  }
+
+  if (start && end && start > end) {
+    return {
+      error: "The From date cannot be after the To date.",
+    };
+  }
+
+  return {
+    range:
+      start || end
+        ? {
+            ...(start ? { gte: start } : {}),
+            ...(end
+              ? {
+                  lt: new Date(
+                    end.getTime() + 24 * 60 * 60 * 1000
+                  ),
+                }
+              : {}),
+          }
+        : undefined,
+  };
+};
+
+const getChangeLogParamList = (searchParams, name) => [
+  ...new Set(
+    searchParams
+      .getAll(name)
+      .map((value) => String(value).trim())
+      .filter(Boolean)
+  ),
+];
+
+// =====================================================
+// GET
+// =====================================================
+
 export async function GET(request) {
   try {
+    // =================================================
+    // ACCESS CONTROL
+    // =================================================
+
     const accessError = await checkMenuAccess("inventory_change_log");
 
-    if (accessError) {
-      return accessError;
-    }
+    if (accessError) return accessError;
 
     const { searchParams } = new URL(request.url);
 
@@ -30,61 +93,100 @@ export async function GET(request) {
     );
 
     const limit = Math.min(
-      Math.max(Number.parseInt(searchParams.get("limit") || "10", 10) || 10, 1),
+      Math.max(
+        Number.parseInt(searchParams.get("limit") || "10", 10) || 10,
+        1
+      ),
       1000
     );
 
     const skip = (page - 1) * limit;
 
     // =================================================
+    // SORTING
+    // =================================================
+
+    // Supports both register-style and existing parameter names.
+    const sort =
+      searchParams.get("sort") ||
+      searchParams.get("sortField") ||
+      "createdAt";
+
+    const dir =
+      searchParams.get("dir") ||
+      searchParams.get("sortOrder") ||
+      "desc";
+
+    const sortField = CHANGE_LOG_SORT_FIELDS.includes(sort)
+      ? sort
+      : "createdAt";
+
+    const sortDirection =
+      dir.toLowerCase() === "asc" ? "asc" : "desc";
+
+    const orderBy = [
+      {
+        [sortField]: sortDirection,
+      },
+      {
+        id: "desc",
+      },
+    ];
+
+    // =================================================
     // FILTERS
     // =================================================
 
-    const search = searchParams.get("search")?.trim() || "";
+    const search = (
+      searchParams.get("search") || ""
+    ).trim();
 
-    // Repeated param: itemId=1&itemId=2
-    const itemIds = [
-      ...new Set(
-        searchParams
-          .getAll("itemId")
-          .map((id) => String(id).trim())
-          .filter(Boolean)
-      ),
-    ];
+    const itemIds = getChangeLogParamList(
+      searchParams,
+      "itemId"
+    );
 
-    const dateFromValue = searchParams.get("dateFrom") || "";
-    const dateToValue = searchParams.get("dateTo") || "";
+    const dateRange = buildChangeLogDateRange(
+      searchParams.get("dateFrom"),
+      searchParams.get("dateTo")
+    );
 
-    const dateFrom = parseChangeLogDay(dateFromValue);
-    const dateTo = parseChangeLogDay(dateToValue);
-
-    if ((dateFromValue && !dateFrom) || (dateToValue && !dateTo)) {
+    if (dateRange.error) {
       return NextResponse.json(
         {
           success: false,
-          message: "Invalid date filter.",
+          message: dateRange.error,
         },
-        {
-          status: 400,
-        }
+        { status: 400 }
       );
     }
 
-    if (dateFrom && dateTo && dateFrom > dateTo) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "The From date cannot be after the To date.",
-        },
-        {
-          status: 400,
-        }
-      );
-    }
+    // =================================================
+    // BUILD WHERE CONDITION
+    // =================================================
 
-    const where = {deletedAt: null,};
+    const where = {
+      deletedAt: null,
 
-    // Search: user, action, item, item type, detail
+      ...(itemIds.length
+        ? {
+            ItemMasterid: {
+              in: itemIds,
+            },
+          }
+        : {}),
+
+      ...(dateRange.range
+        ? {
+            createdAt: dateRange.range,
+          }
+        : {}),
+    };
+
+    // =================================================
+    // SEARCH FILTER
+    // =================================================
+
     if (search) {
       where.OR = [
         {
@@ -120,23 +222,6 @@ export async function GET(request) {
       ];
     }
 
-    // Item Name dropdown (selected item IDs)
-    if (itemIds.length > 0) {
-      where.ItemMasterid = {
-        in: itemIds,
-      };
-    }
-
-    // Date range: From is the start of the day, To includes the whole day.
-    if (dateFrom || dateTo) {
-      where.createdAt = {
-        ...(dateFrom ? { gte: dateFrom } : {}),
-        ...(dateTo
-          ? { lt: new Date(dateTo.getTime() + 24 * 60 * 60 * 1000) }
-          : {}),
-      };
-    }
-
     // =================================================
     // QUERY
     // =================================================
@@ -144,14 +229,7 @@ export async function GET(request) {
     const [logs, total] = await Promise.all([
       prisma.inventoryChangeLog.findMany({
         where,
-        orderBy: [
-          {
-            createdAt: "desc",
-          },
-          {
-            id: "desc",
-          },
-        ],
+        orderBy,
         skip,
         take: limit,
       }),
@@ -161,28 +239,31 @@ export async function GET(request) {
       }),
     ]);
 
+    // =================================================
+    // RESPONSE
+    // =================================================
+
     return NextResponse.json({
       success: true,
       data: logs,
       pagination: {
+        total,
         page,
         limit,
-        total,
         totalPages: Math.ceil(total / limit),
       },
     });
   } catch (error) {
-    console.error("INVENTORY CHANGE LOG GET ERROR:", error);
+    console.error("GET INVENTORY CHANGE LOG ERROR:", error);
 
     return NextResponse.json(
       {
         success: false,
         message:
-          error?.message || "Failed to fetch Inventory Change Log",
+          error?.message ||
+          "Failed to load Inventory Change Log.",
       },
-      {
-        status: 500,
-      }
+      { status: 500 }
     );
   }
 }

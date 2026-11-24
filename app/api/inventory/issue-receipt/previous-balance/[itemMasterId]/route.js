@@ -12,11 +12,63 @@ export async function GET(request, { params }) {
           success: false,
           message: "Item ID is required.",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
-    // Verify Item Master exists.
+    const { searchParams } = new URL(request.url);
+
+    const itemTypeId = searchParams.get("itemTypeId");
+
+    const locationType = String(
+      searchParams.get("locationType") || "",
+    )
+      .trim()
+      .toUpperCase();
+
+    const locationId = searchParams.get("locationId");
+
+    // =====================================================
+    // VALIDATE LOCATION
+    // =====================================================
+
+    if (!itemTypeId) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Item Type ID is required.",
+        },
+        { status: 400 },
+      );
+    }
+
+    if (!["LOCATION", "MACHINE", "MACHINERY"].includes(locationType)) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Invalid location type. Use LOCATION or MACHINE.",
+        },
+        { status: 400 },
+      );
+    }
+
+    if (!locationId) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Location or Machine ID is required.",
+        },
+        { status: 400 },
+      );
+    }
+
+    const normalizedLocationType =
+      locationType === "MACHINERY" ? "MACHINE" : locationType;
+
+    // =====================================================
+    // CHECK ITEM MASTER
+    // =====================================================
+
     const itemMaster = await prisma.itemMaster.findFirst({
       where: {
         id: itemMasterId,
@@ -34,53 +86,103 @@ export async function GET(request, { params }) {
           success: false,
           message: "Item Master record not found.",
         },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
-    // Get latest IssueReceipt transaction.
-    const latestReceipt = await prisma.issueReceipt.findFirst({
+    // =====================================================
+    // GET LOCATION-WISE STOCK BALANCE
+    // =====================================================
+
+    const stockBalance = await prisma.inventoryStockBalance.findUnique({
+      where: {
+        ItemMasterid_ItemTypeid_LocationType_LocationId: {
+          ItemMasterid: itemMasterId,
+          ItemTypeid: itemTypeId,
+          LocationType: normalizedLocationType,
+          LocationId: locationId,
+        },
+      },
+      select: {
+        id: true,
+        ItemMasterid: true,
+        ItemTypeid: true,
+        LocationType: true,
+        LocationId: true,
+        Quantity: true,
+        updatedAt: true,
+      },
+    });
+
+    const previousBalance = Number(stockBalance?.Quantity) || 0;
+
+    // =====================================================
+    // GET LATEST LEDGER FOR SELECTED LOCATION
+    // =====================================================
+
+    const latestLedger = await prisma.inventoryStockLedger.findFirst({
       where: {
         ItemMasterid: itemMasterId,
-        deletedAt: null,
+        ItemTypeid: itemTypeId,
+        LocationType: normalizedLocationType,
+        LocationId: locationId,
       },
       orderBy: [
-        { IssueDate: "desc" },
+        { TransactionDate: "desc" },
         { createdAt: "desc" },
         { id: "desc" },
       ],
       select: {
         id: true,
-        ItemMasterid: true,
-        Qty: true,
+        IssueReceiptId: true,
+        QtyIn: true,
+        QtyOut: true,
         PreviousBalance: true,
-        Price: true,
         Balance: true,
-        IssueDate: true,
-        TransactionTypeid: true,
+        Price: true,
+        TransactionDate: true,
       },
     });
 
-    // Rate priority: Latest IssueReceipt Price > ItemMaster rather.
-    const receiptPrice = Number(latestReceipt?.Price) || 0;
+    // =====================================================
+    // RATE
+    // Latest location-wise ledger price > Item Master rate
+    // =====================================================
+
+    const ledgerPrice = Number(latestLedger?.Price) || 0;
     const itemMasterRate = Number(itemMaster.rather) || 0;
 
-    const rate = receiptPrice > 0 ? receiptPrice : itemMasterRate;
+    const rate =
+      ledgerPrice > 0 ? ledgerPrice : itemMasterRate;
 
-    const previousBalance = Number(latestReceipt?.Balance) || 0;
+    // =====================================================
+    // RESPONSE
+    // =====================================================
 
     return NextResponse.json({
       success: true,
       data: {
         ItemMasterid: itemMasterId,
+        ItemTypeid: itemTypeId,
+
+        LocationType: normalizedLocationType,
+        LocationId: locationId,
+
         PreviousBalance: previousBalance,
-        Rate: rate,
         Balance: previousBalance,
-        LastTransactionId: latestReceipt?.id || null,
-        LastTransactionTypeid:
-          latestReceipt?.TransactionTypeid || null,
-        LastQty: Number(latestReceipt?.Qty) || 0,
-        LastIssueDate: latestReceipt?.IssueDate || null,
+
+        Rate: rate,
+
+        LastTransactionId: latestLedger?.IssueReceiptId || null,
+        LastLedgerId: latestLedger?.id || null,
+
+        LastQtyIn: Number(latestLedger?.QtyIn) || 0,
+        LastQtyOut: Number(latestLedger?.QtyOut) || 0,
+
+        LastIssueDate: latestLedger?.TransactionDate || null,
+
+        StockBalanceId: stockBalance?.id || null,
+        StockUpdatedAt: stockBalance?.updatedAt || null,
       },
     });
   } catch (error) {
@@ -89,9 +191,10 @@ export async function GET(request, { params }) {
     return NextResponse.json(
       {
         success: false,
-        message: error.message || "Failed to fetch previous balance.",
+        message:
+          error.message || "Failed to fetch previous balance.",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

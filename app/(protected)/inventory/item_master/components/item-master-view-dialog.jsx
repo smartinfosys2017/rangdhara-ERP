@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState } from "react";
@@ -14,6 +13,8 @@ import {
   XCircle,
   MapPin,
   Cog,
+  Barcode,
+  ScanBarcode,
 } from "lucide-react";
 
 import {
@@ -82,15 +83,10 @@ export default function ItemMasterViewDialog({
         itemConditionResponse,
       ] = await Promise.all([
         apiFetch("/api/inventory/item-groups?limit=100"),
-
         apiFetch("/api/inventory/unit?limit=100"),
-
         apiFetch("/api/finance/tax_rates?limit=100"),
-
         apiFetch("/api/inventory/location?limit=100"),
-
         apiFetch("/api/inventory/machine-master?limit=100"),
-
         apiFetch("/api/inventory/product-type?limit=100"),
       ]);
 
@@ -126,17 +122,13 @@ export default function ItemMasterViewDialog({
   // =======================================================
 
   const getItemGroupName = (id) => {
-    const data = itemGroups.find(
-      (item) => String(item.id) === String(id),
-    );
+    const data = itemGroups.find((item) => String(item.id) === String(id));
 
     return data?.groupName || id || "-";
   };
 
   const getUnitName = (id) => {
-    const data = units.find(
-      (item) => String(item.id) === String(id),
-    );
+    const data = units.find((item) => String(item.id) === String(id));
 
     if (!data) return id || "-";
 
@@ -148,23 +140,19 @@ export default function ItemMasterViewDialog({
   const getTaxName = (id) => {
     if (!id) return "-";
 
-    const data = taxes.find(
-      (item) => String(item.id) === String(id),
-    );
+    const data = taxes.find((item) => String(item.id) === String(id));
 
     return data?.name || data?.taxName || id || "-";
   };
 
   // =======================================================
-  // GET LOCATION NAME
+  // GET Warehouse NAME
   // =======================================================
 
   const getLocationName = (id) => {
     if (!id) return "-";
 
-    const data = locations.find(
-      (item) => String(item.id) === String(id),
-    );
+    const data = locations.find((item) => String(item.id) === String(id));
 
     if (!data) return id;
 
@@ -180,9 +168,7 @@ export default function ItemMasterViewDialog({
   const getMachineName = (id) => {
     if (!id) return "-";
 
-    const data = machines.find(
-      (item) => String(item.id) === String(id),
-    );
+    const data = machines.find((item) => String(item.id) === String(id));
 
     if (!data) return id;
 
@@ -190,16 +176,15 @@ export default function ItemMasterViewDialog({
       ? `${data.machineName} (${data.machineCode})`
       : data.machineName || "-";
   };
+
   // =======================================================
-  // GET ItemCondition NAME
+  // GET ITEM CONDITION NAME
   // =======================================================
 
   const getItemConditionName = (id) => {
     if (!id) return "-";
 
-    const data = itemConditions.find(
-      (item) => String(item.id) === String(id),
-    );
+    const data = itemConditions.find((item) => String(item.id) === String(id));
 
     if (!data) return id;
 
@@ -221,7 +206,6 @@ export default function ItemMasterViewDialog({
     >
       <DialogContent>
         <div className="flex flex-col h-full max-h-[90vh] overflow-hidden">
-
           {/* HEADER */}
 
           <DialogHeader>
@@ -233,9 +217,7 @@ export default function ItemMasterViewDialog({
           </DialogHeader>
 
           <ScrollArea className="grow min-h-0 flex flex-col h-full max-h-[90vh] overflow-hidden">
-
             <DialogBody className="space-y-6 pt-0 px-0 min-h-0">
-
               {/* ITEM NAME */}
 
               <div className="rounded-lg border p-4">
@@ -244,15 +226,36 @@ export default function ItemMasterViewDialog({
                   Item Name
                 </div>
 
-                <p className="text-sm">
-                  {ItemMaster.ItemName || "-"}
-                </p>
+                <p className="text-sm">{ItemMaster.ItemName || "-"}</p>
+              </div>
+
+              {/* SKU + BARCODE */}
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="rounded-lg border p-4">
+                  <div className="mb-2 flex items-center gap-2 font-semibold">
+                    <Barcode className="h-4 w-4" />
+                    SKU
+                  </div>
+
+                  <p className="text-sm break-all">{ItemMaster.SKU || "-"}</p>
+                </div>
+
+                <div className="rounded-lg border p-4">
+                  <div className="mb-2 flex items-center gap-2 font-semibold">
+                    <ScanBarcode className="h-4 w-4" />
+                    Barcode
+                  </div>
+
+                  <p className="text-sm break-all">
+                    {ItemMaster.Barcode || "-"}
+                  </p>
+                </div>
               </div>
 
               {/* GROUP + UNIT */}
 
               <div className="grid grid-cols-2 gap-4">
-
                 <div className="rounded-lg border p-4">
                   <div className="mb-2 flex gap-2 font-semibold">
                     <Layers className="h-4 w-4" />
@@ -270,19 +273,13 @@ export default function ItemMasterViewDialog({
                     Unit
                   </div>
 
-                  <p className="text-sm">
-                    {getUnitName(ItemMaster.Unitid)}
-                  </p>
+                  <p className="text-sm">{getUnitName(ItemMaster.Unitid)}</p>
                 </div>
-
               </div>
 
-              {/* LOCATION + MACHINE */}
+              {/* LOCATION + MACHINE + ITEM CONDITION */}
 
               <div className="grid grid-cols-2 gap-4">
-
-                {/* LOCATION */}
-
                 <div className="rounded-lg border p-4">
                   <div className="mb-2 flex gap-2 font-semibold">
                     <MapPin className="h-4 w-4" />
@@ -293,8 +290,6 @@ export default function ItemMasterViewDialog({
                     {getLocationName(ItemMaster.Locationid)}
                   </p>
                 </div>
-
-                {/* MACHINE */}
 
                 <div className="rounded-lg border p-4">
                   <div className="mb-2 flex gap-2 font-semibold">
@@ -307,8 +302,6 @@ export default function ItemMasterViewDialog({
                   </p>
                 </div>
 
-                {/* ItemCondition */}
-
                 <div className="rounded-lg border p-4">
                   <div className="mb-2 flex gap-2 font-semibold">
                     <Cog className="h-4 w-4" />
@@ -319,7 +312,6 @@ export default function ItemMasterViewDialog({
                     {getItemConditionName(ItemMaster.ItemConditionid)}
                   </p>
                 </div>
-
               </div>
 
               {/* DESCRIPTION */}
@@ -338,45 +330,35 @@ export default function ItemMasterViewDialog({
               {/* BALANCE + RATE */}
 
               <div className="grid grid-cols-2 gap-4">
-
                 <div className="rounded-lg border p-4">
                   <b>Opening Balance</b>
 
-                  <p className="text-sm">
-                    {ItemMaster.openingBalance || "-"}
-                  </p>
+                  <p className="text-sm">{ItemMaster.openingBalance || "-"}</p>
                 </div>
-                <div className="rounded-lg border p-4">
-                  <b>Closeing Balance</b>
 
-                  <p className="text-sm">
-                    {ItemMaster.openingBalance || "-"}
-                  </p>
+                <div className="rounded-lg border p-4">
+                  <b>Closing Balance</b>
+
+                  <p className="text-sm">{ItemMaster.openingBalance || "-"}</p>
                 </div>
 
                 <div className="rounded-lg border p-4">
                   <b>Rate</b>
 
-                  <p className="text-sm">
-                    {ItemMaster.rather ?? "-"}
-                  </p>
+                  <p className="text-sm">{ItemMaster.rather ?? "-"}</p>
                 </div>
-
               </div>
 
               {/* TAX */}
 
               <div className="grid grid-cols-2 gap-4">
-
                 <div className="rounded-lg border p-4">
                   <div className="mb-2 flex gap-2 font-semibold">
                     <Percent className="h-4 w-4" />
                     Tax 1
                   </div>
 
-                  <p className="text-sm">
-                    {getTaxName(ItemMaster.Tax1)}
-                  </p>
+                  <p className="text-sm">{getTaxName(ItemMaster.Tax1)}</p>
                 </div>
 
                 <div className="rounded-lg border p-4">
@@ -385,11 +367,8 @@ export default function ItemMasterViewDialog({
                     Tax 2
                   </div>
 
-                  <p className="text-sm">
-                    {getTaxName(ItemMaster.Tax2)}
-                  </p>
+                  <p className="text-sm">{getTaxName(ItemMaster.Tax2)}</p>
                 </div>
-
               </div>
 
               {/* RELOCATE */}
@@ -398,9 +377,7 @@ export default function ItemMasterViewDialog({
                 <b>Applicable For Restock Level</b>
 
                 <p className="text-sm">
-                  {ItemMaster.ApplicableForRelocateLevel
-                    ? "Yes"
-                    : "No"}
+                  {ItemMaster.ApplicableForRelocateLevel ? "Yes" : "No"}
                 </p>
 
                 {ItemMaster.ApplicableForRelocateLevel && (
@@ -413,7 +390,6 @@ export default function ItemMasterViewDialog({
               {/* STATUS + DEFAULT */}
 
               <div className="grid grid-cols-2 gap-4">
-
                 <div className="rounded-lg border p-4">
                   <div className="mb-2 flex gap-2 font-semibold">
                     {ItemMaster.status ? (
@@ -421,7 +397,6 @@ export default function ItemMasterViewDialog({
                     ) : (
                       <XCircle className="h-4 w-4 text-red-600" />
                     )}
-
                     Status
                   </div>
 
@@ -437,22 +412,18 @@ export default function ItemMasterViewDialog({
                     {ItemMaster.isDefault ? "Yes" : "No"}
                   </p>
                 </div>
-
               </div>
 
               {/* DATE */}
 
               <div className="grid grid-cols-2 gap-4">
-
                 <div className="rounded-lg border p-4">
                   <div className="mb-2 flex gap-2 font-semibold">
                     <Calendar className="h-4 w-4" />
                     Created Date
                   </div>
 
-                  <p className="text-sm">
-                    {formatDate(ItemMaster.createdAt)}
-                  </p>
+                  <p className="text-sm">{formatDate(ItemMaster.createdAt)}</p>
                 </div>
 
                 <div className="rounded-lg border p-4">
@@ -461,11 +432,8 @@ export default function ItemMasterViewDialog({
                     Updated Date
                   </div>
 
-                  <p className="text-sm">
-                    {formatDate(ItemMaster.updatedAt)}
-                  </p>
+                  <p className="text-sm">{formatDate(ItemMaster.updatedAt)}</p>
                 </div>
-
               </div>
 
               {/* ID */}
@@ -473,25 +441,18 @@ export default function ItemMasterViewDialog({
               <div className="rounded-lg border p-4">
                 <b>ID</b>
 
-                <p className="break-all text-sm mt-2">
-                  {ItemMaster.id || "-"}
-                </p>
+                <p className="break-all text-sm mt-2">{ItemMaster.id || "-"}</p>
               </div>
-
             </DialogBody>
           </ScrollArea>
 
           {/* FOOTER */}
 
           <DialogFooter className="gap-2">
-            <Button
-              variant="outline"
-              onClick={closeDialog}
-            >
+            <Button variant="outline" onClick={closeDialog}>
               Close
             </Button>
           </DialogFooter>
-
         </div>
       </DialogContent>
     </Dialog>

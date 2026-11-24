@@ -17,6 +17,7 @@ import {
     RefreshCw,
     Search,
     Trash2,
+    Settings2,
     X,
     FileSpreadsheet,
     XCircle,
@@ -34,6 +35,7 @@ import { DataGrid } from "@/components/ui/data-grid";
 import { DataGridColumnHeader } from "@/components/ui/data-grid-column-header";
 import { DataGridPagination } from "@/components/ui/data-grid-pagination";
 import { DataGridTable } from "@/components/ui/data-grid-table";
+import { DataGridColumnVisibility } from '@/components/ui/data-grid-column-visibility';
 import {
     Dialog,
     DialogContent,
@@ -1868,7 +1870,14 @@ const ItemGroupList = () => {
                         updatedByFilter={updatedByFilter}
                         setUpdatedByFilter={setUpdatedByFilter}
                     />
-
+                    <DataGridColumnVisibility
+                        table={table}
+                        trigger={
+                            <Button variant="outline">
+                                <Settings2 />
+                                Columns
+                            </Button>
+                        } />
                     {/* {hasActiveFilters && (
                         <Button type="button" variant="ghost" onClick={clearFilters}>
                             <X className="mr-2 size-4" />

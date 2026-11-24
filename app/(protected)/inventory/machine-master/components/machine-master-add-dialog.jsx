@@ -24,14 +24,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { MultiSelect } from "@/components/ui/multi-select";
 import {
   Alert,
   AlertIcon,
   AlertTitle,
 } from "@/components/ui/alert";
-
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { RiCheckboxCircleFill } from "@remixicon/react";
+import { RiCheckboxCircleFill, RiErrorWarningFill, } from "@remixicon/react";
 
 import MachineCustomFields, { validateRequiredCustomFields, } from "../../custom-fields/import-custom-fields";
 const showSuccessToast = (message) => {
@@ -237,6 +237,9 @@ export default function MachineMasterAddDialog({
   const [customFieldDefinitions, setCustomFieldDefinitions] = useState([]);
   const [customFields, setCustomFields] = useState({});
   const [customFieldsReady, setCustomFieldsReady] = useState(false);
+
+  const [errors, setErrors] = useState({});
+  const [submitted, setSubmitted] = useState(false);
 
   const handleItemListKeyDown = (
     e,
@@ -512,6 +515,8 @@ export default function MachineMasterAddDialog({
         GroupName: updated,
       }));
 
+      setSelectedAvailableIds([]);
+
       return updated;
     });
   };
@@ -523,6 +528,7 @@ export default function MachineMasterAddDialog({
       ...prev,
       GroupName: [],
     }));
+    setSelectedAvailableIds([]);
   };
 
   // ------------------------------------------------------
@@ -572,7 +578,16 @@ export default function MachineMasterAddDialog({
     searchItem,
     selectedItems,
   ]);
-
+  const groupOptions = useMemo(
+    () =>
+      itemGroups
+        .filter((group) => group.groupName)
+        .map((group) => ({
+          label: String(group.groupName),
+          value: String(group.groupName),
+        })),
+    [itemGroups],
+  );
   // ------------------------------------------------------
   // ADD ITEM
   // ------------------------------------------------------
@@ -844,6 +859,10 @@ export default function MachineMasterAddDialog({
     setSelectedDetailIds([]);
     setSearchItem("");
     setGroupDropdownOpen(false);
+
+    setErrors({});
+    setSubmitted(false);
+    setCustomFields({});
   };
 
   // ------------------------------------------------------
@@ -856,7 +875,53 @@ export default function MachineMasterAddDialog({
     resetForm();
     closeDialog();
   };
+  const validateForm = () => {
+    const newErrors = {};
 
+    // Machine Code
+    if (!String(form.machineCode || "").trim()) {
+      newErrors.machineCode = "Machine Code is required.";
+    }
+
+    // Machine Name
+    if (!String(form.machineName || "").trim()) {
+      newErrors.machineName = "Machine Name is required.";
+    }
+
+    // Machine Number
+    if (!String(form.machineNumber || "").trim()) {
+      newErrors.machineNumber = "Machine Number is required.";
+    }
+
+    // Item quantity
+    selectedItems.forEach((item) => {
+      const quantity = Number(item.itemQty);
+
+      if (
+        !String(item.itemQty ?? "").trim() ||
+        !Number.isFinite(quantity) ||
+        quantity <= 0
+      ) {
+        newErrors[`quantity_${item.itemMasterId}`] =
+          `Enter a valid quantity for ${item.Selecteditem}.`;
+      }
+    });
+
+    // Required custom fields
+    const missingCustomFields = validateRequiredCustomFields(
+      customFieldDefinitions,
+      customFields
+    );
+
+    if (missingCustomFields.length > 0) {
+      newErrors.customFields =
+        `Please fill in required custom fields: ${missingCustomFields.join(", ")}`;
+    }
+
+    setErrors(newErrors);
+
+    return Object.keys(newErrors).length === 0;
+  };
   // ------------------------------------------------------
   // SUBMIT FORM
   // ------------------------------------------------------
@@ -864,98 +929,20 @@ export default function MachineMasterAddDialog({
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!form.machineNumber.trim()) {
-      toast.custom(
-        () => (
-          <Alert variant="mono" icon="error" close={false}>
-            <AlertIcon>
-              <RiCheckboxCircleFill />
-            </AlertIcon>
-            <AlertTitle>Please enter Machine Number</AlertTitle>
-          </Alert>
-        ),
-        {
-          position: "top-center",
-        },
-      );
+    setSubmitted(true);
+
+    if (!validateForm()) {
+      showErrorToast("Please fix the highlighted fields before saving.");
       return;
     }
 
-    if (!form.machineName.trim()) {
-      toast.custom(
-        () => (
-          <Alert variant="mono" icon="error" close={false}>
-            <AlertIcon>
-              <RiCheckboxCircleFill />
-            </AlertIcon>
-            <AlertTitle>Please enter Machine Name</AlertTitle>
-          </Alert>
-        ),
-        {
-          position: "top-center",
-        },
-      );
-      return;
-    }
-
-    // if (selectedGroups.length === 0) {
-    //   toast.custom(
-    //     () => (
-    //       <Alert variant="mono" icon="error" close={false}>
-    //         <AlertIcon>
-    //           <RiCheckboxCircleFill />
-    //         </AlertIcon>
-    //         <AlertTitle>Please select at least one Group Name</AlertTitle>
-    //       </Alert>
-    //     ),
-    //     {
-    //       position: "top-center",
-    //     },
-    //   );
-    //   return;
-    // }
-
-    for (const item of selectedItems) {
-      if (
-        !String(item.itemQty).trim() ||
-        !Number.isFinite(Number(item.itemQty)) ||
-        Number(item.itemQty) <= 0
-      ) {
-        toast.custom(
-          () => (
-            <Alert variant="mono" icon="error" close={false}>
-              <AlertIcon>
-                <RiCheckboxCircleFill />
-              </AlertIcon>
-              <AlertTitle>{`Enter a valid quantity for ${item.Selecteditem}`}</AlertTitle>
-            </Alert>
-          ),
-          {
-            position: "top-center",
-          },
-        );
-        return;
-      }
-    }
-    const missingCustomFields = validateRequiredCustomFields(
-      customFieldDefinitions,
-      customFields,
-    );
-
-    if (missingCustomFields.length > 0) {
-      showErrorToast(
-        `Please fill in required custom fields: ${missingCustomFields.join(", ")}`,
-      );
-      return;
-    }
     try {
       setSaving(true);
+
       const machineData = {
         machineNumber: form.machineNumber.trim(),
         machineCode: form.machineCode.trim(),
         machineName: form.machineName.trim(),
-        // Prisma schema defines GroupName as String.
-        // Multiple groups are stored as a JSON string.
         GroupName: JSON.stringify(selectedGroups),
         comment: form.comment.trim(),
         status: form.status,
@@ -985,25 +972,11 @@ export default function MachineMasterAddDialog({
       const result = await response.json();
 
       if (!response.ok || !result.success) {
-        throw new Error(
-          result.message || "Failed to create machine"
-        );
+        throw new Error(result.message || "Failed to create machine.");
       }
 
-      toast.custom(
-        () => (
-          <Alert variant="mono" icon="success" close={false}>
-            <AlertIcon>
-              <RiCheckboxCircleFill />
-            </AlertIcon>
-            <AlertTitle>
-              {result.message || "Machine created successfully"}
-            </AlertTitle>
-          </Alert>
-        ),
-        {
-          position: "top-center",
-        },
+      showSuccessToast(
+        result.message || "Machine created successfully."
       );
 
       if (onSuccess) {
@@ -1014,21 +987,7 @@ export default function MachineMasterAddDialog({
       closeDialog();
     } catch (error) {
       console.error("CREATE MACHINE ERROR:", error);
-      toast.custom(
-        () => (
-          <Alert variant="mono" icon="error" close={false}>
-            <AlertIcon>
-              <RiCheckboxCircleFill />
-            </AlertIcon>
-            <AlertTitle>
-              {error.message || "Something went wrong"}
-            </AlertTitle>
-          </Alert>
-        ),
-        {
-          position: "top-center",
-        },
-      );
+      showErrorToast(error.message || "Something went wrong.");
     } finally {
       setSaving(false);
     }
@@ -1039,11 +998,8 @@ export default function MachineMasterAddDialog({
   // ------------------------------------------------------
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(value) => !value && handleClose()}
-    >
-      <DialogContent className="max-w-4xl max-h-[95vh] overflow-y-auto">
+    <Dialog open={open} onOpenChange={closeDialog}>
+      <DialogContent className="mx-auto flex w-[calc(100%-2rem)] max-w-[886px] max-h-[90vh] flex-col gap-0 overflow-hidden  px-4 sm:px-6 md:px-10 " variant="fullscreen">
         <DialogHeader>
           <DialogTitle>Add Machinery</DialogTitle>
           <DialogDescription>
@@ -1051,594 +1007,546 @@ export default function MachineMasterAddDialog({
             this machine.
           </DialogDescription>
         </DialogHeader>
+        <ScrollArea className="min-h-0 flex-1 py-0 mb-5 ps-0 pe-3 -me-7">
+          <form onSubmit={handleSubmit} className="space-y-3">
+            <DialogBody className="space-y-6">
+              {/* MACHINE INFORMATION */}
 
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <DialogBody>
-            {/* MACHINE INFORMATION */}
+              <div className="space-y-1">
+                <h3 className="text-sm font-semibold border-b pb-2">
+                  Machine Information
+                </h3>
 
-            <div className="space-y-1">
-              <h3 className="text-sm font-semibold border-b pb-2">
-                Machine Information
-              </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-1">
+                  <div className="space-y-2">
+                    <Label>
+                      Machine Code <span className="text-red-500">*</span>
+                    </Label>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-1">
-                <div className="space-y-2">
-                  <Label>Machine Code <span className="text-red-500">*</span></Label>
+                    <Input
+                      value={form.machineCode || ""}
+                      readOnly
+                      className={`bg-muted cursor-not-allowed ${errors.machineCode ? "border-red-500 focus-visible:ring-red-500" : ""
+                        }`}
+                      placeholder="Auto generated machine code"
+                    />
 
-                  <Input
-                    value={form.machineCode || "Auto Generated"}
-                    readOnly
-                    className="bg-muted cursor-not-allowed"
-                    placeholder="Auto generated machine code"
-                  />
-                </div>
-                {/* MACHINE NAME */}
-
-                <div className="space-y-2">
-                  <Label>
-                    Machine Name <span className="text-red-500">*</span>
-                  </Label>
-
-                  <Input
-                    value={form.machineName}
-                    onChange={(e) =>
-                      handleChange("machineName", e.target.value)
-                    }
-                    placeholder="Enter machine name"
-                  />
-                </div>
-                {/* MACHINE NUMBER */}
-
-                <div className="space-y-2">
-                  <Label>
-                    Machine Number <span className="text-red-500">*</span>
-                  </Label>
-
-                  <Input
-                    value={form.machineNumber}
-                    onChange={(e) =>
-                      handleChange("machineNumber", e.target.value)
-                    }
-                    placeholder="Enter machine number"
-                  />
-                </div>
-
-                {/* STATUS */}
-
-                <div className="space-y-2">
-                  <Label>Operational <span className="text-red-500">*</span></Label>
-
-                  <Select
-                    value={form.status ? "active" : "inactive"}
-                    onValueChange={(value) =>
-                      handleChange("status", value === "active")
-                    }
-                    className="cursor-pointer"
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select status" />
-                    </SelectTrigger>
-
-                    <SelectContent>
-                      <SelectItem value="active">Yes</SelectItem>
-                      <SelectItem value="inactive">No</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {/* MACHINE COMMENT */}
-
-              <div className="space-y-2">
-                <Label>Comment</Label>
-
-                <Textarea
-                  value={form.comment}
-                  onChange={(e) =>
-                    handleChange("comment", e.target.value)
-                  }
-                  placeholder="Enter machine comment"
-                  rows={2}
-                />
-              </div>
-            </div>
-
-            {/* ITEM SELECTION */}
-
-            <div className="pt-2 space-y-1">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b pb-2">
-                <div>
-                  <h3 className="text-sm font-semibold">
-                    Machine Item Details
-                  </h3>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Select all active items
-                  </p>
-                </div>
-
-                <span className="text-sm font-medium">
-                  Selected Items: {selectedItems.length}
-                </span>
-              </div>
-              {/* GROUP NAME MULTI-SELECT */}
-
-              <div className="space-y-2">
-                <Label>
-                  Item Group
-                </Label>
-
-                <div className="relative">
-                  <button
-                    type="button"
-                    disabled={loadingGroups}
-                    onClick={() =>
-                      setGroupDropdownOpen((prev) => !prev)
-                    }
-                    className="w-full min-h-10 border rounded-md px-3 py-2 text-sm text-left flex items-center justify-between gap-2 bg-background cursor-pointer"
-                  >
-                    <span className="truncate">
-                      {loadingGroups
-                        ? "Loading groups."
-                        : selectedGroups.length > 0
-                          ? `${selectedGroups.length} group(s) selected`
-                          : "Select groups"}
-                    </span>
-
-                    <span className="text-muted-foreground">
-                      {groupDropdownOpen ? "▲" : "▼"}
-                    </span>
-                  </button>
-
-                  {groupDropdownOpen && (
-                    <div className="absolute z-50 top-full mt-1 w-full border rounded-md bg-popover shadow-md p-2">
-                      <div className="flex items-center justify-between gap-2 pb-2 border-b">
-                        <span className="text-xs font-medium">
-                          Select Item Groups
-                        </span>
-
-                        <div className="flex gap-2">
-                          <button
-                            type="button"
-                            className="text-xs text-primary hover:underline cursor-pointer"
-                            onClick={() => {
-                              const allGroups = itemGroups
-                                .map((group) => String(group.groupName || ""))
-                                .filter(Boolean);
-
-                              setSelectedGroups(allGroups);
-                              setForm((prev) => ({
-                                ...prev,
-                                GroupName: allGroups,
-                              }));
-                            }}
-                          >
-                            Select All
-                          </button>
-
-                          <button
-                            type="button"
-                            className="text-xs text-destructive hover:underline cursor-pointer"
-                            onClick={clearSelectedGroups}
-                          >
-                            Clear All
-                          </button>
-                        </div>
-                      </div>
-
-                      <ScrollArea className="max-h-52">
-                        <div className="space-y-1 py-2">
-                          {itemGroups.length === 0 ? (
-                            <p className="text-sm text-muted-foreground text-center py-4">
-                              No groups found
-                            </p>
-                          ) : (
-                            itemGroups.map((group) => {
-                              const groupName = String(group.groupName || "");
-                              const checked =
-                                selectedGroups.includes(groupName);
-
-                              return (
-                                <label
-                                  key={group.id}
-                                  className="flex items-center gap-2 rounded px-2 py-2 text-sm cursor-pointer hover:bg-muted"
-                                >
-                                  <input
-                                    type="checkbox"
-                                    checked={checked}
-                                    onChange={() =>
-                                      handleGroupToggle(groupName)
-                                    }
-                                    className="h-4 w-4"
-                                  />
-
-                                  <span>{groupName}</span>
-                                </label>
-                              );
-                            })
-                          )}
-                        </div>
-                      </ScrollArea>
-
-                      <div className="border-t pt-2 flex justify-end">
-                        <Button
-                          type="button"
-                          size="sm"
-                          onClick={() =>
-                            setGroupDropdownOpen(false)
-                          }
-                        >
-                          Done
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {selectedGroups.length > 0 && (
-                  <div className="flex flex-wrap gap-1">
-                    {selectedGroups.map((group) => (
-                      <span
-                        key={group}
-                        className="inline-flex items-center gap-1 text-xs bg-primary/10 text-primary rounded px-2 py-1"
-                      >
-                        {group}
-
-                        <button
-                          type="button"
-                          onClick={() => handleGroupToggle(group)}
-                          className="font-bold"
-                        >
-                          ×
-                        </button>
-                      </span>
-                    ))}
+                    {errors.machineCode && (
+                      <p className="text-xs text-red-500">
+                        {errors.machineCode}
+                      </p>
+                    )}
                   </div>
-                )}
+                  {/* MACHINE NAME */}
 
-                <p className="text-xs text-muted-foreground">
-                  No group selected displays all active items.
-                </p>
-              </div>
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-1">
-                {/* AVAILABLE ITEMS */}
+                  <div className="space-y-2">
+                    <Label>
+                      Machine Name <span className="text-red-500">*</span>
+                    </Label>
 
-                <div className="border rounded-lg p-2 space-y-3 min-w-0">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <h4 className="font-semibold text-sm">
-                      Available Items ({filteredItems.length})
-                    </h4>
+                    <Input
+                      value={form.machineName}
+                      onChange={(e) => {
+                        handleChange("machineName", e.target.value);
+                        setErrors((prev) => ({
+                          ...prev,
+                          machineName: "",
+                        }));
+                      }}
+                      placeholder="Enter machine name"
+                      className={
+                        errors.machineName
+                          ? "border-red-500 focus-visible:ring-red-500"
+                          : ""
+                      }
+                    />
 
-                    <div className="flex flex-wrap items-center gap-3">
-                      <button
-                        type="button"
-                        onClick={handleSelectAllAvailable}
-                        disabled={!filteredItems.length}
-                        className="text-xs font-medium text-primary hover:underline disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-                      >
-                        Select All
-                      </button>
+                    {errors.machineName && (
+                      <p className="text-xs text-red-500">
+                        {errors.machineName}
+                      </p>
+                    )}
+                  </div>
+                  {/* MACHINE NUMBER */}
 
-                      <button
-                        type="button"
-                        onClick={handleClearAvailable}
-                        disabled={!selectedAvailableIds.length}
-                        className="text-xs font-medium text-destructive hover:underline disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-                      >
-                        Clear All
-                      </button>
+                  <div className="space-y-2">
+                    <Label>
+                      Machine Number <span className="text-red-500">*</span>
+                    </Label>
 
-                      <button
-                        type="button"
-                        onClick={handleTransferSelected}
-                        disabled={!selectedAvailableIds.length}
-                        className="text-xs font-semibold text-primary hover:underline disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-                      >
-                        Transfer Selected ({selectedAvailableIds.length})
-                      </button>
-                    </div>
+                    <Input
+                      value={form.machineNumber}
+                      onChange={(e) => {
+                        handleChange("machineNumber", e.target.value);
+                        setErrors((prev) => ({
+                          ...prev,
+                          machineNumber: "",
+                        }));
+                      }}
+                      placeholder="Enter machine number"
+                      className={
+                        errors.machineNumber
+                          ? "border-red-500 focus-visible:ring-red-500"
+                          : ""
+                      }
+                    />
+
+                    {errors.machineNumber && (
+                      <p className="text-xs text-red-500">
+                        {errors.machineNumber}
+                      </p>
+                    )}
                   </div>
 
-                  <Input
-                    value={searchItem}
-                    onChange={(e) => setSearchItem(e.target.value)}
-                    placeholder="Search item name or unit"
+                  {/* STATUS */}
+
+                  <div className="space-y-2">
+                    <Label>Operational <span className="text-red-500">*</span></Label>
+
+                    <Select
+                      value={form.status ? "active" : "inactive"}
+                      onValueChange={(value) =>
+                        handleChange("status", value === "active")
+                      }
+                      className="cursor-pointer"
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select status" />
+                      </SelectTrigger>
+
+                      <SelectContent>
+                        <SelectItem value="active">Yes</SelectItem>
+                        <SelectItem value="inactive">No</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* MACHINE COMMENT */}
+
+                <div className="space-y-2">
+                  <Label>Comment</Label>
+
+                  <Textarea
+                    value={form.comment}
+                    onChange={(e) =>
+                      handleChange("comment", e.target.value)
+                    }
+                    placeholder="Enter machine comment"
+                    rows={2}
+                  />
+                </div>
+              </div>
+
+              {/* ITEM SELECTION */}
+
+              <div className="pt-2 space-y-1">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b pb-2">
+                  <div>
+                    <h3 className="text-sm font-semibold">
+                      Machine Item Details
+                    </h3>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Select all active items
+                    </p>
+                  </div>
+
+                  <span className="text-sm font-medium">
+                    Selected Items: {selectedItems.length}
+                  </span>
+                </div>
+                {/* GROUP NAME MULTI-SELECT */}
+
+                <div className="space-y-2">
+                  <Label>Item Group</Label>
+
+                  <MultiSelect
+                    options={groupOptions}
+                    value={selectedGroups}
+                    onValueChange={(values) => {
+                      const uniqueValues = [...new Set(values)];
+
+                      setSelectedGroups(uniqueValues);
+
+                      setForm((prev) => ({
+                        ...prev,
+                        GroupName: uniqueValues,
+                      }));
+
+                      // Clear selections that are no longer visible after filtering.
+                      setSelectedAvailableIds([]);
+                    }}
+                    placeholder={loadingGroups ? "Loading groups..." : "Select Item Groups"}
+                    searchPlaceholder="Search Item Group..."
+                    disabled={loadingGroups || groupOptions.length === 0}
                   />
 
                   <p className="text-xs text-muted-foreground">
                     {selectedGroups.length > 0
                       ? `Showing items from: ${selectedGroups.join(", ")}`
-                      : "Showing all active Items"}
+                      : "No group selected displays all active items."}
                   </p>
-
-                  <ScrollArea className="h-[380px] pr-1">
-                    <div className="space-y-1">
-                      {loadingItems ? (
-                        <div className="text-center text-sm text-muted-foreground py-5">
-                          Loading available items...
-                        </div>
-                      ) : filteredItems.length === 0 ? (
-                        <div className="text-center text-sm text-muted-foreground py-5">
-                          No available items found.
-                        </div>
-                      ) : (
-                        filteredItems.map((item) => {
-                          const itemId = getItemId(item);
-                          const checked = selectedAvailableIds.includes(itemId);
-
-                          return (
-                            <label
-                              key={itemId}
-                              className={`flex items-center justify-between gap-2 border rounded-md p-2 cursor-pointer transition-colors ${checked ? "bg-primary/10 border-primary" : "hover:bg-muted/50"
-                                }`}
-                            >
-                              <div className="flex items-center gap-2 min-w-0">
-                                <input
-                                  id={`available-${itemId}`}
-                                  data-item-id={itemId}
-                                  type="checkbox"
-                                  checked={checked}
-                                  onChange={() => handleAvailableToggle(itemId)}
-                                  onKeyDown={(e) =>
-                                    handleItemListKeyDown(
-                                      e,
-                                      filteredItems,
-                                      selectedAvailableIds,
-                                      setSelectedAvailableIds,
-                                      getItemId
-                                    )
-                                  }
-                                  className="h-4 w-4 shrink-0 accent-primary"
-                                />
-
-                                <div className="min-w-0">
-                                  <p className="text-sm font-medium truncate">
-                                    {getItemName(item)}
-                                  </p>
-
-                                  <p className="text-xs text-muted-foreground">
-                                    Unit: {getItemUnit(item, units) || "-"}
-                                  </p>
-
-                                  <p className="text-xs text-muted-foreground">
-                                    Group: {getItemGroup(item, itemGroups) || "-"}
-                                  </p>
-                                </div>
-                              </div>
-
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleAddItem(item)}
-                              >
-                                Add
-                              </Button>
-                            </label>
-                          );
-                        })
-                      )}
-                    </div>
-                  </ScrollArea>
                 </div>
 
-                {/* SELECTED ITEM DETAILS */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-1">
+                  {/* AVAILABLE ITEMS */}
 
-                <div className="border rounded-lg p-1 space-y-1 min-w-0">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <h4 className="font-semibold text-sm">
-                      Selected Item ({selectedItems.length})
-                    </h4>
+                  <div className="border rounded-lg p-2 space-y-3 min-w-0">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h4 className="font-semibold text-sm">
+                        Available Items ({filteredItems.length})
+                      </h4>
 
-                    <div className="flex flex-wrap items-center gap-3">
-                      <button
-                        type="button"
-                        onClick={handleSelectAllDetails}
-                        disabled={!selectedItems.length}
-                        className="text-xs font-medium text-primary hover:underline disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-                      >
-                        Select All
-                      </button>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={handleSelectAllAvailable}
+                          disabled={!filteredItems.length}
+                          className="text-xs font-medium text-primary hover:underline disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                        >
+                          Select All
+                        </button>
 
-                      <button
-                        type="button"
-                        onClick={handleClearDetails}
-                        disabled={!selectedDetailIds.length}
-                        className="text-xs font-medium text-primary hover:underline disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-                      >
-                        Clear All
-                      </button>
+                        <button
+                          type="button"
+                          onClick={handleClearAvailable}
+                          disabled={!selectedAvailableIds.length}
+                          className="text-xs font-medium text-destructive hover:underline disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                        >
+                          Clear All
+                        </button>
 
-                      <button
-                        type="button"
-                        onClick={handleRemoveSelected}
-                        disabled={!selectedDetailIds.length}
-                        className="text-xs font-medium text-destructive hover:underline disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-                      >
-                        Remove Selected ({selectedDetailIds.length})
-                      </button>
+                        <button
+                          type="button"
+                          onClick={handleTransferSelected}
+                          disabled={!selectedAvailableIds.length}
+                          className="text-xs font-semibold text-primary hover:underline disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                        >
+                          Transfer Selected ({selectedAvailableIds.length})
+                        </button>
+                      </div>
                     </div>
-                  </div>
 
-                  {selectedItems.length === 0 ? (
-                    <div className="h-[380px] flex flex-col items-center justify-center text-center">
-                      <p className="text-sm font-medium text-muted-foreground">
-                        No items selected
-                      </p>
+                    <Input
+                      value={searchItem}
+                      onChange={(e) => setSearchItem(e.target.value)}
+                      placeholder="Search item name or unit"
+                    />
 
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Select items from the Available Items panel.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="h-[430px] w-full overflow-auto border rounded-md">
-                      <table className="min-w-[768px] w-full text-sm border-collapse">
-                        <thead className="sticky top-0 bg-muted z-20">
-                          <tr className="border-b">
-                            <th className="p-2 w-[45px] text-center">
-                              <input
-                                type="checkbox"
-                                checked={
-                                  selectedItems.length > 0 &&
-                                  selectedDetailIds.length === selectedItems.length
-                                }
-                                onChange={(e) =>
-                                  e.target.checked
-                                    ? handleSelectAllDetails()
-                                    : handleClearDetails()
-                                }
-                                aria-label="Select all selected items"
-                                className="h-4 w-4 accent-primary"
-                              />
-                            </th>
-                            <th className="text-left p-1 font-semibold whitespace-nowrap w-[180px]">
-                              Item Name
-                            </th>
-                            <th className="text-left p-1 font-semibold whitespace-nowrap w-[100px]">
-                              Unit
-                            </th>
+                    <p className="text-xs text-muted-foreground">
+                      {selectedGroups.length > 0
+                        ? `Showing items from: ${selectedGroups.join(", ")}`
+                        : "Showing all active Items"}
+                    </p>
 
-                            <th className="text-left p-1 font-semibold whitespace-nowrap w-[130px]">
-                              Quantity
-                            </th>
+                    <ScrollArea className="h-[380px] pr-1">
+                      <div className="space-y-1">
+                        {loadingItems ? (
+                          <div className="text-center text-sm text-muted-foreground py-5">
+                            Loading available items...
+                          </div>
+                        ) : filteredItems.length === 0 ? (
+                          <div className="text-center text-sm text-muted-foreground py-5">
+                            No available items found.
+                          </div>
+                        ) : (
+                          filteredItems.map((item) => {
+                            const itemId = getItemId(item);
+                            const checked = selectedAvailableIds.includes(itemId);
 
-                            <th className="text-left p-1 font-semibold whitespace-nowrap w-[250px]">
-                              Comment
-                            </th>
+                            return (
+                              <label
+                                key={itemId}
+                                className={`flex items-center justify-between gap-2 border rounded-md p-2 cursor-pointer transition-colors ${checked ? "bg-primary/10 border-primary" : "hover:bg-muted/50"
+                                  }`}
+                              >
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <input
+                                    id={`available-${itemId}`}
+                                    data-item-id={itemId}
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={() => handleAvailableToggle(itemId)}
+                                    onKeyDown={(e) =>
+                                      handleItemListKeyDown(
+                                        e,
+                                        filteredItems,
+                                        selectedAvailableIds,
+                                        setSelectedAvailableIds,
+                                        getItemId
+                                      )
+                                    }
+                                    className="h-4 w-4 shrink-0 accent-primary"
+                                  />
 
-                            <th className="text-center p-1 font-semibold whitespace-nowrap w-[120px]">
-                              Action
-                            </th>
-                          </tr>
-                        </thead>
+                                  <div className="min-w-0">
+                                    <p className="text-sm font-medium truncate">
+                                      {getItemName(item)}
+                                    </p>
 
-                        <tbody>
-                          {selectedItems.map((item) => (
-                            <tr
-                              key={item.itemMasterId}
-                              className="border-b hover:bg-muted/40"
-                            >
-                              <td className="p-2 text-center">
-                                <input
-                                  type="checkbox"
-                                  data-item-id={String(item.itemMasterId)}
-                                  checked={selectedDetailIds.includes(
-                                    String(item.itemMasterId)
-                                  )}
-                                  onChange={() => handleDetailToggle(item.itemMasterId)}
-                                  onKeyDown={(e) =>
-                                    handleItemListKeyDown(
-                                      e,
-                                      selectedItems,
-                                      selectedDetailIds,
-                                      setSelectedDetailIds,
-                                      (selectedItem) => String(selectedItem.itemMasterId)
-                                    )
-                                  }
-                                  aria-label={`Select ${item.Selecteditem}`}
-                                  className="h-4 w-4 accent-primary"
-                                />
-                              </td>
-                              <td className="p-1 font-medium whitespace-nowrap">
-                                {item.Selecteditem}
-                              </td>
-                              <td className="p-1 whitespace-nowrap">
-                                {item.itemUnit || "-"}
-                              </td>
-                              <td className="p-1">
-                                <Input
-                                  type="number"
-                                  min="0.01"
-                                  step="any"
-                                  value={item.itemQty}
-                                  onChange={(e) =>
-                                    updateSelectedItem(
-                                      item.itemMasterId,
-                                      "itemQty",
-                                      e.target.value
-                                    )
-                                  }
-                                  className="h-9 w-[100px]"
-                                  placeholder="Quantity"
-                                />
-                              </td>
+                                    <p className="text-xs text-muted-foreground">
+                                      Unit: {getItemUnit(item, units) || "-"}
+                                    </p>
 
-                              <td className="p-1">
-                                <Input
-                                  value={item.itemdescription || ""}
-                                  onChange={(e) =>
-                                    updateSelectedItem(
-                                      item.itemMasterId,
-                                      "itemdescription",
-                                      e.target.value
-                                    )
-                                  }
-                                  className="h-9 w-[220px]"
-                                  placeholder="Enter comment"
-                                />
-                              </td>
+                                    <p className="text-xs text-muted-foreground">
+                                      Group: {getItemGroup(item, itemGroups) || "-"}
+                                    </p>
+                                  </div>
+                                </div>
 
-                              {/* ACTION */}
-                              <td className="p-3 text-center whitespace-nowrap">
                                 <Button
                                   type="button"
                                   size="sm"
-                                  variant="destructive"
-                                  onClick={() =>
-                                    handleRemoveItem(item.itemMasterId)
-                                  }
+                                  variant="outline"
+                                  onClick={() => handleAddItem(item)}
                                 >
-                                  Remove
+                                  Add
                                 </Button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                              </label>
+                            );
+                          })
+                        )}
+                      </div>
+                    </ScrollArea>
+                  </div>
+
+                  {/* SELECTED ITEM DETAILS */}
+
+                  <div className="border rounded-lg p-1 space-y-1 min-w-0">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h4 className="font-semibold text-sm">
+                        Selected Item ({selectedItems.length})
+                      </h4>
+
+                      <div className="flex flex-wrap items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={handleSelectAllDetails}
+                          disabled={!selectedItems.length}
+                          className="text-xs font-medium text-primary hover:underline disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                        >
+                          Select All
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={handleClearDetails}
+                          disabled={!selectedDetailIds.length}
+                          className="text-xs font-medium text-primary hover:underline disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                        >
+                          Clear All
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={handleRemoveSelected}
+                          disabled={!selectedDetailIds.length}
+                          className="text-xs font-medium text-destructive hover:underline disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                        >
+                          Remove Selected ({selectedDetailIds.length})
+                        </button>
+                      </div>
                     </div>
-                  )}
+
+                    {selectedItems.length === 0 ? (
+                      <div className="h-[380px] flex flex-col items-center justify-center text-center">
+                        <p className="text-sm font-medium text-muted-foreground">
+                          No items selected
+                        </p>
+
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Select items from the Available Items panel.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="h-[430px] w-full overflow-auto border rounded-md">
+                        <table className="min-w-[768px] w-full text-sm border-collapse">
+                          <thead className="sticky top-0 bg-muted z-20">
+                            <tr className="border-b">
+                              <th className="p-2 w-[45px] text-center">
+                                <input
+                                  type="checkbox"
+                                  checked={
+                                    selectedItems.length > 0 &&
+                                    selectedDetailIds.length === selectedItems.length
+                                  }
+                                  onChange={(e) =>
+                                    e.target.checked
+                                      ? handleSelectAllDetails()
+                                      : handleClearDetails()
+                                  }
+                                  aria-label="Select all selected items"
+                                  className="h-4 w-4 accent-primary"
+                                />
+                              </th>
+                              <th className="text-left p-1 font-semibold whitespace-nowrap w-[180px]">
+                                Item Name
+                              </th>
+                              <th className="text-left p-1 font-semibold whitespace-nowrap w-[100px]">
+                                Unit
+                              </th>
+
+                              <th className="text-left p-1 font-semibold whitespace-nowrap w-[130px]">
+                                Quantity
+                              </th>
+
+                              <th className="text-left p-1 font-semibold whitespace-nowrap w-[250px]">
+                                Comment
+                              </th>
+
+                              <th className="text-center p-1 font-semibold whitespace-nowrap w-[120px]">
+                                Action
+                              </th>
+                            </tr>
+                          </thead>
+
+                          <tbody>
+                            {selectedItems.map((item) => (
+                              <tr
+                                key={item.itemMasterId}
+                                className="border-b hover:bg-muted/40"
+                              >
+                                <td className="p-2 text-center">
+                                  <input
+                                    type="checkbox"
+                                    data-item-id={String(item.itemMasterId)}
+                                    checked={selectedDetailIds.includes(
+                                      String(item.itemMasterId)
+                                    )}
+                                    onChange={() => handleDetailToggle(item.itemMasterId)}
+                                    onKeyDown={(e) =>
+                                      handleItemListKeyDown(
+                                        e,
+                                        selectedItems,
+                                        selectedDetailIds,
+                                        setSelectedDetailIds,
+                                        (selectedItem) => String(selectedItem.itemMasterId)
+                                      )
+                                    }
+                                    aria-label={`Select ${item.Selecteditem}`}
+                                    className="h-4 w-4 accent-primary"
+                                  />
+                                </td>
+                                <td className="p-1 font-medium whitespace-nowrap">
+                                  {item.Selecteditem}
+                                </td>
+                                <td className="p-1 whitespace-nowrap">
+                                  {item.itemUnit || "-"}
+                                </td>
+                                <td className="p-1">
+                                  <Input
+                                    type="number"
+                                    min="0.01"
+                                    step="any"
+                                    value={item.itemQty}
+                                    onChange={(e) => {
+                                      updateSelectedItem(
+                                        item.itemMasterId,
+                                        "itemQty",
+                                        e.target.value
+                                      );
+
+                                      setErrors((prev) => ({
+                                        ...prev,
+                                        [`quantity_${item.itemMasterId}`]: "",
+                                      }));
+                                    }}
+                                    className={`h-9 w-[100px] ${errors[`quantity_${item.itemMasterId}`]
+                                      ? "border-red-500 focus-visible:ring-red-500"
+                                      : ""
+                                      }`}
+                                    placeholder="Quantity"
+                                  />
+
+                                  {errors[`quantity_${item.itemMasterId}`] && (
+                                    <p className="text-xs text-red-500 mt-1 whitespace-normal">
+                                      {errors[`quantity_${item.itemMasterId}`]}
+                                    </p>
+                                  )}
+                                </td>
+
+                                <td className="p-1">
+                                  <Input
+                                    value={item.itemdescription || ""}
+                                    onChange={(e) =>
+                                      updateSelectedItem(
+                                        item.itemMasterId,
+                                        "itemdescription",
+                                        e.target.value
+                                      )
+                                    }
+                                    className="h-9 w-[220px]"
+                                    placeholder="Enter comment"
+                                  />
+                                </td>
+
+                                {/* ACTION */}
+                                <td className="p-3 text-center whitespace-nowrap">
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="destructive"
+                                    onClick={() =>
+                                      handleRemoveItem(item.itemMasterId)
+                                    }
+                                  >
+                                    Remove
+                                  </Button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* CUSTOM FIELDS */}
+              {/* CUSTOM FIELDS */}
 
-            <div className="space-y-4 border-t pt-5">
-              <div>
-                <h3 className="text-base font-semibold">Custom Fields</h3>
+              <div className="space-y-4 border-t pt-5">
+                <div>
+                  <h3 className="text-base font-semibold">Custom Fields</h3>
 
-                <p className="text-sm text-muted-foreground">
-                  Additional machine information.
-                </p>
+                  <p className="text-sm text-muted-foreground">
+                    Additional machine information.
+                  </p>
+                </div>
+
+                <MachineCustomFields
+                  values={customFields}
+                  onChange={setCustomFields}
+                  onFieldsLoaded={(loadedFields) => {
+                    setCustomFieldDefinitions(loadedFields);
+                    setCustomFieldsReady(true);
+                  }}
+                />
+                {errors.customFields && (
+                  <p className="text-sm text-red-500">
+                    {errors.customFields}
+                  </p>
+                )}
               </div>
+            </DialogBody>
+            {/* FOOTER */}
 
-              <MachineCustomFields
-                values={customFields}
-                onChange={setCustomFields}
-                onFieldsLoaded={(loadedFields) => {
-                  setCustomFieldDefinitions(loadedFields);
-                  setCustomFieldsReady(true);
-                }}
-              />
-            </div>
-          </DialogBody>
-          {/* FOOTER */}
+            <DialogFooter className="gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleClose}
+                disabled={saving}
+              >
+                Cancel
+              </Button>
 
-          <DialogFooter className="gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleClose}
-              disabled={saving}
-            >
-              Cancel
-            </Button>
-
-            <Button type="submit" disabled={saving}>
-              {saving ? "Saving." : "Save"}
-            </Button>
-          </DialogFooter>
-        </form>
-
+              <Button type="submit" disabled={saving}>
+                {saving ? "Saving." : "Save"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </ScrollArea>
       </DialogContent>
     </Dialog>
   );

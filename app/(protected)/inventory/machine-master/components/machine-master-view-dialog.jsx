@@ -197,10 +197,10 @@ export default function MachineMasterViewDialog({
 
   const status = isMachineActive(MachineMaster.status);
   const [changeLogs, setChangeLogs] = useState([]);
-  
+
   const customFields = MachineMaster.custom_field_values || MachineMaster.customFields || {};
-  const hasCustomFields =  customFields && typeof customFields === "object" && !Array.isArray(customFields) && Object.keys(customFields).length > 0;
-  
+  const hasCustomFields = customFields && typeof customFields === "object" && !Array.isArray(customFields) && Object.keys(customFields).length > 0;
+
   const [loadingChangeLogs, setLoadingChangeLogs] = useState(false);
   useEffect(() => {
     if (!open || !MachineMaster?.id) {
@@ -237,438 +237,432 @@ export default function MachineMasterViewDialog({
     fetchChangeLogs();
   }, [open, MachineMaster?.id]);
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(value) => {
-        if (!value) closeDialog?.();
-      }}
-    >
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">
+    <Dialog open={open} onOpenChange={closeDialog}>
+      <DialogContent className="mx-auto flex w-[calc(100%-2rem)] max-w-[886px] max-h-[90vh] flex-col gap-0 overflow-hidden  px-4 sm:px-6 md:px-10 " variant="fullscreen">
 
-        <div className="flex flex-col max-h-[85vh] overflow-hidden">
-          {/* HEADER */}
-          <DialogHeader>
-            <DialogTitle>
-              Machinery Details
-            </DialogTitle>
+        {/* HEADER */}
+        <DialogHeader>
+          <DialogTitle>
+            Machinery Details
+          </DialogTitle>
 
-            <DialogDescription>
-              View complete machine information and assigned items.
-            </DialogDescription>
-          </DialogHeader>
-          <ScrollArea className="grow min-h-0 flex flex-col h-full max-h-[90vh] overflow-hidden">
-            <DialogBody className="space-y-6 pt-0 px-0 min-h-0">
-              {/* CONTENT */}
+          <DialogDescription>
+            View complete machine information and assigned items.
+          </DialogDescription>
+        </DialogHeader>
+        <ScrollArea className="min-h-0 flex-1 py-0 mb-5 ps-0 pe-3 -me-7">
+          <DialogBody>
+            {/* CONTENT */}
 
-              {/* MACHINE INFORMATION */}
-              <div className="space-y-3">
-                <h3 className="text-sm font-semibold border-b pb-2">
-                  Machine Information
-                </h3>
+            {/* MACHINE INFORMATION */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold border-b pb-2">
+                Machine Information
+              </h3>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
 
-                  <DetailCard
-                    icon={Hash}
-                    title="Machine Code"
-                  >
-                    {MachineMaster.machineCode}
-                  </DetailCard>
-
-                  <DetailCard
-                    icon={Cpu}
-                    title="Machine Name"
-                  >
-                    {MachineMaster.machineName}
-                  </DetailCard>
-
-                  <DetailCard
-                    icon={Hash}
-                    title="Machine Number"
-                  >
-                    {MachineMaster.machineNumber}
-                  </DetailCard>
-                  {/* OPERATIONAL STATUS */}
-
-                  <DetailCard
-                    icon={status ? CheckCircle : XCircle}
-                    title="Operational"
-                  >
-                    <span
-                      className={
-                        status
-                          ? "font-medium text-green-600"
-                          : "font-medium text-red-600"
-                      }
-                    >
-                      {status ? "Yes" : "No"}
-                    </span>
-                  </DetailCard>
-                </div>
-              </div>
-              {/* GROUP NAME */}
-              <div className="rounded-lg border p-3 mt-3  space-y-3">
-                <div className="flex items-center gap-2 font-semibold text-sm">
-                  <Layers className="h-4 w-4 text-muted-foreground" />
-                  Group Names ({groups.length})
-                </div>
-
-                {groups.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    No groups assigned.
-                  </p>
-                ) : (
-                  <div className="flex flex-wrap gap-2">
-                    {groups.map((group, index) => (
-                      <span
-                        key={`${group}-${index}`}
-                        className="inline-flex items-center rounded-md bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary"
-                      >
-                        {group}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-              {/* MACHINE COMMENT */}
-              <div className="mt-3 space-y-3">
-                <DetailCard
-                  icon={FileText}
-                  title="Machine Comment"
-                >
-                  <p className="whitespace-pre-wrap ">
-                    {MachineMaster.comment || "-"}
-                  </p>
-                </DetailCard>
-              </div>
-              {/* ASSIGNED ITEM DETAILS */}
-              <div className="mt-3  space-y-3">
-                <div className="flex items-center justify-between border-b pb-2">
-                  <div className="flex items-center gap-2">
-                    <Package className="h-4 w-4 text-muted-foreground" />
-
-                    <h3 className="text-sm font-semibold">
-                      Assigned Item Details
-                    </h3>
-                  </div>
-
-                  <span className="text-sm font-medium">
-                    Total Items: {items.length}
-                  </span>
-                </div>
-
-                {items.length === 0 ? (
-                  <div className="rounded-lg border p-8 text-center">
-                    <Package className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-
-                    <p className="text-sm font-medium">
-                      No items assigned
-                    </p>
-
-                    <p className="text-xs text-muted-foreground mt-1">
-                      No item details are available for this machine.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="w-full overflow-x-auto border rounded-lg">
-                    <table className="min-w-[700px] w-full text-sm border-collapse">
-                      <thead className="bg-muted">
-                        <tr className="border-b">
-                          <th className="p-3 text-left font-semibold w-[50px]">
-                            #
-                          </th>
-
-                          <th className="p-3 text-left font-semibold">
-                            Item Name
-                          </th>
-
-                          <th className="p-3 text-left font-semibold">
-                            Group
-                          </th>
-
-                          <th className="p-3 text-left font-semibold">
-                            Unit
-                          </th>
-
-                          <th className="p-3 text-right font-semibold">
-                            Quantity
-                          </th>
-
-                          <th className="p-3 text-left font-semibold">
-                            Comment
-                          </th>
-                        </tr>
-                      </thead>
-
-                      <tbody>
-                        {items.map((item, index) => (
-                          <tr
-                            key={
-                              item.id ||
-                              item.itemMasterId ||
-                              index
-                            }
-                            className="border-b last:border-0 hover:bg-muted/40"
-                          >
-                            <td className="p-3 text-muted-foreground">
-                              {index + 1}
-                            </td>
-
-                            <td className="p-3 font-medium">
-                              {getItemName(item)}
-                            </td>
-
-                            <td className="p-3">
-                              {getItemGroup(item)}
-                            </td>
-
-                            <td className="p-3">
-                              {getItemUnit(item)}
-                            </td>
-
-                            <td className="p-3 text-right font-medium">
-                              {getItemQuantity(item)}
-                            </td>
-
-                            <td className="p-3 whitespace-pre-wrap">
-                              {getItemComment(item)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-              {hasCustomFields && (
-                <div className="rounded-lg border mt-3 mb-3">
-                  <div className="flex items-center gap-2 border-b p-4 font-semibold">
-                    <Settings2 className="h-4 w-4" />
-                    Custom Fields
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-4 p-4 sm:grid-cols-2">
-                    {Object.entries(customFields).map(([key, value]) => (
-                      <div key={key} className="rounded-lg border bg-muted/30 p-4">
-                        <div className="mb-2 text-sm font-medium">{key}</div>
-
-                        <div className="break-words text-sm text-muted-foreground">
-                          {formatCustomFieldValue(value)}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {!hasCustomFields && (
-                <div className="rounded-lg border p-4">
-                  <div className="mb-2 flex items-center gap-2 font-semibold">
-                    <Settings2 className="h-4 w-4" />
-                    Custom Fields
-                  </div>
-
-                  <p className="text-sm text-muted-foreground">
-                    No custom fields available.
-                  </p>
-                </div>
-              )}
-              {/* CREATED / UPDATED */}
-              <div className="mt-3 space-y-3">
-                <h3 className="text-sm font-semibold border-b pb-2">
-                  Record Information
-                </h3>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <DetailCard
-                    icon={Calendar}
-                    title="Created Date"
-                  >
-                    {formatDate(MachineMaster.createdAt)}
-                  </DetailCard>
-
-                  <DetailCard
-                    icon={Calendar}
-                    title="Updated Date"
-                  >
-                    {formatDate(MachineMaster.updatedAt)}
-                  </DetailCard>
-                </div>
-              </div>
-              {/* RECORD ID */}
-              <div className="mt-3 space-y-3">
                 <DetailCard
                   icon={Hash}
-                  title="Machine ID"
+                  title="Machine Code"
                 >
-                  {MachineMaster.id}
+                  {MachineMaster.machineCode}
+                </DetailCard>
+
+                <DetailCard
+                  icon={Cpu}
+                  title="Machine Name"
+                >
+                  {MachineMaster.machineName}
+                </DetailCard>
+
+                <DetailCard
+                  icon={Hash}
+                  title="Machine Number"
+                >
+                  {MachineMaster.machineNumber}
+                </DetailCard>
+                {/* OPERATIONAL STATUS */}
+
+                <DetailCard
+                  icon={status ? CheckCircle : XCircle}
+                  title="Operational"
+                >
+                  <span
+                    className={
+                      status
+                        ? "font-medium text-green-600"
+                        : "font-medium text-red-600"
+                    }
+                  >
+                    {status ? "Yes" : "No"}
+                  </span>
                 </DetailCard>
               </div>
+            </div>
+            {/* GROUP NAME */}
+            <div className="rounded-lg border p-3 mt-3  space-y-3">
+              <div className="flex items-center gap-2 font-semibold text-sm">
+                <Layers className="h-4 w-4 text-muted-foreground" />
+                Group Names ({groups.length})
+              </div>
 
-              {/* Machine Activity Log */}
-              <div className="mt-3 mb-3 rounded-lg border p-3 min-w-0 flex flex-col h-[450px] shrink-0">
-
-                {/* HEADER */}
-                <div className="flex shrink-0 items-center justify-between border-b pb-2 mb-3">
-                  <div className="flex items-center gap-2">
-                    <History className="h-5 w-5 text-muted-foreground" />
-
-                    <h3 className="text-sm font-semibold">
-                      Machine Activity Log
-                    </h3>
-
-                    <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium">
-                      {changeLogs.length}
+              {groups.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No groups assigned.
+                </p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {groups.map((group, index) => (
+                    <span
+                      key={`${group}-${index}`}
+                      className="inline-flex items-center rounded-md bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary"
+                    >
+                      {group}
                     </span>
-                  </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            {/* MACHINE COMMENT */}
+            <div className="mt-3 space-y-3">
+              <DetailCard
+                icon={FileText}
+                title="Machine Comment"
+              >
+                <p className="whitespace-pre-wrap ">
+                  {MachineMaster.comment || "-"}
+                </p>
+              </DetailCard>
+            </div>
+            {/* ASSIGNED ITEM DETAILS */}
+            <div className="mt-3  space-y-3">
+              <div className="flex items-center justify-between border-b pb-2">
+                <div className="flex items-center gap-2">
+                  <Package className="h-4 w-4 text-muted-foreground" />
+
+                  <h3 className="text-sm font-semibold">
+                    Assigned Item Details
+                  </h3>
                 </div>
 
-                {/* CONTENT */}
-                {loadingChangeLogs ? (
-                  <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
-                    Loading change history...
-                  </div>
-                ) : changeLogs.length === 0 ? (
-                  <div className="flex-1 flex items-center justify-center rounded-md border text-sm text-muted-foreground">
-                    No change history available.
-                  </div>
-                ) : (
-                  <div className="min-h-0 flex-1 w-full overflow-auto rounded-md border">
-                    <table className="w-full min-w-[750px] text-sm border-collapse">
-                      <thead className="sticky top-0 z-20 bg-muted">
-                        <tr className="border-b">
-                          <th className="whitespace-nowrap px-3 py-2 text-left font-semibold">
-                            Date & Time
-                          </th>
-                          <th className="whitespace-nowrap px-3 py-2 text-left font-semibold">
-                            Updated By
-                          </th>
-                          <th className="px-3 py-2 text-left font-semibold">
-                            Field
-                          </th>
-                          <th className="px-3 py-2 text-left font-semibold">
-                            Old Value
-                          </th>
-                          <th className="px-3 py-2 text-left font-semibold">
-                            New Value
-                          </th>
+                <span className="text-sm font-medium">
+                  Total Items: {items.length}
+                </span>
+              </div>
+
+              {items.length === 0 ? (
+                <div className="rounded-lg border p-8 text-center">
+                  <Package className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+
+                  <p className="text-sm font-medium">
+                    No items assigned
+                  </p>
+
+                  <p className="text-xs text-muted-foreground mt-1">
+                    No item details are available for this machine.
+                  </p>
+                </div>
+              ) : (
+                <div className="w-full overflow-x-auto border rounded-lg">
+                  <table className="min-w-[700px] w-full text-sm border-collapse">
+                    <thead className="bg-muted">
+                      <tr className="border-b">
+                        <th className="p-3 text-left font-semibold w-[50px]">
+                          #
+                        </th>
+
+                        <th className="p-3 text-left font-semibold">
+                          Item Name
+                        </th>
+
+                        <th className="p-3 text-left font-semibold">
+                          Group
+                        </th>
+
+                        <th className="p-3 text-left font-semibold">
+                          Unit
+                        </th>
+
+                        <th className="p-3 text-right font-semibold">
+                          Quantity
+                        </th>
+
+                        <th className="p-3 text-left font-semibold">
+                          Comment
+                        </th>
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      {items.map((item, index) => (
+                        <tr
+                          key={
+                            item.id ||
+                            item.itemMasterId ||
+                            index
+                          }
+                          className="border-b last:border-0 hover:bg-muted/40"
+                        >
+                          <td className="p-3 text-muted-foreground">
+                            {index + 1}
+                          </td>
+
+                          <td className="p-3 font-medium">
+                            {getItemName(item)}
+                          </td>
+
+                          <td className="p-3">
+                            {getItemGroup(item)}
+                          </td>
+
+                          <td className="p-3">
+                            {getItemUnit(item)}
+                          </td>
+
+                          <td className="p-3 text-right font-medium">
+                            {getItemQuantity(item)}
+                          </td>
+
+                          <td className="p-3 whitespace-pre-wrap">
+                            {getItemComment(item)}
+                          </td>
                         </tr>
-                      </thead>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+            {hasCustomFields && (
+              <div className="rounded-lg border mt-3 mb-3">
+                <div className="flex items-center gap-2 border-b p-4 font-semibold">
+                  <Settings2 className="h-4 w-4" />
+                  Custom Fields
+                </div>
 
-                      <tbody>
-                        {changeLogs.map((log) => {
-                          let details = {};
+                <div className="grid grid-cols-1 gap-4 p-4 sm:grid-cols-2">
+                  {Object.entries(customFields).map(([key, value]) => (
+                    <div key={key} className="rounded-lg border bg-muted/30 p-4">
+                      <div className="mb-2 text-sm font-medium">{key}</div>
 
-                          try {
-                            details =
-                              typeof log.Details === "string"
-                                ? JSON.parse(log.Details)
-                                : log.Details || {};
-                          } catch {
-                            details = {};
+                      <div className="break-words text-sm text-muted-foreground">
+                        {formatCustomFieldValue(value)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {!hasCustomFields && (
+              <div className="rounded-lg border p-4">
+                <div className="mb-2 flex items-center gap-2 font-semibold">
+                  <Settings2 className="h-4 w-4" />
+                  Custom Fields
+                </div>
+
+                <p className="text-sm text-muted-foreground">
+                  No custom fields available.
+                </p>
+              </div>
+            )}
+            {/* CREATED / UPDATED */}
+            <div className="mt-3 space-y-3">
+              <h3 className="text-sm font-semibold border-b pb-2">
+                Record Information
+              </h3>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <DetailCard
+                  icon={Calendar}
+                  title="Created Date"
+                >
+                  {formatDate(MachineMaster.createdAt)}
+                </DetailCard>
+
+                <DetailCard
+                  icon={Calendar}
+                  title="Updated Date"
+                >
+                  {formatDate(MachineMaster.updatedAt)}
+                </DetailCard>
+              </div>
+            </div>
+            {/* RECORD ID */}
+            <div className="mt-3 space-y-3">
+              <DetailCard
+                icon={Hash}
+                title="Machine ID"
+              >
+                {MachineMaster.id}
+              </DetailCard>
+            </div>
+
+            {/* Machine Activity Log */}
+            <div className="mt-3 mb-3 rounded-lg border p-3 min-w-0 flex flex-col h-[450px] shrink-0">
+
+              {/* HEADER */}
+              <div className="flex shrink-0 items-center justify-between border-b pb-2 mb-3">
+                <div className="flex items-center gap-2">
+                  <History className="h-5 w-5 text-muted-foreground" />
+
+                  <h3 className="text-sm font-semibold">
+                    Machine Activity Log
+                  </h3>
+
+                  <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium">
+                    {changeLogs.length}
+                  </span>
+                </div>
+              </div>
+
+              {/* CONTENT */}
+              {loadingChangeLogs ? (
+                <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
+                  Loading change history...
+                </div>
+              ) : changeLogs.length === 0 ? (
+                <div className="flex-1 flex items-center justify-center rounded-md border text-sm text-muted-foreground">
+                  No change history available.
+                </div>
+              ) : (
+                <div className="min-h-0 flex-1 w-full overflow-auto rounded-md border">
+                  <table className="w-full min-w-[750px] text-sm border-collapse">
+                    <thead className="sticky top-0 z-20 bg-muted">
+                      <tr className="border-b">
+                        <th className="whitespace-nowrap px-3 py-2 text-left font-semibold">
+                          Date & Time
+                        </th>
+                        <th className="whitespace-nowrap px-3 py-2 text-left font-semibold">
+                          Updated By
+                        </th>
+                        <th className="px-3 py-2 text-left font-semibold">
+                          Field
+                        </th>
+                        <th className="px-3 py-2 text-left font-semibold">
+                          Old Value
+                        </th>
+                        <th className="px-3 py-2 text-left font-semibold">
+                          New Value
+                        </th>
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      {changeLogs.map((log) => {
+                        let details = {};
+
+                        try {
+                          details =
+                            typeof log.Details === "string"
+                              ? JSON.parse(log.Details)
+                              : log.Details || {};
+                        } catch {
+                          details = {};
+                        }
+
+                        const formatValue = (value) => {
+                          if (value === null || value === undefined || value === "") {
+                            return "-";
                           }
 
-                          const formatValue = (value) => {
-                            if (value === null || value === undefined || value === "") {
-                              return "-";
-                            }
+                          if (typeof value === "boolean") {
+                            return value ? "Active" : "Inactive";
+                          }
 
-                            if (typeof value === "boolean") {
-                              return value ? "Active" : "Inactive";
-                            }
+                          if (Array.isArray(value)) {
+                            if (!value.length) return "-";
 
-                            if (Array.isArray(value)) {
-                              if (!value.length) return "-";
+                            return value.map((item) => {
+                              if (typeof item === "object" && item !== null) {
+                                return Object.entries(item)
+                                  .map(([key, val]) => `${key}: ${formatValue(val)}`)
+                                  .join(", ");
+                              }
 
-                              return value.map((item) => {
-                                if (typeof item === "object" && item !== null) {
-                                  return Object.entries(item)
-                                    .map(([key, val]) => `${key}: ${formatValue(val)}`)
-                                    .join(", ");
-                                }
+                              return String(item);
+                            }).join(" | ");
+                          }
 
-                                return String(item);
-                              }).join(" | ");
-                            }
+                          if (typeof value === "object") {
+                            return Object.entries(value)
+                              .map(([key, val]) => `${key}: ${formatValue(val)}`)
+                              .join(", ");
+                          }
 
-                            if (typeof value === "object") {
-                              return Object.entries(value)
-                                .map(([key, val]) => `${key}: ${formatValue(val)}`)
-                                .join(", ");
-                            }
+                          return String(value);
+                        };
 
-                            return String(value);
-                          };
+                        const changedFields = Object.entries(details).filter(
+                          ([, change]) =>
+                            change &&
+                            typeof change === "object" &&
+                            ("oldValue" in change || "newValue" in change)
+                        );
 
-                          const changedFields = Object.entries(details).filter(
-                            ([, change]) =>
-                              change &&
-                              typeof change === "object" &&
-                              ("oldValue" in change || "newValue" in change)
-                          );
+                        return (
+                          <tr
+                            key={log.id}
+                            className="border-b last:border-0 align-top hover:bg-muted/40"
+                          >
+                            <td className="whitespace-nowrap px-3 py-2">
+                              {formatDate(log.createdAt)}
+                            </td>
 
-                          return (
-                            <tr
-                              key={log.id}
-                              className="border-b last:border-0 align-top hover:bg-muted/40"
-                            >
-                              <td className="whitespace-nowrap px-3 py-2">
-                                {formatDate(log.createdAt)}
-                              </td>
+                            <td className="whitespace-nowrap px-3 py-2">
+                              {log.UserName || "-"}
+                            </td>
 
-                              <td className="whitespace-nowrap px-3 py-2">
-                                {log.UserName || "-"}
-                              </td>
+                            <td className="px-3 py-2">
+                              <div className="font-medium">
+                                {log.Selecteditem || "-"}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {log.Action || "-"}
+                              </div>
+                            </td>
 
-                              <td className="px-3 py-2">
-                                <div className="font-medium">
-                                  {log.Selecteditem || "-"}
-                                </div>
-                                <div className="text-xs text-muted-foreground">
-                                  {log.Action || "-"}
-                                </div>
-                              </td>
-
-                              <td className="max-w-[250px] break-words px-3 py-2">
-                                {changedFields.length ? (
-                                  <div className="space-y-2">
-                                    {changedFields.map(([field, change]) => (
-                                      <div key={field}>
-                                        <div className="text-xs font-semibold capitalize text-muted-foreground">
-                                          {field.replace(/([A-Z])/g, " $1")}
-                                        </div>
-                                        <div>{formatValue(change.oldValue)}</div>
+                            <td className="max-w-[250px] break-words px-3 py-2">
+                              {changedFields.length ? (
+                                <div className="space-y-2">
+                                  {changedFields.map(([field, change]) => (
+                                    <div key={field}>
+                                      <div className="text-xs font-semibold capitalize text-muted-foreground">
+                                        {field.replace(/([A-Z])/g, " $1")}
                                       </div>
-                                    ))}
-                                  </div>
-                                ) : "-"}
-                              </td>
+                                      <div>{formatValue(change.oldValue)}</div>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : "-"}
+                            </td>
 
-                              <td className="max-w-[250px] break-words px-3 py-2">
-                                {changedFields.length ? (
-                                  <div className="space-y-2">
-                                    {changedFields.map(([field, change]) => (
-                                      <div key={field}>
-                                        <div className="text-xs font-semibold capitalize text-muted-foreground">
-                                          {field.replace(/([A-Z])/g, " $1")}
-                                        </div>
-                                        <div>{formatValue(change.newValue)}</div>
+                            <td className="max-w-[250px] break-words px-3 py-2">
+                              {changedFields.length ? (
+                                <div className="space-y-2">
+                                  {changedFields.map(([field, change]) => (
+                                    <div key={field}>
+                                      <div className="text-xs font-semibold capitalize text-muted-foreground">
+                                        {field.replace(/([A-Z])/g, " $1")}
                                       </div>
-                                    ))}
-                                  </div>
-                                ) : "-"}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            </DialogBody>
-          </ScrollArea>
-        </div>
+                                      <div>{formatValue(change.newValue)}</div>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : "-"}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </DialogBody>
+        </ScrollArea>
+
       </DialogContent>
     </Dialog >
   );

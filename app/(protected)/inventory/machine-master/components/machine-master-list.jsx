@@ -14,8 +14,10 @@ import {
     Plus,
     RefreshCw,
     Search,
+    Mail,
     Pencil,
     Trash2,
+    Settings2,
     X,
     XCircle,
     FileSpreadsheet,
@@ -24,6 +26,7 @@ import { toast } from "sonner";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
 import { apiFetch } from "@/lib/api";
 import { can } from "@/lib/permissions";
 import { Button } from "@/components/ui/button";
@@ -33,7 +36,7 @@ import { DataGrid } from "@/components/ui/data-grid";
 import { DataGridColumnHeader } from "@/components/ui/data-grid-column-header";
 import { DataGridPagination } from "@/components/ui/data-grid-pagination";
 import { DataGridTable } from "@/components/ui/data-grid-table";
-
+import { DataGridColumnVisibility } from '@/components/ui/data-grid-column-visibility';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -44,7 +47,15 @@ import {
 
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
-
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogBody,
+    DialogTitle,
+} from "@/components/ui/dialog";
 import {
     Alert,
     AlertIcon,
@@ -141,6 +152,40 @@ const createMachineMasterNotification = async ({
 // ======================================================
 // HELPERS
 // ======================================================
+
+const showSuccess = (message, id) => {
+    toast.custom(
+        () => (
+            <Alert variant="mono" icon="success" close={false}>
+                <AlertIcon>
+                    <RiCheckboxCircleFill />
+                </AlertIcon>
+                <AlertTitle>{message}</AlertTitle>
+            </Alert>
+        ),
+        {
+            id,
+            position: "top-center",
+        },
+    );
+};
+
+const showError = (message, id) => {
+    toast.custom(
+        () => (
+            <Alert variant="mono" icon="destructive" close={false}>
+                <AlertIcon>
+                    <RiErrorWarningFill />
+                </AlertIcon>
+                <AlertTitle>{message}</AlertTitle>
+            </Alert>
+        ),
+        {
+            id,
+            position: "top-center",
+        },
+    );
+};
 
 const formatDate = (value) => {
     if (!value) return "-";
@@ -336,7 +381,21 @@ const MachineMasterList = () => {
     const [inactiveDialogOpen, setInactiveDialogOpen] = useState(false);
     const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] =
         useState(false);
+    // ===================================================
+    // EMAIL REPORT
+    // ===================================================
 
+    const [emailDialogOpen, setEmailDialogOpen] = useState(false);
+    const [emailSubject, setEmailSubject] = useState("");
+    const [emailMessage, setEmailMessage] = useState("");
+
+    const [staffList, setStaffList] = useState([]);
+    const [staffLoading, setStaffLoading] = useState(false);
+
+    const [selectedRecipientEmails, setSelectedRecipientEmails] = useState([]);
+
+    const [attachExcel, setAttachExcel] = useState(true);
+    const [emailSending, setEmailSending] = useState(false);
     // ==================================================
     // REFRESH
     // ==================================================
@@ -1024,7 +1083,31 @@ const MachineMasterList = () => {
             );
         }
     }, [getMachineMasterReportRows]);
+    // ===================================================
+    // EMAIL DIALOG
+    // ===================================================
 
+    const handleOpenEmailDialog = useCallback(() => {
+        setSelectedRecipientEmails([]);
+        setAttachExcel(true);
+
+        setEmailSubject("Machine Report");
+
+        setEmailMessage(
+            [
+                "Dear Team,",
+                "",
+                "Please find the Machine Master report for your review.",
+                "",
+                "The report includes machine number, machine name, machine code, specifications, operational status, and creation and update details.",
+                "",
+                "Please review the information and let us know if any corrections are required.",
+                "",
+            ].join("\n")
+        );
+
+        setEmailDialogOpen(true);
+    }, []);
     // ==================================================
     // DELETE
     // ==================================================
@@ -1429,50 +1512,203 @@ const MachineMasterList = () => {
     // SHARED HEADER REPORT BUTTONS
     // ==================================================
 
+
     useEffect(() => {
         const handleReportButtonClick = (event) => {
             if (!(event.target instanceof Element)) return;
 
             const button = event.target.closest(
-                "#Print, #Export",
+                "#Print, #Export, #Email"
             );
 
             if (!button) return;
 
-            if (
-                !window.location.pathname.includes(
-                    "/machine-master",
-                )
-            ) {
+            if (!window.location.pathname.includes("/machine-master")) {
                 return;
             }
 
-            if (button.id === "Print") {
-                event.preventDefault();
-                void handlePrintMachineMasters();
-            }
+            event.preventDefault();
 
-            if (button.id === "Export") {
-                event.preventDefault();
+            if (button.id === "Print") {
+                void handlePrintMachineMasters();
+            } else if (button.id === "Export") {
                 void handleExportExcel();
+            } else if (button.id === "Email") {
+                handleOpenEmailDialog();
             }
         };
 
-        document.addEventListener(
-            "click",
-            handleReportButtonClick,
-        );
+        document.addEventListener("click", handleReportButtonClick);
 
         return () => {
-            document.removeEventListener(
-                "click",
-                handleReportButtonClick,
-            );
+            document.removeEventListener("click", handleReportButtonClick);
         };
     }, [
         handlePrintMachineMasters,
         handleExportExcel,
+        handleOpenEmailDialog,
     ]);
+
+    // ===================================================
+    // SEND EMAIL
+    // ===================================================
+
+
+    const handleSendEmail = useCallback(async () => {
+        if (!selectedRecipientEmails.length) {
+            showError("Please select at least one recipient.");
+            return;
+        }
+
+        if (!emailSubject.trim() || !emailMessage.trim()) {
+            showError("Please enter the email subject and message.");
+            return;
+        }
+
+        try {
+            setEmailSending(true);
+
+            const response = await fetch(
+                "/api/inventory/machine-master/email-report",
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        recipients: selectedRecipientEmails,
+                        subject: emailSubject.trim(),
+                        message: emailMessage.trim(),
+                        attachExcel,
+                        selectedIds,
+                        filters: {
+                            query: searchQuery,
+                            status: statusFilter,
+                            createdFrom,
+                            createdTo,
+                            updatedFrom,
+                            updatedTo,
+                            createdBy: createdByFilter,
+                            updatedBy: updatedByFilter,
+                        },
+                    }),
+                }
+            );
+
+            const result = await response.json();
+
+            if (!response.ok || result.success === false) {
+                throw new Error(
+                    result.message ||
+                    result.error ||
+                    "Failed to send email."
+                );
+            }
+
+            showSuccess(
+                result.message ||
+                "Machine Master email sent successfully.",
+                "machine-master-email"
+            );
+
+            setEmailDialogOpen(false);
+        } catch (error) {
+            console.error("MACHINE MASTER EMAIL ERROR:", error);
+            showError(
+                error.message || "Failed to send Machine Master email."
+            );
+        } finally {
+            setEmailSending(false);
+        }
+    }, [
+        selectedRecipientEmails,
+        emailSubject,
+        emailMessage,
+        attachExcel,
+        selectedIds,
+        searchQuery,
+        statusFilter,
+        createdFrom,
+        createdTo,
+        updatedFrom,
+        updatedTo,
+        createdByFilter,
+        updatedByFilter,
+        showError,
+        showSuccess,
+    ]);
+
+
+    // ===================================================
+    // LOAD STAFF
+    // ===================================================
+
+    useEffect(() => {
+        if (!emailDialogOpen) return;
+
+        let cancelled = false;
+
+        const loadStaff = async () => {
+            try {
+                setStaffLoading(true);
+
+                const response = await apiFetch("/api/staff?limit=10000");
+
+                const result = await response.json();
+
+                if (!response.ok || result.success === false) {
+                    throw new Error(result.message || "Failed to load staff");
+                }
+
+                const staff = Array.isArray(result)
+                    ? result
+                    : Array.isArray(result.data)
+                        ? result.data
+                        : Array.isArray(result.data?.staff)
+                            ? result.data.staff
+                            : [];
+
+                if (!cancelled) {
+                    setStaffList(
+                        staff
+                            .map((person) => ({
+                                id: person.id,
+
+                                name:
+                                    person.name ||
+                                    person.fullName ||
+                                    [person.firstName, person.lastName]
+                                        .filter(Boolean)
+                                        .join(" ") ||
+                                    person.username ||
+                                    person.email ||
+                                    "Staff member",
+
+                                email: person.email || person.workEmail || "",
+                            }))
+                            .filter((person) => person.email),
+                    );
+                }
+            } catch (error) {
+                console.error("STAFF RECIPIENT LOAD ERROR:", error);
+
+                if (!cancelled) {
+                    setStaffList([]);
+                    showError(error.message);
+                }
+            } finally {
+                if (!cancelled) {
+                    setStaffLoading(false);
+                }
+            }
+        };
+
+        void loadStaff();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [emailDialogOpen]);
 
     // ==================================================
     // ONLINE / OFFLINE
@@ -1578,6 +1814,7 @@ const MachineMasterList = () => {
                 ),
 
                 size: 120,
+                enableHiding: false,
             },
             {
                 accessorKey: "machineName",
@@ -1985,7 +2222,7 @@ const MachineMasterList = () => {
                     </TooltipTrigger>
 
                     <TooltipContent>
-                        <p>Search by machine number, machine name, machine code.</p>
+                        <p>Search by machine number, machine name, machine code, comment, specifications.</p>
                     </TooltipContent>
                 </Tooltip>
 
@@ -2111,7 +2348,18 @@ const MachineMasterList = () => {
                     setCreatedByFilter={setCreatedByFilter}
                     updatedByFilter={updatedByFilter}
                     setUpdatedByFilter={setUpdatedByFilter}
+                    searchInput={searchInput}
+                    setSearchInput={setSearchInput}
+                    handleSearch={handleSearch}
                 />
+                <DataGridColumnVisibility
+                    table={table}
+                    trigger={
+                        <Button variant="outline">
+                            <Settings2 />
+                            Columns
+                        </Button>
+                    } />
             </div>
         </CardHeader>
     );
@@ -2302,6 +2550,272 @@ const MachineMasterList = () => {
                 loading={bulkLoading}
                 onConfirm={handleConfirmBulkDelete}
             />
+            {/* EMAIL REPORT  */}
+            <Dialog open={emailDialogOpen} onOpenChange={setEmailDialogOpen}>
+                <DialogContent className="w-[95vw] max-w-[95vw] max-h-[90vh] flex flex-col gap-0 overflow-hidden sm:w-[90vw] sm:max-w-[600px] md:max-w-[700px] lg:max-w-[900px] xl:max-w-[1000px] p-0">
+                    <form
+                        className="flex h-full max-h-[90vh] flex-col overflow-hidden"
+                        onSubmit={(event) => {
+                            event.preventDefault();
+                            void handleSendEmail();
+                        }}
+                    >
+                        <DialogHeader className="shrink-0 px-6 pt-6 pb-4">
+                            <DialogTitle>Email Machine</DialogTitle>
+
+                            <DialogDescription>
+                                Select recipients and send the Machine report.
+                            </DialogDescription>
+                        </DialogHeader>
+
+                        <ScrollArea className="grow min-h-0 flex flex-col h-full max-h-[90vh] overflow-hidden">
+                            {/* Recipient Selection */}
+                            <DialogBody className="space-y-6 px-6 min-h-0">
+                                {/* RECIPIENTS */}
+                                <div className="flex items-center justify-between gap-3">
+                                    <label className="text-sm font-medium">Recipient Email</label>
+
+                                    <span className="text-xs text-muted-foreground">
+                                        {selectedRecipientEmails.length} of {staffList.length}{" "}
+                                        selected
+                                    </span>
+                                </div>
+
+                                {selectedRecipientEmails.length > 0 && (
+                                    <div className="rounded-lg border bg-muted/30 p-3">
+                                        <div className="mb-2 flex items-center justify-between">
+                                            <p className="text-xs font-medium text-muted-foreground">
+                                                Selected recipients
+                                            </p>
+
+                                            <button
+                                                type="button"
+                                                className="text-xs text-muted-foreground hover:text-foreground"
+                                                onClick={() => setSelectedRecipientEmails([])}
+                                            >
+                                                Clear all
+                                            </button>
+                                        </div>
+
+                                        <div className="flex flex-wrap gap-2">
+                                            {selectedRecipientEmails.map((email) => {
+                                                const person = staffList.find(
+                                                    (staff) => staff.email === email,
+                                                );
+
+                                                return (
+                                                    <span
+                                                        key={email}
+                                                        className="inline-flex max-w-full items-center gap-1.5 rounded-full border bg-background px-2.5 py-1 text-xs"
+                                                    >
+                                                        <span className="max-w-[220px] truncate">
+                                                            {person?.name || email}
+                                                        </span>
+
+                                                        <button
+                                                            type="button"
+                                                            aria-label={`Remove ${email}`}
+                                                            className="rounded-full text-muted-foreground hover:text-destructive"
+                                                            onClick={() =>
+                                                                setSelectedRecipientEmails((previous) =>
+                                                                    previous.filter((item) => item !== email),
+                                                                )
+                                                            }
+                                                        >
+                                                            <X className="size-3.5" />
+                                                        </button>
+                                                    </span>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* SELECT ALL STAFF */}
+                                <div className="overflow-hidden rounded-lg border">
+                                    <div className="border-b bg-muted/30 p-2">
+                                        <label className="flex cursor-pointer items-center gap-2">
+                                            <Checkbox
+                                                checked={
+                                                    staffList.length > 0 &&
+                                                    staffList.every((person) =>
+                                                        selectedRecipientEmails.includes(person.email),
+                                                    )
+                                                }
+                                                disabled={staffLoading || staffList.length === 0}
+                                                onCheckedChange={(checked) => {
+                                                    setSelectedRecipientEmails((previous) =>
+                                                        checked === true
+                                                            ? [
+                                                                ...new Set([
+                                                                    ...previous,
+                                                                    ...staffList.map((person) => person.email),
+                                                                ]),
+                                                            ]
+                                                            : previous.filter(
+                                                                (email) =>
+                                                                    !staffList.some(
+                                                                        (person) => person.email === email,
+                                                                    ),
+                                                            ),
+                                                    );
+                                                }}
+                                            />
+
+                                            <span className="text-sm font-medium">
+                                                Select all staff
+                                            </span>
+                                        </label>
+                                    </div>
+
+                                    <ScrollArea className="max-h-52">
+                                        <div className="p-2">
+                                            {staffLoading ? (
+                                                <p className="p-3 text-sm text-muted-foreground">
+                                                    Loading staff...
+                                                </p>
+                                            ) : staffList.length === 0 ? (
+                                                <p className="p-3 text-sm text-muted-foreground">
+                                                    No staff email addresses found.
+                                                </p>
+                                            ) : (
+                                                <div className="space-y-1">
+                                                    {staffList.map((person) => {
+                                                        const isSelected = selectedRecipientEmails.includes(
+                                                            person.email,
+                                                        );
+
+                                                        return (
+                                                            <label
+                                                                key={`${person.id}-${person.email}`}
+                                                                className="flex cursor-pointer items-start gap-3 rounded-md p-2.5 transition-colors hover:bg-muted/60"
+                                                            >
+                                                                <Checkbox
+                                                                    className="mt-0.5"
+                                                                    checked={isSelected}
+                                                                    onCheckedChange={(checked) => {
+                                                                        setSelectedRecipientEmails((previous) =>
+                                                                            checked === true
+                                                                                ? [
+                                                                                    ...new Set([
+                                                                                        ...previous,
+                                                                                        person.email,
+                                                                                    ]),
+                                                                                ]
+                                                                                : previous.filter(
+                                                                                    (email) => email !== person.email,
+                                                                                ),
+                                                                        );
+                                                                    }}
+                                                                />
+
+                                                                <span className="min-w-0 flex-1">
+                                                                    <span className="block truncate text-sm font-medium">
+                                                                        {person.name}
+                                                                    </span>
+
+                                                                    <span className="block break-all text-xs text-muted-foreground">
+                                                                        {person.email}
+                                                                    </span>
+                                                                </span>
+                                                            </label>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </ScrollArea>
+                                </div>
+
+                                {/* SUBJECT */}
+                                <div className="space-y-2">
+                                    <label
+                                        htmlFor="machine-subject"
+                                        className="text-sm font-medium"
+                                    >
+                                        Subject
+                                    </label>
+
+                                    <Input
+                                        id="machine-subject"
+                                        required
+                                        value={emailSubject}
+                                        onChange={(event) => setEmailSubject(event.target.value)}
+                                        placeholder="Locations Report"
+                                    />
+                                </div>
+
+                                {/* EXCEL ATTACHMENT */}
+                                <div className="rounded-lg border p-3 transition-colors hover:bg-muted/30">
+                                    <label className="flex cursor-pointer items-start gap-3">
+                                        <Checkbox
+                                            className="mt-0.5"
+                                            checked={attachExcel}
+                                            onCheckedChange={(checked) =>
+                                                setAttachExcel(checked === true)
+                                            }
+                                        />
+
+                                        <span className="min-w-0 flex-1">
+                                            <span className="block text-sm font-medium">
+                                                Add Excel attachment
+                                            </span>
+
+                                            <span className="mt-1 block text-xs text-muted-foreground">
+                                                Attach the Machinereport as an Excel file (.xlsx).
+                                            </span>
+                                        </span>
+
+                                        <FileSpreadsheet className="size-5 shrink-0 text-muted-foreground" />
+                                    </label>
+                                </div>
+
+                                {/* MESSAGE */}
+                                <div className="space-y-2">
+                                    <label
+                                        htmlFor="machine-message"
+                                        className="text-sm font-medium"
+                                    >
+                                        Message
+                                    </label>
+
+                                    <Textarea
+                                        id="machine-message"
+                                        required
+                                        rows={5}
+                                        value={emailMessage}
+                                        onChange={(event) => setEmailMessage(event.target.value)}
+                                        placeholder="Enter your email message..."
+                                    />
+                                </div>
+                            </DialogBody>
+
+                            <DialogFooter className="gap-2 px-6 pb-4">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => setEmailDialogOpen(false)}
+                                    disabled={emailSending}
+                                >
+                                    Cancel
+                                </Button>
+
+                                <Button
+                                    type="submit"
+                                    disabled={
+                                        emailSending ||
+                                        staffLoading ||
+                                        selectedRecipientEmails.length === 0
+                                    }
+                                >
+                                    <Mail className="mr-2 size-4" />
+                                    {emailSending ? "Sending Email..." : "Send Email"}
+                                </Button>
+                            </DialogFooter>
+                        </ScrollArea>
+                    </form>
+                </DialogContent>
+            </Dialog>
         </>
     );
 };

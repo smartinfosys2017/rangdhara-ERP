@@ -17,6 +17,7 @@ import {
   Printer,
   RefreshCw,
   Search,
+  Settings2,
   Trash2,
   X,
   FileSpreadsheet,
@@ -36,6 +37,7 @@ import { DataGrid } from "@/components/ui/data-grid";
 import { DataGridColumnHeader } from "@/components/ui/data-grid-column-header";
 import { DataGridPagination } from "@/components/ui/data-grid-pagination";
 import { DataGridTable } from "@/components/ui/data-grid-table";
+import { DataGridColumnVisibility } from '@/components/ui/data-grid-column-visibility';
 import { Alert, AlertIcon, AlertTitle } from "@/components/ui/alert";
 import { RiCheckboxCircleFill, RiErrorWarningFill } from "@remixicon/react";
 import {
@@ -1872,7 +1874,14 @@ const ProductTypeList = () => {
             updatedBy={updatedBy}
             setUpdatedBy={setUpdatedBy}
           />
-
+          <DataGridColumnVisibility
+            table={table}
+            trigger={
+              <Button variant="outline">
+                <Settings2 />
+                Columns
+              </Button>
+            } />
           {/* {hasActiveFilters && (
               <Button type="button" variant="ghost" onClick={clearFilters}>
                   <X className="mr-2 size-4" />

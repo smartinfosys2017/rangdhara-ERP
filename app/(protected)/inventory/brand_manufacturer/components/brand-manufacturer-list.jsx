@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -17,14 +18,17 @@ import {
     RefreshCw,
     Search,
     Trash2,
+    Settings2,
     X,
     FileSpreadsheet,
     XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Checkbox } from '@/components/ui/checkbox';
-import { Textarea } from '@/components/ui/textarea';
+import { RiCheckboxCircleFill } from "@remixicon/react";
+
+import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
 import { apiFetch } from "@/lib/api";
 import { can } from "@/lib/permissions";
 import { Button } from "@/components/ui/button";
@@ -34,6 +38,7 @@ import { DataGrid } from "@/components/ui/data-grid";
 import { DataGridColumnHeader } from "@/components/ui/data-grid-column-header";
 import { DataGridPagination } from "@/components/ui/data-grid-pagination";
 import { DataGridTable } from "@/components/ui/data-grid-table";
+import { DataGridColumnVisibility } from '@/components/ui/data-grid-column-visibility';
 import {
     Dialog,
     DialogContent,
@@ -47,7 +52,7 @@ import {
     Tooltip,
     TooltipContent,
     TooltipTrigger,
-} from '@/components/ui/tooltip';
+} from "@/components/ui/tooltip";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -57,65 +62,20 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
-
-import ItemGroupAddDialog from "./brand-manufacturer-add-dialog";
-import ItemGroupEditDialog from "./brand-manufacturer-edit-dialog";
-import ItemGroupViewDialog from "./brand-manufacturer-view-dialog";
-import ItemGroupDeleteDialog from "./brand-manufacturer-delete-dialog";
-import { StoreClientFiltersSheet } from "./sheet/filters-sheet";
-import BrandManufacturersActiveDialog from "./items-groups-active-dialog";
-import BrandManufacturersInactiveDialog from "./items-groups-inactive-dialog";
-import BrandManufacturersDeleteDialog from "./items-groups-delete-dialog";
-import { RiCheckboxCircleFill, RiErrorWarningFill } from "@remixicon/react";
 import { Alert, AlertIcon, AlertTitle } from "@/components/ui/alert";
-const createItemGroupNotification = async ({
-    action,
-    title,
-    message,
-    itemGroupId = null,
-    itemGroupName = null,
-}) => {
-    try {
-        const response = await fetch("/api/notifications", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                module: "inventory",
-                action,
-                title,
-                message,
-                entityId:
-                    itemGroupId !== null && itemGroupId !== undefined
-                        ? String(itemGroupId)
-                        : null,
-                entityType: "item_group",
-                entityName: itemGroupName || "Brand/Manufacturer",
-                url: "/inventory/item_group",
-            }),
-            cache: "no-store",
-        });
 
-        const result = await response.json().catch(() => ({}));
+import BrandManufacturerAddDialog from "./brand-manufacturer-add-dialog";
+import BrandManufacturerEditDialog from "./brand-manufacturer-edit-dialog";
+import BrandManufacturerViewDialog from "./brand-manufacturer-view-dialog";
+import BrandManufacturerDeleteDialog from "./brand-manufacturer-delete-dialog";
+import { StoreClientFiltersSheet } from "./sheet/filters-sheet";
+import BrandManufacturersActiveDialog from "./brand-manufacturers-active-dialog";
+import BrandManufacturersInactiveDialog from "./brand-manufacturers-inactive-dialog";
+import BrandManufacturersDeleteDialog from "./brand-manufacturers-delete-dialog";
 
-        if (!response.ok || !result?.success) {
-            throw new Error(result?.message || "Notification failed");
-        }
+const API_URL = "/api/inventory/brand_manufacturer";
+const QUERY_KEY = "brand-manufacturer";
 
-        if (typeof window !== "undefined") {
-            window.dispatchEvent(new CustomEvent("notifications-refresh"));
-            window.dispatchEvent(
-                new CustomEvent("notifications-received", {
-                    detail: result.notification ? [result.notification] : [],
-                }),
-            );
-        }
-
-        return result;
-    } catch (error) {
-        console.error("Brand/Manufacturer NOTIFICATION ERROR", error);
-        return null;
-    }
-};
 const formatDate = (value) => {
     if (!value) return "-";
 
@@ -125,7 +85,114 @@ const formatDate = (value) => {
         ? "-"
         : date.toLocaleDateString();
 };
-const ItemGroupList = () => {
+
+const getBrandManufacturerName = (item) => {
+    if (!item) return "Brand/Manufacturer";
+
+    return [item.brandName, item.manufacturerName]
+        .filter(Boolean)
+        .join(" / ") || "Brand/Manufacturer";
+};
+
+const showSuccessToast = (message, id) => {
+    toast.custom(
+        () => (
+            <Alert variant="mono" icon="success" close={false}>
+                <AlertIcon>
+                    <RiCheckboxCircleFill />
+                </AlertIcon>
+                <AlertTitle>{message}</AlertTitle>
+            </Alert>
+        ),
+        {
+            id,
+            position: "top-center",
+        },
+    );
+};
+
+const showErrorToast = (message, id) => {
+    toast.custom(
+        () => (
+            <Alert variant="mono" icon="error" close={false}>
+                <AlertIcon>
+                    <RiCheckboxCircleFill />
+                </AlertIcon>
+                <AlertTitle>{message}</AlertTitle>
+            </Alert>
+        ),
+        {
+            id,
+            position: "top-center",
+        },
+    );
+};
+
+const createBrandManufacturerNotification = async ({
+    action,
+    title,
+    message,
+    brandManufacturerId = null,
+    brandManufacturerName = null,
+}) => {
+    try {
+        const response = await fetch("/api/notifications", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                module: "inventory",
+                action,
+                title,
+                message,
+                entityId:
+                    brandManufacturerId !== null &&
+                        brandManufacturerId !== undefined
+                        ? String(brandManufacturerId)
+                        : null,
+                entityType: "brand_manufacturer",
+                entityName:
+                    brandManufacturerName || "Brand/Manufacturer",
+                url: "/inventory/brand_manufacturer",
+            }),
+            cache: "no-store",
+        });
+
+        const result = await response.json().catch(() => ({}));
+
+        if (!response.ok || !result?.success) {
+            throw new Error(
+                result?.message || "Notification failed",
+            );
+        }
+
+        if (typeof window !== "undefined") {
+            window.dispatchEvent(
+                new CustomEvent("notifications-refresh"),
+            );
+
+            window.dispatchEvent(
+                new CustomEvent("notifications-received", {
+                    detail: result.notification
+                        ? [result.notification]
+                        : [],
+                }),
+            );
+        }
+
+        return result;
+    } catch (error) {
+        console.error(
+            "BRAND/MANUFACTURER NOTIFICATION ERROR",
+            error,
+        );
+
+        return null;
+    }
+};
+
+const BrandManufacturerList = () => {
     const queryClient = useQueryClient();
     const { data: session } = useSession();
 
@@ -134,84 +201,125 @@ const ItemGroupList = () => {
         [session?.user?.permissions],
     );
 
-    const canView = can("item_group.view", userPermissions);
-    const canManage = can("item_group.manage", userPermissions);
-    const canEdit = can("item_group.edit", userPermissions);
-    const canDelete = can("item_group.delete", userPermissions);
+    // Update these permission keys if your permission master uses different keys.
+    const canView = can(
+        "manufacturer.view",
+        userPermissions,
+    );
 
-    // Table state
+    const canManage = can(
+        "manufacturer.manage",
+        userPermissions,
+    );
+
+    const canEdit = can(
+        "manufacturer.edit",
+        userPermissions,
+    );
+
+    const canDelete = can(
+        "manufacturer.delete",
+        userPermissions,
+    );
+
     const [pagination, setPagination] = useState({
         pageIndex: 0,
         pageSize: 10,
     });
-    const [sorting, setSorting] = useState([{ id: "createdAt", desc: true }]);
 
-    // Search and filters
+    const [sorting, setSorting] = useState([
+        {
+            id: "createdAt",
+            desc: true,
+        },
+    ]);
+
     const [searchInput, setSearchInput] = useState("");
     const [searchQuery, setSearchQuery] = useState("");
 
     const [statusFilter, setStatusFilter] = useState("all");
+
     const [createdFrom, setCreatedFrom] = useState("");
     const [createdTo, setCreatedTo] = useState("");
+
     const [updatedFrom, setUpdatedFrom] = useState("");
     const [updatedTo, setUpdatedTo] = useState("");
+
     const [createdByFilter, setCreatedByFilter] = useState("");
     const [updatedByFilter, setUpdatedByFilter] = useState("");
-    // Selection and bulk actions
+
     const [selectedIds, setSelectedIds] = useState([]);
     const [bulkLoading, setBulkLoading] = useState(false);
 
-    // Connection state
     const [isOnline, setIsOnline] = useState(
-        typeof navigator === "undefined" ? true : navigator.onLine,
+        typeof navigator === "undefined"
+            ? true
+            : navigator.onLine,
     );
+
     const [dbStatus, setDbStatus] = useState({
         env: "local",
         online: false,
         loading: true,
     });
+
     const [checkingDb, setCheckingDb] = useState(false);
     const [syncing, setSyncing] = useState(false);
+
     const syncingRef = useRef(false);
 
-    // CRUD dialogs
     const [addDialogOpen, setAddDialogOpen] = useState(false);
     const [editDialogOpen, setEditDialogOpen] = useState(false);
     const [viewDialogOpen, setViewDialogOpen] = useState(false);
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-    const [selectedBrandManufacturers, setSelectedBrandManufacturers] = useState(null);
+
+    const [
+        selectedBrandManufacturers,
+        setSelectedBrandManufacturers,
+    ] = useState(null);
+
     const [deleteLoading, setDeleteLoading] = useState(false);
 
-    // Email report
     const [emailDialogOpen, setEmailDialogOpen] = useState(false);
     const [emailSubject, setEmailSubject] = useState("");
     const [emailMessage, setEmailMessage] = useState("");
+
     const [staffList, setStaffList] = useState([]);
     const [staffLoading, setStaffLoading] = useState(false);
-    const [selectedRecipientEmails, setSelectedRecipientEmails] = useState([]);
+
+    const [
+        selectedRecipientEmails,
+        setSelectedRecipientEmails,
+    ] = useState([]);
+
     const [attachExcel, setAttachExcel] = useState(true);
     const [emailSending, setEmailSending] = useState(false);
 
-    // Bulk confirmation dialogs
     const [activeDialogOpen, setActiveDialogOpen] = useState(false);
     const [inactiveDialogOpen, setInactiveDialogOpen] = useState(false);
     const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
 
-    // Copy dialog
     const [copyDialogOpen, setCopyDialogOpen] = useState(false);
     const [copySourceItem, setCopySourceItem] = useState(null);
-    const [copyGroupName, setCopyGroupName] = useState("");
+
+    const [copyBrandName, setCopyBrandName] = useState("");
+    const [copyManufacturerName, setCopyManufacturerName] = useState("");
+    const [copyWebsiteURL, setCopyWebsiteURL] = useState("");
     const [copyDescription, setCopyDescription] = useState("");
+
     const [copyLoading, setCopyLoading] = useState(false);
 
     const refreshBrandManufacturers = useCallback(async () => {
         await queryClient.invalidateQueries({
-            queryKey: ["brand-manufacturers"],
+            queryKey: [QUERY_KEY],
         });
     }, [queryClient]);
 
     const syncInventoryBrandManufacturers = useCallback(async () => {
-        if (typeof navigator !== "undefined" && !navigator.onLine) {
+        if (
+            typeof navigator !== "undefined" &&
+            !navigator.onLine
+        ) {
             setIsOnline(false);
             return null;
         }
@@ -222,35 +330,38 @@ const ItemGroupList = () => {
             syncingRef.current = true;
             setSyncing(true);
 
-            const response = await fetch("/api/sync/inventory-local", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                cache: "no-store",
-            });
+            const response = await fetch(
+                "/api/sync/inventory-local",
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    cache: "no-store",
+                },
+            );
 
             const result = await response.json();
 
             if (!response.ok || !result.success) {
-                throw new Error(result?.message || "Inventory sync failed");
+                throw new Error(
+                    result?.message || "Inventory sync failed",
+                );
             }
 
-            window.dispatchEvent(new CustomEvent("notifications-refresh"));
+            window.dispatchEvent(
+                new CustomEvent("notifications-refresh"),
+            );
+
             return result;
         } catch (error) {
-            console.error("Brand/Manufacturer SYNC ERROR", error);
-            toast.custom(
-                () => (
-                    <Alert variant="mono" icon="error" close={false}>
-                        <AlertIcon>
-                            <RiCheckboxCircleFill />
-                        </AlertIcon>
-                        <AlertTitle>
-                            {error.message}
-                        </AlertTitle>
-                    </Alert>
-                ),
-                { position: "top-center" },
+            console.error(
+                "BRAND/MANUFACTURER SYNC ERROR",
+                error,
             );
+
+            showErrorToast(error.message);
+
             return null;
         } finally {
             syncingRef.current = false;
@@ -259,21 +370,28 @@ const ItemGroupList = () => {
     }, []);
 
     const checkDbStatus = useCallback(async () => {
-        if (typeof navigator !== "undefined" && !navigator.onLine) {
+        if (
+            typeof navigator !== "undefined" &&
+            !navigator.onLine
+        ) {
             setDbStatus((prev) => ({
                 ...prev,
                 online: false,
                 loading: false,
             }));
+
             return;
         }
 
         try {
             setCheckingDb(true);
 
-            const response = await fetch("/api/settings/toggle", {
-                cache: "no-store",
-            });
+            const response = await fetch(
+                "/api/settings/toggle",
+                {
+                    cache: "no-store",
+                },
+            );
 
             if (!response.ok) {
                 throw new Error("Database check failed");
@@ -287,7 +405,11 @@ const ItemGroupList = () => {
                 loading: false,
             });
         } catch (error) {
-            console.error("DATABASE STATUS ERROR", error);
+            console.error(
+                "DATABASE STATUS ERROR",
+                error,
+            );
+
             setDbStatus((prev) => ({
                 ...prev,
                 online: false,
@@ -304,23 +426,31 @@ const ItemGroupList = () => {
             limit: String(pagination.pageSize),
             query: searchQuery || "",
             status: statusFilter || "all",
+
             createdFrom: createdFrom || "",
             createdTo: createdTo || "",
+
             updatedFrom: updatedFrom || "",
             updatedTo: updatedTo || "",
+
             createdBy: createdByFilter || "",
             updatedBy: updatedByFilter || "",
+
             sort: sorting?.[0]?.id || "createdAt",
             dir: sorting?.[0]?.desc ? "desc" : "asc",
         });
 
         const response = await apiFetch(
-            `/api/inventory/brand_manufacturer?${params.toString()}`,
+            `${API_URL}?${params.toString()}`,
         );
+
         const result = await response.json();
 
         if (!response.ok || !result.success) {
-            throw new Error(result.message || "Failed loading brand/manufacturer");
+            throw new Error(
+                result.message ||
+                "Failed loading brand/manufacturer",
+            );
         }
 
         return result;
@@ -333,12 +463,17 @@ const ItemGroupList = () => {
         createdTo,
         updatedFrom,
         updatedTo,
+        createdByFilter,
+        updatedByFilter,
         sorting,
     ]);
 
-    const { data, isLoading, isFetching, error } = useQuery({
+    const {
+        data,
+        isLoading,
+    } = useQuery({
         queryKey: [
-            "brand-manufacturer",
+            QUERY_KEY,
             pagination.pageIndex,
             pagination.pageSize,
             sorting,
@@ -356,101 +491,162 @@ const ItemGroupList = () => {
     });
 
     const BrandManufacturers = data?.data || [];
-    const totalRecords = Number(data?.pagination?.total || 0);
+
+    const totalRecords = Number(
+        data?.pagination?.total || 0,
+    );
 
     const currentPageIds = useMemo(
-        () => BrandManufacturers.map((item) => String(item.id)),
-        [brandManufacturers],
+        () =>
+            BrandManufacturers.map((item) =>
+                String(item.id),
+            ),
+        [BrandManufacturers],
     );
 
     const allCurrentPageSelected =
         currentPageIds.length > 0 &&
-        currentPageIds.every((id) => selectedIds.includes(id));
-
-    // Report rows: selected rows on the current page, or all matching records.
-    const getItemGroupReportRows = useCallback(async () => {
-        if (selectedIds.length > 0) {
-            const selectedSet = new Set(selectedIds.map(String));
-            return brandManufacturers.filter((item) => selectedSet.has(String(item.id)));
-        }
-
-        const params = new URLSearchParams({
-            page: "1",
-            limit: "10000",
-            query: searchQuery || "",
-            status: statusFilter || "all",
-            createdFrom: createdFrom || "",
-            createdTo: createdTo || "",
-            updatedFrom: updatedFrom || "",
-            updatedTo: updatedTo || "",
-            sort: sorting?.[0]?.id || "createdAt",
-            dir: sorting?.[0]?.desc ? "desc" : "asc",
-        });
-
-        const response = await apiFetch(
-            `/api/inventory/brand_manufacturer?${params.toString()}`,
+        currentPageIds.every((id) =>
+            selectedIds.includes(id),
         );
-        const result = await response.json();
 
-        if (!response.ok || !result.success) {
-            throw new Error(result.message || "Failed to load brand/manufacturer");
-        }
+    const getBrandManufacturerReportRows = useCallback(
+        async () => {
+            if (selectedIds.length > 0) {
+                const selectedSet = new Set(
+                    selectedIds.map(String),
+                );
 
-        return result.data || [];
-    }, [
-        selectedIds,
-        brandManufacturers,
-        searchQuery,
-        statusFilter,
-        createdFrom,
-        createdTo,
-        updatedFrom,
-        updatedTo,
-        sorting,
-    ]);
+                return BrandManufacturers.filter((item) =>
+                    selectedSet.has(String(item.id)),
+                );
+            }
 
-    const buildItemGroupExcel = useCallback((items) => {
-        const rows = items.map((item) => ({
-            ID: item.id,
-            "Group Name": item.groupName || "",
-            Description: item.description || "",
-            Status: item.status ? "Active" : "Inactive",
-            Default: item.isDefault ? "Yes" : "No",
-            "Created Date": formatDate(item.createdAt),
-            "Created By": item.createdByName || "-",
-            "Updated Date": formatDate(item.updatedAt),
-            "Updated By": item.updatedByName || "-",
-        }));
+            const params = new URLSearchParams({
+                page: "1",
+                limit: "10000",
+                query: searchQuery || "",
+                status: statusFilter || "all",
 
-        const worksheet = XLSX.utils.json_to_sheet(rows);
-        worksheet["!cols"] = [
-            { wch: 15 },
-            { wch: 30 },
-            { wch: 45 },
-            { wch: 14 },
-            { wch: 12 },
-            { wch: 22 },
-            { wch: 25 },
-            { wch: 22 },
-            { wch: 25 },
-        ];
+                createdFrom: createdFrom || "",
+                createdTo: createdTo || "",
 
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Brand/Manufacturer");
-        return workbook;
-    }, []);
+                updatedFrom: updatedFrom || "",
+                updatedTo: updatedTo || "",
 
-    const downloadItemGroupExcel = useCallback(
-        (items, filename = "brand-manufacturers.xlsx") => {
+                createdBy: createdByFilter || "",
+                updatedBy: updatedByFilter || "",
+
+                sort: sorting?.[0]?.id || "createdAt",
+                dir: sorting?.[0]?.desc ? "desc" : "asc",
+            });
+
+            const response = await apiFetch(
+                `${API_URL}?${params.toString()}`,
+            );
+
+            const result = await response.json();
+
+            if (!response.ok || !result.success) {
+                throw new Error(
+                    result.message ||
+                    "Failed to load brand/manufacturer",
+                );
+            }
+
+            return result.data || [];
+        },
+        [
+            selectedIds,
+            BrandManufacturers,
+            searchQuery,
+            statusFilter,
+            createdFrom,
+            createdTo,
+            updatedFrom,
+            updatedTo,
+            createdByFilter,
+            updatedByFilter,
+            sorting,
+        ],
+    );
+
+    const buildBrandManufacturerExcel = useCallback(
+        (items) => {
+            const rows = items.map((item) => ({
+                ID: item.id || "",
+
+                "Brand Name": item.brandName || "",
+
+                "Manufacturer Name":
+                    item.manufacturerName || "",
+
+                Website: item.websiteURL || "",
+
+                Description: item.description || "",
+
+                Status: item.status
+                    ? "Active"
+                    : "Inactive",
+
+                "Created Date": formatDate(item.createdAt),
+
+                "Created By": item.createdByName || "-",
+
+                "Updated Date": formatDate(item.updatedAt),
+
+                "Updated By": item.updatedByName || "-",
+            }));
+
+            const worksheet = XLSX.utils.json_to_sheet(rows);
+
+            worksheet["!cols"] = [
+                { wch: 15 },
+                { wch: 28 },
+                { wch: 30 },
+                { wch: 35 },
+                { wch: 45 },
+                { wch: 14 },
+                { wch: 20 },
+                { wch: 25 },
+                { wch: 20 },
+                { wch: 25 },
+            ];
+
+            const workbook = XLSX.utils.book_new();
+
+            XLSX.utils.book_append_sheet(
+                workbook,
+                worksheet,
+                "Brand Manufacturer",
+            );
+
+            return workbook;
+        },
+        [],
+    );
+
+    const downloadBrandManufacturerExcel = useCallback(
+        (
+            items,
+            filename = "brand-manufacturers.xlsx",
+        ) => {
             if (!items.length) {
-                toast.error("No brand/manufacturer to export");
+                toast.error(
+                    "No brand/manufacturer records to export",
+                );
+
                 return false;
             }
 
-            XLSX.writeFile(buildItemGroupExcel(items), filename);
+            XLSX.writeFile(
+                buildBrandManufacturerExcel(items),
+                filename,
+            );
+
             return true;
         },
-        [buildItemGroupExcel],
+        [buildBrandManufacturerExcel],
     );
 
     const handleExportExcel = useCallback(async () => {
@@ -459,216 +655,226 @@ const ItemGroupList = () => {
                 id: "brand-manufacturer-export",
             });
 
-            const items = await getItemGroupReportRows();
+            const items =
+                await getBrandManufacturerReportRows();
 
             if (!items.length) {
-                toast.error("No brand/manufacturer to export", {
-                    id: "brand-manufacturer-export",
-                });
-                return;
-            }
-
-            downloadItemGroupExcel(items);
-
-            toast.custom(
-                () => (
-                    <Alert variant="mono" icon="success" close={false}>
-                        <AlertIcon>
-                            <RiCheckboxCircleFill />
-                        </AlertIcon>
-                        <AlertTitle>
-                            {items.length} brand/manufacturer(s) exported.
-                        </AlertTitle>
-                    </Alert>
-                ),
-                {
-                    id: "brand-manufacturer-export",
-                    position: "top-center",
-                },
-            );
-        } catch (error) {
-            console.error("Brand/Manufacturer EXPORT ERROR", error);
-            toast.custom(
-                () => (
-                    <Alert variant="mono" icon="error" close={false}>
-                        <AlertIcon>
-                            <RiCheckboxCircleFill />
-                        </AlertIcon>
-                        <AlertTitle>
-                            {error.message}
-                        </AlertTitle>
-                    </Alert>
-                ),
-                { position: "top-center" },
-            );
-        }
-    }, [getItemGroupReportRows, downloadItemGroupExcel]);
-
-    const handlePrintBrandManufacturers = useCallback(async () => {
-        try {
-            const items = await getItemGroupReportRows();
-
-            if (!items.length) {
-                toast.error("No brand/manufacturer to print");
-                return;
-            }
-
-            const escapeHtml = (value) =>
-                String(value ?? "").replace(
-                    /[&<>"']/g,
-                    (char) =>
-                        ({
-                            "&": "&amp;",
-                            "<": "&lt;",
-                            ">": "&gt;",
-                            '"': "&quot;",
-                            "'": "&#39;",
-                        })[char],
+                toast.error(
+                    "No brand/manufacturer records to export",
+                    {
+                        id: "brand-manufacturer-export",
+                    },
                 );
 
-            const rows = items
-                .map(
-                    (item) => `
-            <tr>
-              <td>${escapeHtml(item.id)}</td>
-              <td>${escapeHtml(item.groupName)}</td>
-              <td>${escapeHtml(item.description || "-")}</td>
-              <td>${item.status ? "Active" : "Inactive"}</td>
-              <td>${item.isDefault ? "Yes" : "No"}</td>
-              <td>${escapeHtml(formatDate(item.createdAt))}</td>
-              <td>${escapeHtml(item.createdByName || "-")}</td>
-              <td>${escapeHtml(formatDate(item.updatedAt))}</td>              
-              <td>${escapeHtml(item.updatedByName || "-")}</td>
-            </tr>
-          `,
-                )
-                .join("");
-
-            const printWindow = window.open("", "_blank", "width=1200,height=800");
-
-            if (!printWindow) {
-                toast.error("Please allow pop-ups to print the report");
                 return;
             }
 
-            printWindow.document.write(`
-        <!doctype html>
-        <html>
-          <head>
-            <title>Brand/Manufacturer Report</title>
-            <meta charset="utf-8">
-            <style>
-              body {
-                font-family: Arial, sans-serif;
-                padding: 24px;
-                color: #222;
-              }
-              h1 {
-                font-size: 22px;
-                margin-bottom: 6px;
-              }
-              p {
-                color: #555;
-                font-size: 12px;
-              }
-              table {
-                width: 100%;
-                border-collapse: collapse;
-                margin-top: 20px;
-              }
-              th, td {
-                border: 1px solid #ccc;
-                padding: 8px;
-                text-align: left;
-                font-size: 11px;
-              }
-              th {
-                background: #f2f2f2;
-              }
-              tr {
-                break-inside: avoid;
-              }
-              @media print {
-                body { padding: 0; }
-              }
-            </style>
-          </head>
-          <body>
-            <h1>Brand/Manufacturers Report</h1>
-            <p>Generated: ${escapeHtml(new Date().toLocaleString())}</p>
-            <p>Total records: ${items.length}</p>
-            <table>
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>Group Name</th>
-                  <th>Description</th>
-                  <th>Status</th>
-                  <th>Default</th>
-                  <th>Created Date</th>
-                  <th>Created By</th>
-                  <th>Updated Date</th>
-                  <th>Updated By</th>
-                </tr>
-              </thead>
-              <tbody>${rows}</tbody>
-            </table>
-            <script>
-              window.onload = function () {
-                window.focus();
-                window.print();
-              };
-            </script>
-          </body>
-        </html>
-      `);
+            downloadBrandManufacturerExcel(items);
 
-            printWindow.document.close();
+            showSuccessToast(
+                `${items.length} brand/manufacturer record(s) exported.`,
+                "brand-manufacturer-export",
+            );
         } catch (error) {
-            console.error("Brand/Manufacturer PRINT ERROR", error);
-            toast.custom(
-                () => (
-                    <Alert variant="mono" icon="error" close={false}>
-                        <AlertIcon>
-                            <RiCheckboxCircleFill />
-                        </AlertIcon>
-                        <AlertTitle>
-                            {error.message}
-                        </AlertTitle>
-                    </Alert>
-                ),
-                { position: "top-center" },
+            console.error(
+                "BRAND/MANUFACTURER EXPORT ERROR",
+                error,
+            );
+
+            showErrorToast(
+                error.message,
+                "brand-manufacturer-export",
             );
         }
-    }, [getItemGroupReportRows]);
+    }, [
+        getBrandManufacturerReportRows,
+        downloadBrandManufacturerExcel,
+    ]);
+
+    const handlePrintBrandManufacturers = useCallback(
+        async () => {
+            try {
+                const items =
+                    await getBrandManufacturerReportRows();
+
+                if (!items.length) {
+                    toast.error(
+                        "No brand/manufacturer records to print",
+                    );
+
+                    return;
+                }
+
+                const escapeHtml = (value) =>
+                    String(value ?? "").replace(
+                        /[&<>"']/g,
+                        (char) =>
+                            ({
+                                "&": "&amp;",
+                                "<": "&lt;",
+                                ">": "&gt;",
+                                '"': "&quot;",
+                                "'": "&#39;",
+                            })[char],
+                    );
+
+                const rows = items
+                    .map(
+                        (item) => `
+                            <tr>
+                                <td>${escapeHtml(item.id)}</td>
+                                <td>${escapeHtml(item.brandName)}</td>
+                                <td>${escapeHtml(item.manufacturerName)}</td>
+                                <td>${escapeHtml(item.websiteURL || "-")}</td>
+                                <td>${escapeHtml(item.description || "-")}</td>
+                                <td>${item.status ? "Active" : "Inactive"}</td>
+                                <td>${escapeHtml(formatDate(item.createdAt))}</td>
+                                <td>${escapeHtml(item.createdByName || "-")}</td>
+                                <td>${escapeHtml(formatDate(item.updatedAt))}</td>
+                                <td>${escapeHtml(item.updatedByName || "-")}</td>
+                            </tr>
+                        `,
+                    )
+                    .join("");
+
+                const printWindow = window.open(
+                    "",
+                    "_blank",
+                    "width=1400,height=800",
+                );
+
+                if (!printWindow) {
+                    toast.error(
+                        "Please allow pop-ups to print the report",
+                    );
+
+                    return;
+                }
+
+                printWindow.document.write(`
+                    <!doctype html>
+                    <html>
+                        <head>
+                            <title>Brand/Manufacturer Report</title>
+                            <meta charset="utf-8">
+
+                            <style>
+                                body {
+                                    font-family: Arial, sans-serif;
+                                    padding: 24px;
+                                    color: #222;
+                                }
+
+                                h1 {
+                                    font-size: 22px;
+                                    margin-bottom: 6px;
+                                }
+
+                                p {
+                                    color: #555;
+                                    font-size: 12px;
+                                }
+
+                                table {
+                                    width: 100%;
+                                    border-collapse: collapse;
+                                    margin-top: 20px;
+                                }
+
+                                th, td {
+                                    border: 1px solid #ccc;
+                                    padding: 8px;
+                                    text-align: left;
+                                    font-size: 10px;
+                                    overflow-wrap: anywhere;
+                                }
+
+                                th {
+                                    background: #f2f2f2;
+                                }
+
+                                tr {
+                                    break-inside: avoid;
+                                }
+
+                                @media print {
+                                    body {
+                                        padding: 0;
+                                    }
+                                }
+                            </style>
+                        </head>
+
+                        <body>
+                            <h1>Brand/Manufacturer Report</h1>
+
+                            <p>
+                                Generated:
+                                ${escapeHtml(new Date().toLocaleString())}
+                            </p>
+
+                            <p>Total records: ${items.length}</p>
+
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Brand Name</th>
+                                        <th>Manufacturer Name</th>
+                                        <th>Website</th>
+                                        <th>Description</th>
+                                        <th>Status</th>
+                                        <th>Created Date</th>
+                                        <th>Created By</th>
+                                        <th>Updated Date</th>
+                                        <th>Updated By</th>
+                                    </tr>
+                                </thead>
+
+                                <tbody>${rows}</tbody>
+                            </table>
+
+                            <script>
+                                window.onload = function () {
+                                    window.focus();
+                                    window.print();
+                                };
+                            </script>
+                        </body>
+                    </html>
+                `);
+
+                printWindow.document.close();
+            } catch (error) {
+                console.error(
+                    "BRAND/MANUFACTURER PRINT ERROR",
+                    error,
+                );
+
+                showErrorToast(error.message);
+            }
+        },
+        [getBrandManufacturerReportRows],
+    );
 
     const handleSearch = useCallback((value) => {
         setSearchInput(value);
+        setSearchQuery(value.trim());
 
         setPagination((prev) => ({
             ...prev,
             pageIndex: 0,
         }));
-
-        setSearchQuery(value.trim());
     }, []);
-
-
-    // const clearFilters = useCallback(() => {
-    //     setSearchInput("");
-    //     setSearchQuery("");
-    //     setStatusFilter("all");
-    //     setCreatedFrom("");
-    //     setCreatedTo("");
-    //     setUpdatedFrom("");
-    //     setUpdatedTo("");
-    //     setSelectedIds([]);
-    //     setPagination((prev) => ({ ...prev, pageIndex: 0 }));
-    // }, []);
 
     useEffect(() => {
         setPagination((prev) =>
-            prev.pageIndex === 0 ? prev : { ...prev, pageIndex: 0 },
+            prev.pageIndex === 0
+                ? prev
+                : {
+                    ...prev,
+                    pageIndex: 0,
+                },
         );
     }, [
         statusFilter,
@@ -695,6 +901,7 @@ const ItemGroupList = () => {
         createdByFilter,
         updatedByFilter,
     ]);
+
     const handleDelete = useCallback((item) => {
         setSelectedBrandManufacturers(item);
         setDeleteDialogOpen(true);
@@ -706,283 +913,290 @@ const ItemGroupList = () => {
         try {
             setDeleteLoading(true);
 
-            const response = await apiFetch("/api/inventory/brand_manufacturer", {
+            const response = await apiFetch(API_URL, {
                 method: "DELETE",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ id: selectedBrandManufacturers.id }),
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    id: selectedBrandManufacturers.id,
+                }),
             });
+
             const result = await response.json();
 
             if (!response.ok || !result.success) {
-                throw new Error(result.message || "Delete failed");
+                throw new Error(
+                    result.message || "Delete failed",
+                );
             }
-            toast.custom(
-                () => (
-                    <Alert variant="mono" icon="error" close={false}>
-                        <AlertIcon>
-                            <RiCheckboxCircleFill />
-                        </AlertIcon>
-                        <AlertTitle>
-                            Brand/Manufacturer deleted successfully
-                        </AlertTitle>
-                    </Alert>
-                ),
-                { position: "top-center" },
+
+            showSuccessToast(
+                "Brand/Manufacturer deleted successfully",
             );
 
-
-            await createItemGroupNotification({
+            await createBrandManufacturerNotification({
                 action: "deleted",
                 title: "Brand/Manufacturer Deleted",
-                message: `${selectedBrandManufacturers.groupName} brand/manufacturer has been deleted.`,
-                itemGroupId: selectedBrandManufacturers.id,
-                itemGroupName: selectedBrandManufacturers.groupName,
+                message: `${getBrandManufacturerName(selectedBrandManufacturers)} has been deleted.`,
+                brandManufacturerId:
+                    selectedBrandManufacturers.id,
+                brandManufacturerName:
+                    getBrandManufacturerName(selectedBrandManufacturers),
             });
 
             setDeleteDialogOpen(false);
+
             setSelectedIds((prev) =>
-                prev.filter((id) => id !== String(selectedBrandManufacturers.id)),
+                prev.filter(
+                    (id) =>
+                        id !==
+                        String(selectedBrandManufacturers.id),
+                ),
             );
+
             setSelectedBrandManufacturers(null);
 
             await refreshBrandManufacturers();
             await syncInventoryBrandManufacturers();
         } catch (error) {
-            console.error("Brand/Manufacturer DELETE ERROR", error);
+            console.error(
+                "BRAND/MANUFACTURER DELETE ERROR",
+                error,
+            );
+
             toast.error(error.message || "Delete failed");
         } finally {
             setDeleteLoading(false);
         }
-    }, [selectedBrandManufacturers, refreshBrandManufacturers, syncInventoryBrandManufacturers]);
-
-    const getExistingGroupNames = useCallback(async () => {
-        const params = new URLSearchParams({
-            page: "1",
-            limit: "10000",
-            sort: "createdAt",
-            dir: "desc",
-        });
-
-        const response = await apiFetch(
-            `/api/inventory/brand_manufacturer?${params.toString()}`,
-        );
-        const result = await response.json();
-
-        if (!response.ok || !result.success) {
-            throw new Error(
-                result.message || "Unable to check existing group names.",
-            );
-        }
-
-        return new Set(
-            (result.data || []).map((group) =>
-                String(group.groupName || "")
-                    .trim()
-                    .toLowerCase(),
-            ),
-        );
-    }, []);
-
-    const handleCopyItemGroup = useCallback(
-        async (item) => {
-            try {
-                const originalName = String(item.groupName || "").trim();
-
-                if (!originalName) {
-                    toast.error("The original group name is empty.");
-                    return;
-                }
-
-                const existingNames = await getExistingGroupNames();
-                let copiedName = `${originalName} (Copy)`;
-                let counter = 2;
-
-                while (existingNames.has(copiedName.toLowerCase())) {
-                    copiedName = `${originalName} (Copy ${counter})`;
-                    counter += 1;
-                }
-
-                setCopySourceItem(item);
-                setCopyGroupName(copiedName);
-                setCopyDescription(item.description || "");
-                setCopyDialogOpen(true);
-            } catch (error) {
-                console.error("OPEN COPY DIALOG ERROR", error);
-                toast.custom(
-                    () => (
-                        <Alert variant="mono" icon="error" close={false}>
-                            <AlertIcon>
-                                <RiCheckboxCircleFill />
-                            </AlertIcon>
-                            <AlertTitle>
-                                {error.message}
-                            </AlertTitle>
-                        </Alert>
-                    ),
-                    { position: "top-center" },
-                );
-            }
-        },
-        [getExistingGroupNames],
-    );
-
-    const handleConfirmCopyItemGroup = useCallback(async () => {
-        if (!copySourceItem?.id) {
-            toast.error("Please select an brand/manufacturer to copy.");
-            return;
-        }
-
-        const finalName = copyGroupName.trim();
-
-        if (!finalName) {
-            toast.error("Please enter a group name.");
-            return;
-        }
-
-        try {
-            setCopyLoading(true);
-
-            const existingNames = await getExistingGroupNames();
-
-            if (existingNames.has(finalName.toLowerCase())) {
-                toast.error("This group name already exists. Please use another name.");
-                return;
-            }
-
-            const response = await apiFetch("/api/inventory/brand_manufacturer", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    groupName: finalName,
-                    description: copySourceItem.description || "",
-                    status: Boolean(copySourceItem.status),
-                    isDefault: false,
-                }),
-            });
-            const result = await response.json();
-
-            if (!response.ok || !result.success) {
-                throw new Error(result.message || "Failed to copy brand/manufacturer.");
-            }
-            toast.custom(
-                () => (
-                    <Alert variant="mono" icon="error" close={false}>
-                        <AlertIcon>
-                            <RiCheckboxCircleFill />
-                        </AlertIcon>
-                        <AlertTitle>
-                            Brand/Manufacturer copied successfully.
-                        </AlertTitle>
-                    </Alert>
-                ),
-                { position: "top-center" },
-            );
-
-
-            await createItemGroupNotification({
-                action: "created",
-                title: "Brand/Manufacturer Copied",
-                message: `${finalName} was copied from ${copySourceItem.groupName}.`,
-                itemGroupId: result.data?.id,
-                itemGroupName: finalName,
-            });
-
-            setCopyDialogOpen(false);
-            setCopySourceItem(null);
-            setCopyGroupName("");
-            setCopyDescription("");
-            await refreshBrandManufacturers();
-            await syncInventoryBrandManufacturers();
-        } catch (error) {
-            console.error("Brand/Manufacturer COPY ERROR", error);
-            toast.custom(
-                () => (
-                    <Alert variant="mono" icon="error" close={false}>
-                        <AlertIcon>
-                            <RiCheckboxCircleFill />
-                        </AlertIcon>
-                        <AlertTitle>
-                            {error.message}
-                        </AlertTitle>
-                    </Alert>
-                ),
-                { position: "top-center" },
-            );
-        } finally {
-            setCopyLoading(false);
-        }
     }, [
-        copySourceItem,
-        copyGroupName,
-        getExistingGroupNames,
+        selectedBrandManufacturers,
         refreshBrandManufacturers,
         syncInventoryBrandManufacturers,
     ]);
 
-    const handleToggleBrandManufacturerStatus = useCallback(
+    const handleCopyBrandManufacturer = useCallback(
         async (item) => {
-            const nextStatus = !Boolean(item.status);
+            const brandName = String(
+                item.brandName || "",
+            ).trim();
+
+            const manufacturerName = String(
+                item.manufacturerName || "",
+            ).trim();
+
+            if (!brandName || !manufacturerName) {
+                toast.error(
+                    "Brand name and manufacturer name are required to copy this record.",
+                );
+
+                return;
+            }
+
+            setCopySourceItem(item);
+
+            setCopyBrandName(`${brandName} (Copy)`);
+            setCopyManufacturerName(manufacturerName);
+            setCopyWebsiteURL(item.websiteURL || "");
+            setCopyDescription(item.description || "");
+
+            setCopyDialogOpen(true);
+        },
+        [],
+    );
+
+    const handleConfirmCopyBrandManufacturer =
+        useCallback(async () => {
+            if (!copySourceItem?.id) {
+                toast.error(
+                    "Please select a brand/manufacturer to copy.",
+                );
+
+                return;
+            }
+
+            const finalBrandName = copyBrandName.trim();
+            const finalManufacturerName =
+                copyManufacturerName.trim();
+            const finalWebsiteURL = copyWebsiteURL.trim();
+
+            if (!finalBrandName) {
+                toast.error("Please enter a brand name.");
+                return;
+            }
+
+            if (!finalManufacturerName) {
+                toast.error(
+                    "Please enter a manufacturer name.",
+                );
+
+                return;
+            }
+
+            // Website URL is optional.
+            if (finalWebsiteURL) {
+                if (finalWebsiteURL.length > 255) {
+                    toast.error(
+                        "Website URL cannot exceed 255 characters.",
+                    );
+
+                    return;
+                }
+
+                try {
+                    const normalizedURL =
+                        /^[a-zA-Z][a-zA-Z\d+\-.]*:\/\//.test(
+                            finalWebsiteURL,
+                        )
+                            ? finalWebsiteURL
+                            : `https://${finalWebsiteURL}`;
+
+                    const parsedURL = new URL(normalizedURL);
+
+                    if (
+                        !["http:", "https:"].includes(
+                            parsedURL.protocol,
+                        ) ||
+                        !parsedURL.hostname.includes(".")
+                    ) {
+                        throw new Error();
+                    }
+                } catch {
+                    toast.error(
+                        "Please enter a valid website URL.",
+                    );
+
+                    return;
+                }
+            }
 
             try {
-                const response = await apiFetch("/api/inventory/brand_manufacturer", {
-                    method: "PATCH",
-                    headers: { "Content-Type": "application/json" },
+                setCopyLoading(true);
+
+                const response = await apiFetch(API_URL, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
                     body: JSON.stringify({
-                        id: item.id,
-                        status: nextStatus,
+                        brandName: finalBrandName,
+                        manufacturerName:
+                            finalManufacturerName,
+                        websiteURL: finalWebsiteURL || null,
+                        description: copyDescription.trim(),
+                        status: Boolean(copySourceItem.status),
                     }),
                 });
+
                 const result = await response.json();
 
                 if (!response.ok || !result.success) {
-                    throw new Error(result.message || "Status update failed");
+                    throw new Error(
+                        result.message ||
+                        "Failed to copy brand/manufacturer.",
+                    );
                 }
 
-                toast.custom(
-                    () => (
-                        <Alert variant="mono" icon="success" close={false}>
-                            <AlertIcon>
-                                <RiCheckboxCircleFill />
-                            </AlertIcon>
-                            <AlertTitle>
-                                {`${item.groupName} marked ${nextStatus ? "active" : "inactive"}`}
-                            </AlertTitle>
-                        </Alert>
-                    ),
-                    {
-                        id: "brand_manufacturer-status",
-                        position: "top-center",
-                    },
+                showSuccessToast(
+                    "Brand/Manufacturer copied successfully.",
                 );
+
+                const copiedItem = result.data || {};
+
+                await createBrandManufacturerNotification({
+                    action: "created",
+                    title: "Brand/Manufacturer Copied",
+                    message: `${finalBrandName} / ${finalManufacturerName} was copied from ${getBrandManufacturerName(copySourceItem)}.`,
+                    brandManufacturerId: copiedItem.id,
+                    brandManufacturerName:
+                        `${finalBrandName} / ${finalManufacturerName}`,
+                });
+
+                setCopyDialogOpen(false);
+                setCopySourceItem(null);
+
+                setCopyBrandName("");
+                setCopyManufacturerName("");
+                setCopyWebsiteURL("");
+                setCopyDescription("");
 
                 await refreshBrandManufacturers();
                 await syncInventoryBrandManufacturers();
             } catch (error) {
-                console.error("Brand/Manufacturer STATUS ERROR", error);
-                toast.custom(
-                    () => (
-                        <Alert variant="mono" icon="error" close={false}>
-                            <AlertIcon>
-                                <RiCheckboxCircleFill />
-                            </AlertIcon>
-                            <AlertTitle>
-                                {error.message}
-                            </AlertTitle>
-                        </Alert>
-                    ),
-                    { position: "top-center" },
+                console.error(
+                    "BRAND/MANUFACTURER COPY ERROR",
+                    error,
                 );
+
+                showErrorToast(error.message);
+            } finally {
+                setCopyLoading(false);
             }
-        },
-        [refreshBrandManufacturers, syncInventoryBrandManufacturers],
-    );
+        }, [
+            copySourceItem,
+            copyBrandName,
+            copyManufacturerName,
+            copyWebsiteURL,
+            copyDescription,
+            refreshBrandManufacturers,
+            syncInventoryBrandManufacturers,
+        ]);
+    const handleToggleBrandManufacturerStatus =
+        useCallback(
+            async (item) => {
+                const nextStatus = !Boolean(item.status);
+
+                try {
+                    const response = await apiFetch(API_URL, {
+                        method: "PATCH",
+                        headers: {
+                            "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({
+                            id: item.id,
+                            status: nextStatus,
+                        }),
+                    });
+
+                    const result = await response.json();
+
+                    if (!response.ok || !result.success) {
+                        throw new Error(
+                            result.message ||
+                            "Status update failed",
+                        );
+                    }
+
+                    showSuccessToast(
+                        `${getBrandManufacturerName(item)} marked ${nextStatus ? "active" : "inactive"}`,
+                        "brand-manufacturer-status",
+                    );
+
+                    await refreshBrandManufacturers();
+                    await syncInventoryBrandManufacturers();
+                } catch (error) {
+                    console.error(
+                        "BRAND/MANUFACTURER STATUS ERROR",
+                        error,
+                    );
+
+                    showErrorToast(error.message);
+                }
+            },
+            [
+                refreshBrandManufacturers,
+                syncInventoryBrandManufacturers,
+            ],
+        );
 
     const toggleRowSelection = useCallback((id) => {
         const normalizedId = String(id);
 
         setSelectedIds((prev) =>
             prev.includes(normalizedId)
-                ? prev.filter((value) => value !== normalizedId)
+                ? prev.filter(
+                    (value) => value !== normalizedId,
+                )
                 : [...prev, normalizedId],
         );
     }, []);
@@ -990,22 +1204,38 @@ const ItemGroupList = () => {
     const toggleCurrentPageSelection = useCallback(() => {
         setSelectedIds((prev) => {
             if (allCurrentPageSelected) {
-                return prev.filter((id) => !currentPageIds.includes(id));
+                return prev.filter(
+                    (id) => !currentPageIds.includes(id),
+                );
             }
 
-            return [...new Set([...prev, ...currentPageIds])];
+            return [
+                ...new Set([
+                    ...prev,
+                    ...currentPageIds,
+                ]),
+            ];
         });
-    }, [allCurrentPageSelected, currentPageIds]);
+    }, [
+        allCurrentPageSelected,
+        currentPageIds,
+    ]);
 
     const handleBulkStatus = useCallback(
         async (status) => {
             if (!selectedIds.length) {
-                toast.error("Select at least one brand/manufacturer");
+                toast.error(
+                    "Select at least one brand/manufacturer",
+                );
+
                 return;
             }
 
             if (!(canManage || canEdit)) {
-                toast.error("You do not have permission to change brand/manufacturer status");
+                toast.error(
+                    "You do not have permission to change brand/manufacturer status",
+                );
+
                 return;
             }
 
@@ -1014,11 +1244,17 @@ const ItemGroupList = () => {
             try {
                 setBulkLoading(true);
 
-                const response = await apiFetch("/api/inventory/brand_manufacturer", {
+                const response = await apiFetch(API_URL, {
                     method: "PATCH",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ ids: idsToUpdate, status }),
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        ids: idsToUpdate,
+                        status,
+                    }),
                 });
+
                 const result = await response.json();
 
                 if (!response.ok || !result.success) {
@@ -1028,21 +1264,9 @@ const ItemGroupList = () => {
                     );
                 }
 
-                toast.custom(
-                    () => (
-                        <Alert variant="mono" icon="success" close={false}>
-                            <AlertIcon>
-                                <RiCheckboxCircleFill />
-                            </AlertIcon>
-                            <AlertTitle>
-                                {`${result.count ?? idsToUpdate.length} brand/manufacturer(s) marked ${status ? "active" : "inactive"}`}
-                            </AlertTitle>
-                        </Alert>
-                    ),
-                    {
-                        id: "brand_manufacturer-status-update",
-                        position: "top-center",
-                    },
+                showSuccessToast(
+                    `${result.count ?? idsToUpdate.length} brand/manufacturer(s) marked ${status ? "active" : "inactive"}`,
+                    "brand-manufacturer-status-update",
                 );
 
                 setActiveDialogOpen(false);
@@ -1052,20 +1276,12 @@ const ItemGroupList = () => {
                 await refreshBrandManufacturers();
                 await syncInventoryBrandManufacturers();
             } catch (error) {
-                console.error("BULK STATUS ERROR", error);
-                toast.custom(
-                    () => (
-                        <Alert variant="mono" icon="error" close={false}>
-                            <AlertIcon>
-                                <RiCheckboxCircleFill />
-                            </AlertIcon>
-                            <AlertTitle>
-                                {error.message}
-                            </AlertTitle>
-                        </Alert>
-                    ),
-                    { position: "top-center" },
+                console.error(
+                    "BRAND/MANUFACTURER BULK STATUS ERROR",
+                    error,
                 );
+
+                showErrorToast(error.message);
             } finally {
                 setBulkLoading(false);
             }
@@ -1081,93 +1297,94 @@ const ItemGroupList = () => {
 
     const handleBulkDelete = useCallback(() => {
         if (!selectedIds.length) {
-            toast.error("Select at least one brand/manufacturer");
+            toast.error(
+                "Select at least one brand/manufacturer",
+            );
+
             return;
         }
 
         if (!canDelete) {
-            toast.error("You do not have permission to delete brand/manufacturers");
+            toast.error(
+                "You do not have permission to delete brand/manufacturers",
+            );
+
             return;
         }
 
         setBulkDeleteDialogOpen(true);
     }, [selectedIds, canDelete]);
 
-    const handleConfirmBulkDelete = useCallback(async () => {
-        if (!selectedIds.length || bulkLoading) return;
+    const handleConfirmBulkDelete = useCallback(
+        async () => {
+            if (!selectedIds.length || bulkLoading) return;
 
-        const idsToDelete = [...selectedIds];
+            const idsToDelete = [...selectedIds];
 
-        try {
-            setBulkLoading(true);
+            try {
+                setBulkLoading(true);
 
-            const response = await apiFetch("/api/inventory/brand_manufacturer", {
-                method: "DELETE",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ ids: idsToDelete }),
-            });
-            const result = await response.json();
+                const response = await apiFetch(API_URL, {
+                    method: "DELETE",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        ids: idsToDelete,
+                    }),
+                });
 
-            if (!response.ok || !result.success) {
-                throw new Error(
-                    result.message ||
-                    "Bulk delete failed. Your API route must support ids.",
+                const result = await response.json();
+
+                if (!response.ok || !result.success) {
+                    throw new Error(
+                        result.message ||
+                        "Bulk delete failed. Your API route must support ids.",
+                    );
+                }
+
+                showSuccessToast(
+                    `${result.count ?? idsToDelete.length} brand/manufacturer(s) deleted`,
+                    "brand-manufacturer-delete",
                 );
+
+                setBulkDeleteDialogOpen(false);
+                setSelectedIds([]);
+
+                await refreshBrandManufacturers();
+                await syncInventoryBrandManufacturers();
+            } catch (error) {
+                console.error(
+                    "BRAND/MANUFACTURER BULK DELETE ERROR",
+                    error,
+                );
+
+                showErrorToast(error.message);
+            } finally {
+                setBulkLoading(false);
             }
-
-            toast.custom(
-                () => (
-                    <Alert variant="mono" icon="success" close={false}>
-                        <AlertIcon>
-                            <RiCheckboxCircleFill />
-                        </AlertIcon>
-                        <AlertTitle>
-                            {`${result.count ?? idsToDelete.length} brand/manufacturer(s) deleted`}
-                        </AlertTitle>
-                    </Alert>
-                ),
-                {
-                    id: "brand-manufacturer-delete",
-                    position: "top-center",
-                },
-            );
-
-            setBulkDeleteDialogOpen(false);
-            setSelectedIds([]);
-
-            await refreshBrandManufacturers();
-            await syncInventoryBrandManufacturers();
-        } catch (error) {
-            console.error("BULK DELETE ERROR", error);
-            toast.custom(
-                () => (
-                    <Alert variant="mono" icon="error" close={false}>
-                        <AlertIcon>
-                            <RiCheckboxCircleFill />
-                        </AlertIcon>
-                        <AlertTitle>
-                            {error.message}
-                        </AlertTitle>
-                    </Alert>
-                ),
-                { position: "top-center" },
-            );
-        } finally {
-            setBulkLoading(false);
-        }
-    }, [selectedIds, bulkLoading, refreshBrandManufacturers, syncInventoryBrandManufacturers]);
+        },
+        [
+            selectedIds,
+            bulkLoading,
+            refreshBrandManufacturers,
+            syncInventoryBrandManufacturers,
+        ],
+    );
 
     const handleOpenEmailDialog = useCallback(() => {
         setSelectedRecipientEmails([]);
         setAttachExcel(true);
+
         setEmailSubject("Brand/Manufacturer Report");
+
         setEmailMessage(
             [
                 "Dear Team,",
                 "",
                 "Please find the Brand/Manufacturer report for your review.",
                 "",
-                "The report includes the brand/manufacturer name, description, status, default setting, and creation and update dates.",
+                "The report includes brand name, manufacturer name, website URL, description, status, and creation and update details.",
                 "",
                 "Please review the information and let us know if any corrections are required.",
                 "",
@@ -1175,21 +1392,27 @@ const ItemGroupList = () => {
                 "Inventory Management Team",
             ].join("\n"),
         );
+
         setEmailDialogOpen(true);
     }, []);
 
-
-    // Support the existing shared header buttons by ID.
     useEffect(() => {
         const handleReportButtonClick = (event) => {
             if (!(event.target instanceof Element)) return;
 
-            const button = event.target.closest("#Print, #Export, #Email");
+            const button = event.target.closest(
+                "#Print, #Export, #Email",
+            );
 
             if (!button) return;
 
-            // Prevent these handlers from running on unrelated pages.
-            if (!window.location.pathname.includes("/item_group")) return;
+            if (
+                !window.location.pathname.includes(
+                    "/brand_manufacturer",
+                )
+            ) {
+                return;
+            }
 
             switch (button.id) {
                 case "Print":
@@ -1212,10 +1435,16 @@ const ItemGroupList = () => {
             }
         };
 
-        document.addEventListener("click", handleReportButtonClick);
+        document.addEventListener(
+            "click",
+            handleReportButtonClick,
+        );
 
         return () => {
-            document.removeEventListener("click", handleReportButtonClick);
+            document.removeEventListener(
+                "click",
+                handleReportButtonClick,
+            );
         };
     }, [
         handlePrintBrandManufacturers,
@@ -1223,82 +1452,88 @@ const ItemGroupList = () => {
         handleOpenEmailDialog,
     ]);
 
-
     const handleSendEmail = useCallback(async () => {
         if (selectedRecipientEmails.length === 0) {
-            toast.error("Please select at least one recipient.");
+            toast.error(
+                "Please select at least one recipient.",
+            );
+
             return;
         }
 
-        if (!emailSubject.trim() || !emailMessage.trim()) {
-            toast.error("Please enter the email subject and message.");
+        if (
+            !emailSubject.trim() ||
+            !emailMessage.trim()
+        ) {
+            toast.error(
+                "Please enter the email subject and message.",
+            );
+
             return;
         }
 
         try {
             setEmailSending(true);
 
-            const response = await fetch("/api/inventory/brand_manufacturer/email-report", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    recipients: selectedRecipientEmails,
-                    subject: emailSubject.trim(),
-                    message: emailMessage.trim(),
-                    attachExcel,
-                    selectedIds,
-                    filters: {
-                        query: searchQuery,
-                        status: statusFilter,
-                        createdFrom,
-                        createdTo,
-                        updatedFrom,
-                        updatedTo,
+            const response = await fetch(
+                `${API_URL}/email-report`,
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
                     },
-                }),
-            });
+                    body: JSON.stringify({
+                        recipients: selectedRecipientEmails,
+                        subject: emailSubject.trim(),
+                        message: emailMessage.trim(),
+                        attachExcel,
+                        selectedIds,
+
+                        filters: {
+                            query: searchQuery,
+                            status: statusFilter,
+
+                            createdFrom,
+                            createdTo,
+
+                            updatedFrom,
+                            updatedTo,
+
+                            createdBy: createdByFilter,
+                            updatedBy: updatedByFilter,
+                        },
+                    }),
+                },
+            );
+
             const result = await response.json();
 
-            if (!response.ok || result.success === false) {
+            if (
+                !response.ok ||
+                result.success === false
+            ) {
                 throw new Error(
-                    result.error || result.message || "Failed to send email.",
+                    result.error ||
+                    result.message ||
+                    "Failed to send email.",
                 );
             }
 
-            toast.custom(
-                () => (
-                    <Alert variant="mono" icon="success" close={false}>
-                        <AlertIcon>
-                            <RiCheckboxCircleFill />
-                        </AlertIcon>
-                        <AlertTitle>
-                            {attachExcel
-                                ? "Email sent successfully with the Excel attachment."
-                                : "Email sent successfully."}
-                        </AlertTitle>
-                    </Alert>
-                ),
-                {
-                    id: "brand-manufacturer-email",
-                    position: "top-center",
-                },
+            showSuccessToast(
+                attachExcel
+                    ? "Email sent successfully with the Excel attachment."
+                    : "Email sent successfully.",
+                "brand-manufacturer-email",
             );
+
             setEmailDialogOpen(false);
         } catch (error) {
-            console.error("EMAIL REPORT ERROR", error);
-            toast.custom(
-                () => (
-                    <Alert variant="mono" icon="error" close={false}>
-                        <AlertIcon>
-                            <RiCheckboxCircleFill />
-                        </AlertIcon>
-                        <AlertTitle>
-                            {error.message}
-                        </AlertTitle>
-                    </Alert>
-                ),
-                { position: "top-center" },
+            console.error(
+                "BRAND/MANUFACTURER EMAIL ERROR",
+                error,
             );
+
+            showErrorToast(error.message);
         } finally {
             setEmailSending(false);
         }
@@ -1314,9 +1549,10 @@ const ItemGroupList = () => {
         createdTo,
         updatedFrom,
         updatedTo,
+        createdByFilter,
+        updatedByFilter,
     ]);
 
-    // Load staff recipients only while the email dialog is open.
     useEffect(() => {
         if (!emailDialogOpen) return;
 
@@ -1326,11 +1562,20 @@ const ItemGroupList = () => {
             try {
                 setStaffLoading(true);
 
-                const response = await apiFetch("/api/staff?limit=10000");
+                const response = await apiFetch(
+                    "/api/staff?limit=10000",
+                );
+
                 const result = await response.json();
 
-                if (!response.ok || result.success === false) {
-                    throw new Error(result.message || "Failed to load staff");
+                if (
+                    !response.ok ||
+                    result.success === false
+                ) {
+                    throw new Error(
+                        result.message ||
+                        "Failed to load staff",
+                    );
                 }
 
                 const staff = Array.isArray(result)
@@ -1346,41 +1591,42 @@ const ItemGroupList = () => {
                         staff
                             .map((person) => ({
                                 id: person.id,
+
                                 name:
                                     person.name ||
                                     person.fullName ||
-                                    [person.firstName, person.lastName]
+                                    [
+                                        person.firstName,
+                                        person.lastName,
+                                    ]
                                         .filter(Boolean)
                                         .join(" ") ||
                                     person.username ||
                                     person.email ||
                                     "Staff member",
-                                email: person.email || person.workEmail || "",
+
+                                email:
+                                    person.email ||
+                                    person.workEmail ||
+                                    "",
                             }))
                             .filter((person) => person.email),
                     );
                 }
             } catch (error) {
-                console.error("STAFF RECIPIENT LOAD ERROR", error);
+                console.error(
+                    "STAFF RECIPIENT LOAD ERROR",
+                    error,
+                );
 
                 if (!cancelled) {
                     setStaffList([]);
-                    toast.custom(
-                        () => (
-                            <Alert variant="mono" icon="error" close={false}>
-                                <AlertIcon>
-                                    <RiCheckboxCircleFill />
-                                </AlertIcon>
-                                <AlertTitle>
-                                    {error.message}
-                                </AlertTitle>
-                            </Alert>
-                        ),
-                        { position: "top-center" },
-                    );
+                    showErrorToast(error.message);
                 }
             } finally {
-                if (!cancelled) setStaffLoading(false);
+                if (!cancelled) {
+                    setStaffLoading(false);
+                }
             }
         };
 
@@ -1394,6 +1640,7 @@ const ItemGroupList = () => {
     useEffect(() => {
         const handleOnline = async () => {
             setIsOnline(true);
+
             await checkDbStatus();
             await syncInventoryBrandManufacturers();
             await refreshBrandManufacturers();
@@ -1401,6 +1648,7 @@ const ItemGroupList = () => {
 
         const handleOffline = () => {
             setIsOnline(false);
+
             setDbStatus((prev) => ({
                 ...prev,
                 online: false,
@@ -1412,14 +1660,29 @@ const ItemGroupList = () => {
         window.addEventListener("offline", handleOffline);
 
         return () => {
-            window.removeEventListener("online", handleOnline);
-            window.removeEventListener("offline", handleOffline);
+            window.removeEventListener(
+                "online",
+                handleOnline,
+            );
+
+            window.removeEventListener(
+                "offline",
+                handleOffline,
+            );
         };
-    }, [checkDbStatus, syncInventoryBrandManufacturers, refreshBrandManufacturers]);
+    }, [
+        checkDbStatus,
+        syncInventoryBrandManufacturers,
+        refreshBrandManufacturers,
+    ]);
 
     useEffect(() => {
         void checkDbStatus();
-        const interval = setInterval(() => void checkDbStatus(), 30000);
+
+        const interval = setInterval(
+            () => void checkDbStatus(),
+            30000,
+        );
 
         return () => clearInterval(interval);
     }, [checkDbStatus]);
@@ -1428,64 +1691,151 @@ const ItemGroupList = () => {
         () => [
             {
                 id: "select",
+
                 header: () => (
                     <Checkbox
                         aria-label="Select all rows on this page"
                         checked={allCurrentPageSelected}
-                        onClick={(event) => event.stopPropagation()}
-                        onCheckedChange={(checked) => {
-                            if (checked === true) {
-                                toggleCurrentPageSelection();
-                            } else {
-                                toggleCurrentPageSelection();
-                            }
-                        }}
-                        disabled={!brandManufacturers.length || bulkLoading}
+                        onClick={(event) =>
+                            event.stopPropagation()
+                        }
+                        onCheckedChange={() =>
+                            toggleCurrentPageSelection()
+                        }
+                        disabled={
+                            !BrandManufacturers.length ||
+                            bulkLoading
+                        }
                     />
                 ),
+
                 cell: ({ row }) => {
                     const item = row.original;
                     const id = String(item.id);
 
                     return (
                         <Checkbox
-                            aria-label={`Select ${item.groupName}`}
+                            aria-label={`Select ${getBrandManufacturerName(item)}`}
                             checked={selectedIds.includes(id)}
-                            onClick={(event) => event.stopPropagation()}
-                            onCheckedChange={() => toggleRowSelection(id)}
+                            onClick={(event) =>
+                                event.stopPropagation()
+                            }
+                            onCheckedChange={() =>
+                                toggleRowSelection(id)
+                            }
                             disabled={bulkLoading}
                         />
                     );
                 },
+
                 size: 48,
                 enableSorting: false,
                 enableHiding: false,
             },
+
             {
                 accessorKey: "id",
                 id: "id",
+
                 header: ({ column }) => (
-                    <DataGridColumnHeader title="ID" column={column} visibility />
+                    <DataGridColumnHeader
+                        title="ID"
+                        column={column}
+                        visibility
+                    />
                 ),
+
                 cell: ({ row }) => (
-                    <span>#{String(row.original.id).substring(0, 8)}</span>
+                    <span>
+                        #{String(row.original.id).substring(0, 8)}
+                    </span>
                 ),
+
                 size: 120,
             },
+
             {
-                accessorKey: "groupName",
-                id: "groupName",
+                accessorKey: "brandName",
+                id: "brandName",
+
                 header: ({ column }) => (
-                    <DataGridColumnHeader title="Group Name" column={column} visibility />
+                    <DataGridColumnHeader
+                        title="Brand Name"
+                        column={column}
+                        visibility
+                    />
                 ),
+
                 cell: ({ row }) => (
-                    <span className="font-medium">{row.original.groupName}</span>
+                    <span className="font-medium">
+                        {row.original.brandName || "-"}
+                    </span>
                 ),
+
+                size: 200,
+            },
+
+            {
+                accessorKey: "manufacturerName",
+                id: "manufacturerName",
+
+                header: ({ column }) => (
+                    <DataGridColumnHeader
+                        title="Manufacturer Name"
+                        column={column}
+                        visibility
+                    />
+                ),
+
+                cell: ({ row }) => (
+                    <span className="font-medium">
+                        {row.original.manufacturerName || "-"}
+                    </span>
+                ),
+
                 size: 220,
             },
+
+            {
+                accessorKey: "websiteURL",
+                id: "websiteURL",
+
+                header: ({ column }) => (
+                    <DataGridColumnHeader
+                        title="Website URL"
+                        column={column}
+                        visibility
+                    />
+                ),
+
+                cell: ({ row }) => {
+                    const websiteURL =
+                        row.original.websiteURL;
+
+                    return websiteURL ? (
+                        <a
+                            href={websiteURL}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="block max-w-[220px] truncate text-primary hover:underline"
+                            onClick={(event) =>
+                                event.stopPropagation()
+                            }
+                        >
+                            {websiteURL}
+                        </a>
+                    ) : (
+                        <span>-</span>
+                    );
+                },
+
+                size: 220,
+            },
+
             {
                 accessorKey: "description",
                 id: "description",
+
                 header: ({ column }) => (
                     <DataGridColumnHeader
                         title="Description"
@@ -1493,19 +1843,28 @@ const ItemGroupList = () => {
                         visibility
                     />
                 ),
+
                 cell: ({ row }) => (
-                    <span className="block max-w-[350px] truncate">
+                    <span className="block max-w-[300px] truncate">
                         {row.original.description || "-"}
                     </span>
                 ),
+
                 size: 300,
             },
+
             {
                 accessorKey: "status",
                 id: "status",
+
                 header: ({ column }) => (
-                    <DataGridColumnHeader title="Status" column={column} visibility />
+                    <DataGridColumnHeader
+                        title="Status"
+                        column={column}
+                        visibility
+                    />
                 ),
+
                 cell: ({ row }) => (
                     <span
                         className={
@@ -1514,83 +1873,133 @@ const ItemGroupList = () => {
                                 : "font-medium text-red-600"
                         }
                     >
-                        {row.original.status ? "Active" : "Inactive"}
+                        {row.original.status
+                            ? "Active"
+                            : "Inactive"}
                     </span>
                 ),
+
                 size: 110,
             },
-            {
-                accessorKey: "isDefault",
-                id: "isDefault",
-                header: "Default",
-                cell: ({ row }) => <span>{row.original.isDefault ? "Yes" : "No"}</span>,
-                size: 100,
-            },
+
             {
                 accessorKey: "createdAt",
                 id: "createdAt",
+
                 header: ({ column }) => (
-                    <DataGridColumnHeader title="Created Date" column={column} visibility />
+                    <DataGridColumnHeader
+                        title="Created Date"
+                        column={column}
+                        visibility
+                    />
                 ),
-                cell: ({ row }) => formatDate(row.original?.createdAt),
+
+                cell: ({ row }) =>
+                    formatDate(row.original?.createdAt),
+
                 size: 150,
                 enableSorting: true,
+
                 meta: {
                     headerTitle: "Created Date",
-                    skeleton: <Skeleton className="h-7 w-24" />,
+                    skeleton: (
+                        <Skeleton className="h-7 w-24" />
+                    ),
                 },
             },
+
             {
                 accessorKey: "createdByName",
                 id: "createdByName",
+
                 header: ({ column }) => (
-                    <DataGridColumnHeader title="Created By" column={column} visibility />
+                    <DataGridColumnHeader
+                        title="Created By"
+                        column={column}
+                        visibility
+                    />
                 ),
+
                 cell: ({ row }) => (
-                    <span>{row.original.createdByName || "-"}</span>
+                    <span>
+                        {row.original.createdByName || "-"}
+                    </span>
                 ),
+
                 size: 180,
                 enableSorting: false,
+
                 meta: {
                     headerTitle: "Created By",
-                    skeleton: <Skeleton className="h-7 w-24" />,
+                    skeleton: (
+                        <Skeleton className="h-7 w-24" />
+                    ),
                 },
             },
+
             {
                 accessorKey: "updatedAt",
                 id: "updatedAt",
+
                 header: ({ column }) => (
-                    <DataGridColumnHeader title="Updated Date" column={column} visibility />
+                    <DataGridColumnHeader
+                        title="Updated Date"
+                        column={column}
+                        visibility
+                    />
                 ),
-                cell: ({ row }) => formatDate(row.original?.updatedAt),
+
+                cell: ({ row }) =>
+                    formatDate(row.original?.updatedAt),
+
                 size: 150,
                 enableSorting: true,
+
                 meta: {
                     headerTitle: "Updated Date",
-                    skeleton: <Skeleton className="h-7 w-24" />,
+                    skeleton: (
+                        <Skeleton className="h-7 w-24" />
+                    ),
                 },
             },
+
             {
                 accessorKey: "updatedByName",
                 id: "updatedByName",
+
                 header: ({ column }) => (
-                    <DataGridColumnHeader title="Updated By" column={column} visibility />
+                    <DataGridColumnHeader
+                        title="Updated By"
+                        column={column}
+                        visibility
+                    />
                 ),
+
                 cell: ({ row }) => (
-                    <span>{row.original.updatedByName || "-"}</span>
+                    <span>
+                        {row.original.updatedByName || "-"}
+                    </span>
                 ),
+
                 size: 180,
                 enableSorting: false,
+
                 meta: {
                     headerTitle: "Updated By",
-                    skeleton: <Skeleton className="h-7 w-24" />,
+                    skeleton: (
+                        <Skeleton className="h-7 w-24" />
+                    ),
                 },
             },
+
             {
                 id: "actions",
                 header: "Actions",
+
                 cell: ({ row }) => {
                     const item = row.original;
+                    const itemName =
+                        getBrandManufacturerName(item);
 
                     return (
                         <DropdownMenu>
@@ -1599,7 +2008,7 @@ const ItemGroupList = () => {
                                     type="button"
                                     mode="icon"
                                     variant="ghost"
-                                    aria-label={`Actions for ${item.groupName}`}
+                                    aria-label={`Actions for ${itemName}`}
                                 >
                                     <Ellipsis />
                                 </Button>
@@ -1609,7 +2018,10 @@ const ItemGroupList = () => {
                                 {canView && (
                                     <DropdownMenuItem
                                         onClick={() => {
-                                            setSelectedBrandManufacturers(item);
+                                            setSelectedBrandManufacturers(
+                                                item,
+                                            );
+
                                             setViewDialogOpen(true);
                                         }}
                                     >
@@ -1621,7 +2033,10 @@ const ItemGroupList = () => {
                                 {canEdit && (
                                     <DropdownMenuItem
                                         onClick={() => {
-                                            setSelectedBrandManufacturers(item);
+                                            setSelectedBrandManufacturers(
+                                                item,
+                                            );
+
                                             setEditDialogOpen(true);
                                         }}
                                     >
@@ -1632,7 +2047,11 @@ const ItemGroupList = () => {
 
                                 {(canManage || canEdit) && (
                                     <DropdownMenuItem
-                                        onClick={() => void handleCopyBrandManufacturer(item)}
+                                        onClick={() =>
+                                            void handleCopyBrandManufacturer(
+                                                item,
+                                            )
+                                        }
                                     >
                                         <Copy className="mr-2 size-4" />
                                         Copy
@@ -1641,23 +2060,34 @@ const ItemGroupList = () => {
 
                                 {(canManage || canEdit) && (
                                     <DropdownMenuItem
-                                        onClick={() => void handleToggleBrandManufacturerStatus(item)}
+                                        onClick={() =>
+                                            void handleToggleBrandManufacturerStatus(
+                                                item,
+                                            )
+                                        }
                                     >
                                         {item.status ? (
                                             <XCircle className="mr-2 size-4" />
                                         ) : (
                                             <CheckCircle className="mr-2 size-4" />
                                         )}
-                                        Mark {item.status ? "Inactive" : "Active"}
+
+                                        Mark{" "}
+                                        {item.status
+                                            ? "Inactive"
+                                            : "Active"}
                                     </DropdownMenuItem>
                                 )}
 
                                 {canDelete && (
                                     <>
                                         <DropdownMenuSeparator />
+
                                         <DropdownMenuItem
                                             className="text-destructive"
-                                            onClick={() => handleDelete(item)}
+                                            onClick={() =>
+                                                handleDelete(item)
+                                            }
                                         >
                                             <Trash2 className="mr-2 size-4" />
                                             Delete
@@ -1672,7 +2102,7 @@ const ItemGroupList = () => {
         ],
         [
             allCurrentPageSelected,
-            brandManufacturers,
+            BrandManufacturers,
             selectedIds,
             bulkLoading,
             toggleCurrentPageSelection,
@@ -1689,205 +2119,239 @@ const ItemGroupList = () => {
 
     const table = useReactTable({
         columns,
-        data: brandManufacturer,
-        pageCount: Math.ceil(totalRecords / pagination.pageSize),
-        state: { pagination, sorting },
+        data: BrandManufacturers,
+
+        pageCount: Math.ceil(
+            totalRecords / pagination.pageSize,
+        ),
+
+        state: {
+            pagination,
+            sorting,
+        },
+
         onPaginationChange: setPagination,
         onSortingChange: setSorting,
+
         getCoreRowModel: getCoreRowModel(),
+
         manualPagination: true,
         manualSorting: true,
         manualFiltering: true,
     });
 
-    const renderToolbar = () => {
-        const hasActiveFilters =
-            Boolean(searchInput.trim()) ||
-            Boolean(searchQuery) ||
-            statusFilter !== "all" ||
-            Boolean(createdFrom) ||
-            Boolean(createdTo) ||
-            Boolean(updatedFrom) ||
-            Boolean(updatedTo);
 
-        return (
-            <CardHeader className="flex-col flex-wrap items-stretch gap-3 py-5 sm:flex-row sm:items-center">
-                <div className="flex w-full items-center gap-2 sm:w-auto">
-                    <div className="relative flex-1 sm:w-[250px] sm:flex-none">
-                        <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+    const renderToolbar = () => (
+        <CardHeader className="flex-col flex-wrap items-stretch gap-3 py-5 sm:flex-row sm:items-center">
+            <div className="flex w-full items-center gap-2 sm:w-auto">
+                <div className="relative flex-1 sm:w-[250px] sm:flex-none">
+                    <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
 
-                        <Input
-                            type="text"
-                            placeholder="Search brand/manufacturer"
-                            value={searchInput}
-                            onChange={(event) => handleSearch(event.target.value)}
-                            className="w-full pl-9 pr-9"
-                            autoComplete="off"
-                        />
-
-                        {searchInput.length > 0 && (
-                            <button
-                                type="button"
-                                aria-label="Clear search input"
-                                className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:text-foreground"
-                                onClick={() => {
-                                    setSearchInput("");
-                                    setSearchQuery("");
-                                    setPagination((prev) => ({ ...prev, pageIndex: 0 }));
-                                }}
-                            >
-                                <X className="size-4" />
-                            </button>
-                        )}
-                    </div>
-
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <button
-                                type="button"
-                                className="flex size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
-                            >
-                                <Info className="size-4" />
-                            </button>
-                        </TooltipTrigger>
-
-                        <TooltipContent>
-                            <p>Search by group name, description.</p>
-                        </TooltipContent>
-                    </Tooltip>
-                </div>
-
-                <div className="flex flex-wrap items-center justify-end gap-2">
-                    {selectedIds.length > 0 && (
-                        <div className="">
-                            <div className="flex flex-wrap gap-2">
-                                {(canManage || canEdit) && (
-                                    <>
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            disabled={bulkLoading}
-                                            onClick={() => setActiveDialogOpen(true)}
-                                        >
-                                            <CheckCircle className="mr-2 size-4" />
-                                            {selectedIds.length} Mark Active
-                                        </Button>
-
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            disabled={bulkLoading}
-                                            onClick={() => setInactiveDialogOpen(true)}
-                                        >
-                                            <XCircle className="mr-2 size-4" />
-                                            {selectedIds.length} Mark Inactive
-                                        </Button>
-                                    </>
-                                )}
-
-                                {canDelete && (
-                                    <Button
-                                        type="button"
-                                        variant="destructive"
-                                        disabled={bulkLoading}
-                                        onClick={handleBulkDelete}
-                                    >
-                                        <Trash2 className="mr-2 size-4" />
-                                        {selectedIds.length} Delete Selected
-                                    </Button>
-                                )}
-                            </div>
-                        </div>
-                    )}
-                    <div
-                        className="flex h-9 items-center gap-2 rounded-md border bg-background px-3"
-                        role="status"
-                        aria-live="polite"
-                    >
-                        <span
-                            className={`size-2.5 shrink-0 rounded-full ${dbStatus.loading
-                                ? "animate-pulse bg-yellow-500"
-                                : dbStatus.online && isOnline
-                                    ? "bg-green-500"
-                                    : "bg-red-500"
-                                }`}
-                        />
-
-                        <span className="text-xs font-medium">
-                            {dbStatus.loading
-                                ? "Checking..."
-                                : dbStatus.online && isOnline
-                                    ? String(dbStatus.env || "Database")
-                                        .toLowerCase()
-                                        .replace(/\b\w/g, (char) => char.toUpperCase())
-                                    : "Offline"}
-                        </span>
-
-                        <Button
-                            type="button"
-                            mode="icon"
-                            variant="ghost"
-                            size="sm"
-                            className="size-7"
-                            disabled={checkingDb || syncing}
-                            onClick={() => void checkDbStatus()}
-                            aria-label="Refresh database connection status"
-                        >
-                            <RefreshCw
-                                className={`size-4 ${checkingDb ? "animate-spin" : ""}`}
-                            />
-                        </Button>
-                    </div>
-
-                    {canManage && (
-                        <Button type="button" onClick={() => setAddDialogOpen(true)}>
-                            <Plus className="mr-2 size-4" />
-                            Add Brand/Manufacturer
-                        </Button>
-                    )}
-
-                    <StoreClientFiltersSheet
-                        trigger={
-                            <Button type="button" variant="outline">
-                                <Funnel className="mr-2 size-4" />
-                                Filter
-                            </Button>
+                    <Input
+                        type="text"
+                        placeholder="Search brand/manufacturer"
+                        value={searchInput}
+                        onChange={(event) =>
+                            handleSearch(event.target.value)
                         }
-                        statusFilter={statusFilter}
-                        setStatusFilter={setStatusFilter}
-                        createdFrom={createdFrom}
-                        setCreatedFrom={setCreatedFrom}
-                        createdTo={createdTo}
-                        setCreatedTo={setCreatedTo}
-                        updatedFrom={updatedFrom}
-                        setUpdatedFrom={setUpdatedFrom}
-                        updatedTo={updatedTo}
-                        setUpdatedTo={setUpdatedTo}
-                        createdByFilter={createdByFilter}
-                        setCreatedByFilter={setCreatedByFilter}
-                        updatedByFilter={updatedByFilter}
-                        setUpdatedByFilter={setUpdatedByFilter}
+                        className="w-full pl-9 pr-9"
+                        autoComplete="off"
                     />
 
-                    {/* {hasActiveFilters && (
-                        <Button type="button" variant="ghost" onClick={clearFilters}>
-                            <X className="mr-2 size-4" />
-                            Clear Filters
-                        </Button>
-                    )} */}
+                    {searchInput.length > 0 && (
+                        <button
+                            type="button"
+                            aria-label="Clear search input"
+                            className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:text-foreground"
+                            onClick={() => {
+                                setSearchInput("");
+                                setSearchQuery("");
+
+                                setPagination((prev) => ({
+                                    ...prev,
+                                    pageIndex: 0,
+                                }));
+                            }}
+                        >
+                            <X className="size-4" />
+                        </button>
+                    )}
                 </div>
-            </CardHeader>
-        );
-    };
+
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <button
+                            type="button"
+                            className="flex size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                        >
+                            <Info className="size-4" />
+                        </button>
+                    </TooltipTrigger>
+
+                    <TooltipContent>
+                        <p>
+                            Search by brand name, manufacturer name,
+                            website URL, or description.
+                        </p>
+                    </TooltipContent>
+                </Tooltip>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-end gap-2">
+                {selectedIds.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                        {(canManage || canEdit) && (
+                            <>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    disabled={bulkLoading}
+                                    onClick={() =>
+                                        setActiveDialogOpen(true)
+                                    }
+                                >
+                                    <CheckCircle className="mr-2 size-4" />
+                                    {selectedIds.length} Mark Active
+                                </Button>
+
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    disabled={bulkLoading}
+                                    onClick={() =>
+                                        setInactiveDialogOpen(true)
+                                    }
+                                >
+                                    <XCircle className="mr-2 size-4" />
+                                    {selectedIds.length} Mark Inactive
+                                </Button>
+                            </>
+                        )}
+
+                        {canDelete && (
+                            <Button
+                                type="button"
+                                variant="destructive"
+                                disabled={bulkLoading}
+                                onClick={handleBulkDelete}
+                            >
+                                <Trash2 className="mr-2 size-4" />
+                                {selectedIds.length} Delete Selected
+                            </Button>
+                        )}
+                    </div>
+                )}
+
+                {/* Database Connection Status */}
+
+                <div
+                    className="flex h-9 items-center gap-2 rounded-md border bg-background px-3"
+                    role="status"
+                    aria-live="polite"
+                >
+                    <span
+                        className={`size-2.5 shrink-0 rounded-full ${dbStatus.loading
+                            ? "animate-pulse bg-yellow-500"
+                            : dbStatus.online && isOnline
+                                ? "bg-green-500"
+                                : "bg-red-500"
+                            }`}
+                    />
+
+                    <span className="text-xs font-medium">
+                        {dbStatus.loading
+                            ? "Checking..."
+                            : dbStatus.online && isOnline
+                                ? String(
+                                    dbStatus.env || "Database",
+                                )
+                                    .toLowerCase()
+                                    .replace(/\b\w/g, (char) =>
+                                        char.toUpperCase(),
+                                    )
+                                : "Offline"}
+                    </span>
+
+                    <Button
+                        type="button"
+                        mode="icon"
+                        variant="ghost"
+                        size="sm"
+                        className="size-7"
+                        disabled={checkingDb || syncing}
+                        onClick={() =>
+                            void checkDbStatus()
+                        }
+                        aria-label="Refresh database connection status"
+                    >
+                        <RefreshCw
+                            className={`size-4 ${checkingDb ? "animate-spin" : ""
+                                }`}
+                        />
+                    </Button>
+                </div>
+
+                {canManage && (
+                    <Button
+                        type="button"
+                        onClick={() =>
+                            setAddDialogOpen(true)
+                        }
+                    >
+                        <Plus className="mr-2 size-4" />
+                        Add Brand/Manufacturer
+                    </Button>
+                )}
+
+                <StoreClientFiltersSheet
+                    trigger={
+                        <Button
+                            type="button"
+                            variant="outline"
+                        >
+                            <Funnel className="mr-2 size-4" />
+                            Filter
+                        </Button>
+                    }
+                    statusFilter={statusFilter}
+                    setStatusFilter={setStatusFilter}
+                    createdFrom={createdFrom}
+                    setCreatedFrom={setCreatedFrom}
+                    createdTo={createdTo}
+                    setCreatedTo={setCreatedTo}
+                    updatedFrom={updatedFrom}
+                    setUpdatedFrom={setUpdatedFrom}
+                    updatedTo={updatedTo}
+                    setUpdatedTo={setUpdatedTo}
+                    createdByFilter={createdByFilter}
+                    setCreatedByFilter={setCreatedByFilter}
+                    updatedByFilter={updatedByFilter}
+                    setUpdatedByFilter={setUpdatedByFilter}
+                />
+                <DataGridColumnVisibility
+                    table={table}
+                    trigger={
+                        <Button variant="outline">
+                            <Settings2 />
+                            Columns
+                        </Button>
+                    } />
+            </div>
+        </CardHeader>
+    );
 
     if (!canView) {
         return (
             <Card>
                 <CardHeader>
                     <div>
-                        <h3 className="text-lg font-semibold">Access Denied</h3>
+                        <h3 className="text-lg font-semibold">
+                            Access Denied
+                        </h3>
+
                         <p className="mt-1 text-sm text-muted-foreground">
-                            You do not have permission to view Brand/Manufacturer.
+                            You do not have permission to view
+                            Brand/Manufacturer.
                         </p>
                     </div>
                 </CardHeader>
@@ -1907,7 +2371,9 @@ const ItemGroupList = () => {
                     columnsMovable: true,
                     columnsVisibility: true,
                 }}
-                tableClassNames={{ edgeCell: "px-5" }}
+                tableClassNames={{
+                    edgeCell: "px-5",
+                }}
             >
                 <Card>
                     {renderToolbar()}
@@ -1925,18 +2391,30 @@ const ItemGroupList = () => {
                 </Card>
             </DataGrid>
 
-            <ItemGroupAddDialog
+            {/* ---------------------------------------------------------------- */}
+            {/* Add Dialog                                                       */}
+            {/* ---------------------------------------------------------------- */}
+
+            <BrandManufacturerAddDialog
                 open={addDialogOpen}
-                closeDialog={() => setAddDialogOpen(false)}
-                onSuccess={async (newItemGroup) => {
+                closeDialog={() =>
+                    setAddDialogOpen(false)
+                }
+                onSuccess={async (newBrandManufacturer) => {
                     setAddDialogOpen(false);
 
-                    await createItemGroupNotification({
+                    const brandManufacturerName =
+                        getBrandManufacturerName(
+                            newBrandManufacturer,
+                        );
+
+                    await createBrandManufacturerNotification({
                         action: "created",
                         title: "New Brand/Manufacturer Created",
-                        message: `${newItemGroup?.groupName} has been created.`,
-                        itemGroupId: newItemGroup?.id,
-                        itemGroupName: newItemGroup?.groupName,
+                        message: `${brandManufacturerName} has been created.`,
+                        brandManufacturerId:
+                            newBrandManufacturer?.id,
+                        brandManufacturerName,
                     });
 
                     await refreshBrandManufacturers();
@@ -1944,41 +2422,61 @@ const ItemGroupList = () => {
                 }}
             />
 
-            <ItemGroupViewDialog
+            {/* ---------------------------------------------------------------- */}
+            {/* View Dialog                                                      */}
+            {/* ---------------------------------------------------------------- */}
+
+            <BrandManufacturerViewDialog
                 open={viewDialogOpen}
-                ItemGroup={selectedBrandManufacturers}
+                BrandManufacturer={selectedBrandManufacturers}
                 closeDialog={() => {
                     setViewDialogOpen(false);
                     setSelectedBrandManufacturers(null);
                 }}
             />
 
-            <ItemGroupEditDialog
+            {/* ---------------------------------------------------------------- */}
+            {/* Edit Dialog                                                      */}
+            {/* ---------------------------------------------------------------- */}
+
+            <BrandManufacturerEditDialog
                 open={editDialogOpen}
-                ItemGroup={selectedBrandManufacturers}
+                BrandManufacturer={selectedBrandManufacturers}
                 closeDialog={() => {
                     setEditDialogOpen(false);
                     setSelectedBrandManufacturers(null);
                 }}
-                onSuccess={async (updatedItemGroup) => {
-                    await createItemGroupNotification({
+                onSuccess={async (updatedBrandManufacturer) => {
+                    const updatedItem =
+                        updatedBrandManufacturer ||
+                        selectedBrandManufacturers;
+
+                    const brandManufacturerName =
+                        getBrandManufacturerName(updatedItem);
+
+                    await createBrandManufacturerNotification({
                         action: "updated",
                         title: "Brand/Manufacturer Updated",
-                        message: `${updatedItemGroup?.groupName || selectedBrandManufacturers?.groupName
-                            } has been updated.`,
-                        itemGroupId: updatedItemGroup?.id || selectedBrandManufacturers?.id,
-                        itemGroupName:
-                            updatedItemGroup?.groupName || selectedBrandManufacturers?.groupName,
+                        message: `${brandManufacturerName} has been updated.`,
+                        brandManufacturerId: updatedItem?.id,
+                        brandManufacturerName,
                     });
+
+                    setEditDialogOpen(false);
+                    setSelectedBrandManufacturers(null);
 
                     await refreshBrandManufacturers();
                     await syncInventoryBrandManufacturers();
                 }}
             />
 
-            <ItemGroupDeleteDialog
+            {/* ---------------------------------------------------------------- */}
+            {/* Delete Dialog                                                    */}
+            {/* ---------------------------------------------------------------- */}
+
+            <BrandManufacturerDeleteDialog
                 open={deleteDialogOpen}
-                ItemGroup={selectedBrandManufacturers}
+                BrandManufacturer={selectedBrandManufacturers}
                 loading={deleteLoading}
                 onConfirm={handleDeleteConfirm}
                 closeDialog={() => {
@@ -1987,38 +2485,50 @@ const ItemGroupList = () => {
                 }}
             />
 
-            {/* Email report dialog */}
-            <Dialog open={emailDialogOpen} onOpenChange={setEmailDialogOpen}>
-                <DialogContent className="w-[95vw] max-w-[95vw] max-h-[90vh] flex flex-col gap-0 overflow-hidden sm:w-[90vw] sm:max-w-[600px] md:max-w-[700px] lg:max-w-[900px] xl:max-w-[1000px] p-0">
+            {/* ---------------------------------------------------------------- */}
+            {/* Email Report Dialog                                              */}
+            {/* ---------------------------------------------------------------- */}
+
+            <Dialog
+                open={emailDialogOpen}
+                onOpenChange={setEmailDialogOpen}
+            >
+                <DialogContent className="w-[95vw] max-w-[95vw] max-h-[90vh] flex flex-col gap-0 overflow-hidden p-0 sm:w-[90vw] sm:max-w-[600px] md:max-w-[700px] lg:max-w-[900px] xl:max-w-[1000px]">
                     <form
-                        className="flex flex-col h-full max-h-[90vh] overflow-hidden"
+                        className="flex h-full max-h-[90vh] flex-col overflow-hidden"
                         onSubmit={(event) => {
                             event.preventDefault();
                             void handleSendEmail();
                         }}
                     >
-                        <DialogHeader className="px-6 pt-6 pb-4 shrink-0">
-                            <DialogTitle>Email Brand/Manufacturers</DialogTitle>
+                        <DialogHeader className="shrink-0 px-6 pb-4 pt-6">
+                            <DialogTitle>
+                                Email Brand/Manufacturers
+                            </DialogTitle>
+
                             <DialogDescription>
-                                Select recipients and send the brand/manufacturer report.
+                                Select recipients and send the
+                                brand/manufacturer report.
                             </DialogDescription>
                         </DialogHeader>
 
+                        <ScrollArea className="flex h-full max-h-[90vh] min-h-0 grow flex-col overflow-hidden">
+                            <DialogBody className="min-h-0 space-y-6 px-6">
+                                {/* Recipient Selection */}
 
-                        <ScrollArea className="grow min-h-0 flex flex-col h-full max-h-[90vh] overflow-hidden">
-                            {/* Recipient Selection */}
-                            <DialogBody className="space-y-6 px-6 min-h-0">
                                 <div className="flex items-center justify-between gap-3">
                                     <label className="text-sm font-medium">
                                         Recipient Email
                                     </label>
 
                                     <span className="text-xs text-muted-foreground">
-                                        {selectedRecipientEmails.length} of {staffList.length} selected
+                                        {selectedRecipientEmails.length} of{" "}
+                                        {staffList.length} selected
                                     </span>
                                 </div>
 
                                 {/* Selected Recipients */}
+
                                 {selectedRecipientEmails.length > 0 && (
                                     <div className="rounded-lg border bg-muted/30 p-3">
                                         <div className="mb-2 flex items-center justify-between">
@@ -2029,73 +2539,101 @@ const ItemGroupList = () => {
                                             <button
                                                 type="button"
                                                 className="text-xs text-muted-foreground hover:text-foreground"
-                                                onClick={() => setSelectedRecipientEmails([])}
+                                                onClick={() =>
+                                                    setSelectedRecipientEmails(
+                                                        [],
+                                                    )
+                                                }
                                             >
                                                 Clear all
                                             </button>
                                         </div>
 
                                         <div className="flex flex-wrap gap-2">
-                                            {selectedRecipientEmails.map((email) => {
-                                                const person = staffList.find(
-                                                    (staff) => staff.email === email
-                                                );
+                                            {selectedRecipientEmails.map(
+                                                (email) => {
+                                                    const person =
+                                                        staffList.find(
+                                                            (staff) =>
+                                                                staff.email ===
+                                                                email,
+                                                        );
 
-                                                return (
-                                                    <span
-                                                        key={email}
-                                                        className="inline-flex max-w-full items-center gap-1.5 rounded-full border bg-background px-2.5 py-1 text-xs"
-                                                    >
-                                                        <span className="max-w-[220px] truncate">
-                                                            {person?.name || email}
-                                                        </span>
-
-                                                        <button
-                                                            type="button"
-                                                            aria-label={`Remove ${email}`}
-                                                            className="rounded-full text-muted-foreground hover:text-destructive"
-                                                            onClick={() =>
-                                                                setSelectedRecipientEmails((previous) =>
-                                                                    previous.filter((item) => item !== email)
-                                                                )
-                                                            }
+                                                    return (
+                                                        <span
+                                                            key={email}
+                                                            className="inline-flex max-w-full items-center gap-1.5 rounded-full border bg-background px-2.5 py-1 text-xs"
                                                         >
-                                                            <X className="size-3.5" />
-                                                        </button>
-                                                    </span>
-                                                );
-                                            })}
+                                                            <span className="max-w-[220px] truncate">
+                                                                {person?.name ||
+                                                                    email}
+                                                            </span>
+
+                                                            <button
+                                                                type="button"
+                                                                aria-label={`Remove ${email}`}
+                                                                className="rounded-full text-muted-foreground hover:text-destructive"
+                                                                onClick={() =>
+                                                                    setSelectedRecipientEmails(
+                                                                        (previous) =>
+                                                                            previous.filter(
+                                                                                (item) =>
+                                                                                    item !==
+                                                                                    email,
+                                                                            ),
+                                                                    )
+                                                                }
+                                                            >
+                                                                <X className="size-3.5" />
+                                                            </button>
+                                                        </span>
+                                                    );
+                                                },
+                                            )}
                                         </div>
                                     </div>
                                 )}
 
                                 {/* Staff Selection */}
+
                                 <div className="overflow-hidden rounded-lg border">
                                     <div className="border-b bg-muted/30 p-2">
                                         <label className="flex cursor-pointer items-center gap-2">
                                             <Checkbox
                                                 checked={
                                                     staffList.length > 0 &&
-                                                    staffList.every((person) =>
-                                                        selectedRecipientEmails.includes(person.email)
+                                                    staffList.every(
+                                                        (person) =>
+                                                            selectedRecipientEmails.includes(
+                                                                person.email,
+                                                            ),
                                                     )
                                                 }
-                                                disabled={staffLoading || staffList.length === 0}
+                                                disabled={
+                                                    staffLoading ||
+                                                    staffList.length === 0
+                                                }
                                                 onCheckedChange={(checked) => {
-                                                    setSelectedRecipientEmails((previous) =>
-                                                        checked === true
-                                                            ? [
-                                                                ...new Set([
-                                                                    ...previous,
-                                                                    ...staffList.map((person) => person.email),
-                                                                ]),
-                                                            ]
-                                                            : previous.filter(
-                                                                (email) =>
-                                                                    !staffList.some(
-                                                                        (person) => person.email === email
-                                                                    )
-                                                            )
+                                                    setSelectedRecipientEmails(
+                                                        (previous) =>
+                                                            checked === true
+                                                                ? [
+                                                                    ...new Set([
+                                                                        ...previous,
+                                                                        ...staffList.map(
+                                                                            (person) =>
+                                                                                person.email,
+                                                                        ),
+                                                                    ]),
+                                                                ]
+                                                                : previous.filter(
+                                                                    (email) =>
+                                                                        !staffList.some(
+                                                                            (person) =>
+                                                                                person.email ===
+                                                                                email,
+                                                                        ),
+                                                                ),
                                                     );
                                                 }}
                                             />
@@ -2106,7 +2644,7 @@ const ItemGroupList = () => {
                                         </label>
                                     </div>
 
-                                    <ScrollArea className="grow max-h-50 flex flex-col h-full overflow-hidden">
+                                    <ScrollArea className="flex h-full max-h-50 flex-col overflow-hidden">
                                         <div className="p-2">
                                             {staffLoading ? (
                                                 <p className="p-3 text-sm text-muted-foreground">
@@ -2114,65 +2652,90 @@ const ItemGroupList = () => {
                                                 </p>
                                             ) : staffList.length === 0 ? (
                                                 <p className="p-3 text-sm text-muted-foreground">
-                                                    No staff email addresses found.
+                                                    No staff email addresses
+                                                    found.
                                                 </p>
                                             ) : (
                                                 <div className="space-y-1">
-                                                    {staffList.map((person) => {
-                                                        const isSelected =
-                                                            selectedRecipientEmails.includes(person.email);
+                                                    {staffList.map(
+                                                        (person) => {
+                                                            const isSelected =
+                                                                selectedRecipientEmails.includes(
+                                                                    person.email,
+                                                                );
 
-                                                        return (
-                                                            <label
-                                                                key={`${person.id}-${person.email}`}
-                                                                className="flex cursor-pointer items-start gap-3 rounded-md p-2.5 transition-colors hover:bg-muted/60"
-                                                            >
-                                                                <Checkbox
-                                                                    className="mt-0.5"
-                                                                    checked={isSelected}
-                                                                    onCheckedChange={(checked) => {
-                                                                        setSelectedRecipientEmails((previous) =>
-                                                                            checked === true
-                                                                                ? [
-                                                                                    ...new Set([
-                                                                                        ...previous,
-                                                                                        person.email,
-                                                                                    ]),
-                                                                                ]
-                                                                                : previous.filter(
-                                                                                    (email) =>
-                                                                                        email !== person.email
-                                                                                )
-                                                                        );
-                                                                    }}
-                                                                />
-                                                                <span className="min-w-0 flex-1">
-                                                                    <span className="block truncate text-sm font-medium">
-                                                                        {person.name}
+                                                            return (
+                                                                <label
+                                                                    key={`${person.id}-${person.email}`}
+                                                                    className="flex cursor-pointer items-start gap-3 rounded-md p-2.5 transition-colors hover:bg-muted/60"
+                                                                >
+                                                                    <Checkbox
+                                                                        className="mt-0.5"
+                                                                        checked={
+                                                                            isSelected
+                                                                        }
+                                                                        onCheckedChange={(
+                                                                            checked,
+                                                                        ) => {
+                                                                            setSelectedRecipientEmails(
+                                                                                (
+                                                                                    previous,
+                                                                                ) =>
+                                                                                    checked ===
+                                                                                        true
+                                                                                        ? [
+                                                                                            ...new Set(
+                                                                                                [
+                                                                                                    ...previous,
+                                                                                                    person.email,
+                                                                                                ],
+                                                                                            ),
+                                                                                        ]
+                                                                                        : previous.filter(
+                                                                                            (
+                                                                                                email,
+                                                                                            ) =>
+                                                                                                email !==
+                                                                                                person.email,
+                                                                                        ),
+                                                                            );
+                                                                        }}
+                                                                    />
+
+                                                                    <span className="min-w-0 flex-1">
+                                                                        <span className="block truncate text-sm font-medium">
+                                                                            {person.name}
+                                                                        </span>
+
+                                                                        <span className="block break-all text-xs text-muted-foreground">
+                                                                            {person.email}
+                                                                        </span>
                                                                     </span>
 
-                                                                    <span className="block break-all text-xs text-muted-foreground">
-                                                                        {person.email}
-                                                                    </span>
-                                                                </span>
-
-                                                                {isSelected && (
-                                                                    <CheckCircle className="mt-0.5 size-4 shrink-0 text-primary" />
-                                                                )}
-                                                            </label>
-                                                        );
-                                                    })}
+                                                                    {isSelected && (
+                                                                        <CheckCircle className="mt-0.5 size-4 shrink-0 text-primary" />
+                                                                    )}
+                                                                </label>
+                                                            );
+                                                        },
+                                                    )}
                                                 </div>
                                             )}
                                         </div>
                                     </ScrollArea>
                                 </div>
-                                {!staffLoading && selectedRecipientEmails.length === 0 && (
-                                    <p className="text-xs text-muted-foreground">
-                                        Select at least one recipient to send the report.
-                                    </p>
-                                )}
-                                {/* Email Subject */}
+
+                                {!staffLoading &&
+                                    selectedRecipientEmails.length ===
+                                    0 && (
+                                        <p className="text-xs text-muted-foreground">
+                                            Select at least one recipient
+                                            to send the report.
+                                        </p>
+                                    )}
+
+                                {/* Subject */}
+
                                 <div className="space-y-2">
                                     <label
                                         htmlFor="brand-manufacturer-subject"
@@ -2180,22 +2743,31 @@ const ItemGroupList = () => {
                                     >
                                         Subject
                                     </label>
+
                                     <Input
                                         id="brand-manufacturer-subject"
                                         required
                                         value={emailSubject}
-                                        onChange={(event) => setEmailSubject(event.target.value)}
+                                        onChange={(event) =>
+                                            setEmailSubject(
+                                                event.target.value,
+                                            )
+                                        }
                                         placeholder="Brand/Manufacturers Report"
                                     />
                                 </div>
+
                                 {/* Excel Attachment */}
+
                                 <div className="rounded-lg border p-3 transition-colors hover:bg-muted/30">
                                     <label className="flex cursor-pointer items-start gap-3">
                                         <Checkbox
                                             className="mt-0.5"
                                             checked={attachExcel}
                                             onCheckedChange={(checked) =>
-                                                setAttachExcel(checked === true)
+                                                setAttachExcel(
+                                                    checked === true,
+                                                )
                                             }
                                         />
 
@@ -2203,15 +2775,21 @@ const ItemGroupList = () => {
                                             <span className="block text-sm font-medium">
                                                 Add Excel attachment
                                             </span>
+
                                             <span className="mt-1 block text-xs text-muted-foreground">
-                                                Attach the brand/manufacturer report as an Excel file (.xlsx)
+                                                Attach the
+                                                brand/manufacturer report
+                                                as an Excel file (.xlsx)
                                                 to the email.
                                             </span>
                                         </span>
+
                                         <FileSpreadsheet className="size-5 shrink-0 text-muted-foreground" />
                                     </label>
                                 </div>
-                                {/* Email Message */}
+
+                                {/* Message */}
+
                                 <div className="space-y-2">
                                     <label
                                         htmlFor="brand-manufacturer-message"
@@ -2219,41 +2797,68 @@ const ItemGroupList = () => {
                                     >
                                         Message
                                     </label>
+
                                     <ScrollArea className="h-[150px] w-full">
                                         <Textarea
                                             id="brand-manufacturer-message"
                                             required
                                             rows={5}
                                             value={emailMessage}
-                                            onChange={(event) => setEmailMessage(event.target.value)}
+                                            onChange={(event) =>
+                                                setEmailMessage(
+                                                    event.target.value,
+                                                )
+                                            }
                                             placeholder="Enter your email message..."
                                             className="min-h-[150px] resize-none"
                                         />
                                     </ScrollArea>
 
                                     <p className="text-xs text-muted-foreground">
-                                        Enter the message to include in the email sent to the selected staff.
+                                        Enter the message to include in
+                                        the email sent to the selected
+                                        staff.
                                     </p>
                                 </div>
                             </DialogBody>
-                            {/* Footer Actions */}
+
                             <DialogFooter className="gap-2 px-6 pb-2">
-                                <Button type="button" variant="outline" onClick={() => setEmailDialogOpen(false)} disabled={emailSending} >
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() =>
+                                        setEmailDialogOpen(false)
+                                    }
+                                    disabled={emailSending}
+                                >
                                     Cancel
                                 </Button>
 
-                                <Button type="submit" disabled={emailSending || staffLoading || selectedRecipientEmails.length === 0} >
+                                <Button
+                                    type="submit"
+                                    disabled={
+                                        emailSending ||
+                                        staffLoading ||
+                                        selectedRecipientEmails.length === 0
+                                    }
+                                >
                                     <Mail className="mr-2 size-4" />
-                                    {emailSending ? "Sending Email..." : "Send Email"}
+
+                                    {emailSending
+                                        ? "Sending Email..."
+                                        : "Send Email"}
                                 </Button>
                             </DialogFooter>
                         </ScrollArea>
                     </form>
                 </DialogContent>
-            </Dialog >
+            </Dialog>
 
-            {/* Copy brand/manufacturer dialog */}
-            < Dialog
+            {/* ---------------------------------------------------------------- */}
+            {/* Copy Brand/Manufacturer Dialog                                   */}
+            {/* ---------------------------------------------------------------- */}
+
+            <Dialog
                 open={copyDialogOpen}
                 onOpenChange={(open) => {
                     if (copyLoading) return;
@@ -2262,17 +2867,23 @@ const ItemGroupList = () => {
 
                     if (!open) {
                         setCopySourceItem(null);
-                        setCopyGroupName("");
+
+                        setCopyBrandName("");
+                        setCopyManufacturerName("");
+                        setCopyWebsiteURL("");
                         setCopyDescription("");
                     }
                 }}
             >
-                <DialogContent className="sm:max-w-md">
+                <DialogContent className="sm:max-w-lg">
                     <DialogHeader>
-                        <DialogTitle>Copy Brand/Manufacturer</DialogTitle>
+                        <DialogTitle>
+                            Copy Brand/Manufacturer
+                        </DialogTitle>
+
                         <DialogDescription>
-                            Enter a unique name for the copied brand/manufacturer. You can change the
-                            suggested name before saving.
+                            Review and edit the details for the copied
+                            brand/manufacturer before saving.
                         </DialogDescription>
                     </DialogHeader>
 
@@ -2280,54 +2891,129 @@ const ItemGroupList = () => {
                         className="space-y-4"
                         onSubmit={(event) => {
                             event.preventDefault();
-                            void handleConfirmCopyItemGroup();
+
+                            void handleConfirmCopyBrandManufacturer();
                         }}
                     >
+                        {/* Brand Name */}
+
                         <div className="space-y-2">
-                            <label htmlFor="copy-group-name" className="text-sm font-medium">
-                                Group Name <span className="text-destructive">*</span>
+                            <label
+                                htmlFor="copy-brand-name"
+                                className="text-sm font-medium"
+                            >
+                                Brand Name{" "}
+                                <span className="text-destructive">
+                                    *
+                                </span>
                             </label>
 
                             <Input
-                                id="copy-group-name"
-                                value={copyGroupName}
-                                onChange={(event) => setCopyGroupName(event.target.value)}
-                                placeholder="Enter group name"
-                                maxLength={150}
+                                id="copy-brand-name"
+                                value={copyBrandName}
+                                onChange={(event) =>
+                                    setCopyBrandName(
+                                        event.target.value,
+                                    )
+                                }
+                                placeholder="Enter brand name"
+                                maxLength={255}
                                 required
                                 autoFocus
                                 disabled={copyLoading}
                             />
-
-                            {copySourceItem && (
-                                <p className="text-xs text-muted-foreground">
-                                    Copying from: {copySourceItem.groupName}
-                                </p>
-                            )}
                         </div>
+
+                        {/* Manufacturer Name */}
+
                         <div className="space-y-2">
                             <label
-                                htmlFor="copy-item-type-description"
+                                htmlFor="copy-manufacturer-name"
+                                className="text-sm font-medium"
+                            >
+                                Manufacturer Name{" "}
+                                <span className="text-destructive">
+                                    *
+                                </span>
+                            </label>
+
+                            <Input
+                                id="copy-manufacturer-name"
+                                value={copyManufacturerName}
+                                onChange={(event) =>
+                                    setCopyManufacturerName(
+                                        event.target.value,
+                                    )
+                                }
+                                placeholder="Enter manufacturer name"
+                                maxLength={255}
+                                required
+                                disabled={copyLoading}
+                            />
+                        </div>
+
+                        {/* Website URL (Optional) */}
+
+                        <div className="space-y-2">
+                            <label
+                                htmlFor="copy-website-url"
+                                className="text-sm font-medium"
+                            >
+                                Website URL
+                            </label>
+
+                            <Input
+                                id="copy-website-url"
+                                type="url"
+                                value={copyWebsiteURL}
+                                onChange={(event) =>
+                                    setCopyWebsiteURL(event.target.value)
+                                }
+                                placeholder="https://example.com"
+                                maxLength={255}
+                                disabled={copyLoading}
+                            />
+                        </div>
+                        {/* Description */}
+
+                        <div className="space-y-2">
+                            <label
+                                htmlFor="copy-brand-description"
                                 className="text-sm font-medium"
                             >
                                 Description
                             </label>
 
-                            <textarea
-                                id="copy-item-type-description"
+                            <Textarea
+                                id="copy-brand-description"
                                 rows={4}
-                                className="w-full rounded-md border border-input bg-background p-3 text-sm"
                                 value={copyDescription}
-                                onChange={(event) => setCopyDescription(event.target.value)}
+                                onChange={(event) =>
+                                    setCopyDescription(
+                                        event.target.value,
+                                    )
+                                }
                                 placeholder="Enter description"
                                 disabled={copyLoading}
                             />
                         </div>
+
+                        {copySourceItem && (
+                            <p className="text-xs text-muted-foreground">
+                                Copying from:{" "}
+                                {getBrandManufacturerName(
+                                    copySourceItem,
+                                )}
+                            </p>
+                        )}
+
                         <DialogFooter className="gap-2 sm:gap-2">
                             <Button
                                 type="button"
                                 variant="outline"
-                                onClick={() => setCopyDialogOpen(false)}
+                                onClick={() =>
+                                    setCopyDialogOpen(false)
+                                }
                                 disabled={copyLoading}
                             >
                                 Cancel
@@ -2335,30 +3021,43 @@ const ItemGroupList = () => {
 
                             <Button
                                 type="submit"
-                                disabled={copyLoading || !copyGroupName.trim()}
+                                disabled={
+                                    copyLoading ||
+                                    !copyBrandName.trim() ||
+                                    !copyManufacturerName.trim()
+                                }
                             >
                                 <Copy className="mr-2 size-4" />
-                                {copyLoading ? "Copying..." : "Copy"}
+
+                                {copyLoading
+                                    ? "Copying..."
+                                    : "Copy"}
                             </Button>
                         </DialogFooter>
                     </form>
                 </DialogContent>
-            </Dialog >
+            </Dialog>
+
 
             <BrandManufacturersActiveDialog
                 open={activeDialogOpen}
                 onOpenChange={setActiveDialogOpen}
                 selectedCount={selectedIds.length}
                 loading={bulkLoading}
-                onConfirm={() => handleBulkStatus(true)}
+                onConfirm={() =>
+                    handleBulkStatus(true)
+                }
             />
+
 
             <BrandManufacturersInactiveDialog
                 open={inactiveDialogOpen}
                 onOpenChange={setInactiveDialogOpen}
                 selectedCount={selectedIds.length}
                 loading={bulkLoading}
-                onConfirm={() => handleBulkStatus(false)}
+                onConfirm={() =>
+                    handleBulkStatus(false)
+                }
             />
 
             <BrandManufacturersDeleteDialog
@@ -2372,4 +3071,4 @@ const ItemGroupList = () => {
     );
 };
 
-export default ItemGroupList;
+export default BrandManufacturerList;

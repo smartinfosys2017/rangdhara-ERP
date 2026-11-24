@@ -210,10 +210,7 @@ export const MENU_SIDEBAR = [
             path: "/setup/custom_fields",
             permission: "custom_fields.list",
           },
-
         ],
-
-
       },
       {
         title: "Staff",
@@ -353,7 +350,8 @@ export const MENU_SIDEBAR = [
       { title: "Items", path: "/sales/items", permission: "items.list" },
     ],
     permission: "customers.list",
-  }, { heading: "diveder" },
+  },
+  { heading: "diveder" },
   {
     title: "HR",
     children: [
@@ -420,7 +418,7 @@ export const MENU_SIDEBAR = [
             path: "/hr/Questionnaire/Question",
             permission: "question.list",
           },
-        ]
+        ],
       },
       {
         title: "Employee",
@@ -438,18 +436,30 @@ export const MENU_SIDEBAR = [
   },
   { heading: "diveder" },
   {
+    title: "Production",
+    icon: Users,
+    path: "/production",
+    permission: "production.list",
+  },
+  { heading: "diveder" },
+  {
     title: "inventory",
     icon: Warehouse,
     children: [
       {
         title: "Unit",
         path: "/inventory/unit",
-        permission: "unit.list"
+        permission: "unit.list",
       },
       {
         title: "Item Group",
         path: "/inventory/item_group",
         permission: "item_group.list",
+      },
+      {
+        title: "Brand/Manufacturer",
+        path: "/inventory/brand_manufacturer",
+        permission: "manufacturer.list",
       },
       {
         title: "Item Condition",
@@ -1025,7 +1035,6 @@ export const MENU_SIDEBAR_COMPACT = [
             path: "/setup/custom_fields",
             permission: "custom_fields.list",
           },
-
         ],
       },
       {
@@ -1238,7 +1247,14 @@ export const MENU_SIDEBAR_COMPACT = [
         path: "/hr/Questionnaire/Question",
         permission: "question.list",
       },
-    ]
+    ],
+  },
+  { heading: "diveder" },
+  {
+    title: "Production",
+    icon: Users,
+    path: "/production",
+    permission: "production.list",
   },
   { heading: "diveder" },
   {
@@ -1248,12 +1264,17 @@ export const MENU_SIDEBAR_COMPACT = [
       {
         title: "Unit",
         path: "/inventory/unit",
-        permission: "unit.list"
+        permission: "unit.list",
       },
       {
         title: "Item Group",
         path: "/inventory/item_group",
         permission: "item_group.list",
+      },
+      {
+        title: "Brand/Manufacturer",
+        path: "/inventory/brand_manufacturer",
+        permission: "brand_manufacturer.list",
       },
       {
         title: "Item Condition",

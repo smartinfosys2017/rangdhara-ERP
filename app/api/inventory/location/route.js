@@ -272,7 +272,7 @@ export async function POST(request) {
       return NextResponse.json(
         {
           success: false,
-          message: "Location name is required.",
+          message: "Warehouse name is required.",
         },
         { status: 400 },
       );
@@ -282,7 +282,7 @@ export async function POST(request) {
       return NextResponse.json(
         {
           success: false,
-          message: "Location code is required.",
+          message: "Warehouse code is required.",
         },
         { status: 400 },
       );
@@ -292,7 +292,7 @@ export async function POST(request) {
       return NextResponse.json(
         {
           success: false,
-          message: "Location name cannot exceed 255 characters.",
+          message: "Warehouse name cannot exceed 255 characters.",
         },
         { status: 400 },
       );
@@ -302,7 +302,7 @@ export async function POST(request) {
       return NextResponse.json(
         {
           success: false,
-          message: "Location code cannot exceed 25 characters.",
+          message: "Warehouse code cannot exceed 25 characters.",
         },
         { status: 400 },
       );
@@ -339,7 +339,7 @@ export async function POST(request) {
       );
     }
 
-    // Check duplicate location name (case-insensitive).
+    // Check duplicate Warehouse name (case-insensitive).
     const existingLocationName = await prisma.location.findFirst({
       where: {
         locationName: {
@@ -355,7 +355,7 @@ export async function POST(request) {
         {
           success: false,
           message:
-            "This Location name already exists.",
+            "This Warehouse name already exists.",
         },
         { status: 409 },
       );
@@ -392,7 +392,7 @@ export async function POST(request) {
       return NextResponse.json(
         {
           success: false,
-          message: "This Location code already exists.",
+          message: "This Warehouse code already exists.",
         },
         { status: 409 },
       );
@@ -401,7 +401,7 @@ export async function POST(request) {
     return NextResponse.json(
       {
         success: false,
-        message: error.message || "Failed to create location.",
+        message: error.message || "Failed to create warehouse.",
       },
       { status: 500 },
     );
@@ -467,7 +467,7 @@ export async function PUT(request) {
       updateby: String(user.id),
     };
 
-    // Validate Location Name
+    // Validate Warehouse Name
     if (body.locationName !== undefined) {
       const locationName = String(body.locationName ?? "").trim();
 
@@ -475,7 +475,7 @@ export async function PUT(request) {
         return NextResponse.json(
           {
             success: false,
-            message: "Location name is required.",
+            message: "Warehouse name is required.",
           },
           { status: 400 },
         );
@@ -485,7 +485,7 @@ export async function PUT(request) {
         return NextResponse.json(
           {
             success: false,
-            message: "Location name cannot exceed 255 characters.",
+            message: "Warehouse name cannot exceed 255 characters.",
           },
           { status: 400 },
         );
@@ -512,7 +512,7 @@ export async function PUT(request) {
         return NextResponse.json(
           {
             success: false,
-            message: "This Location name already exists.",
+            message: "This Warehouse name already exists.",
           },
           { status: 409 },
         );
@@ -521,7 +521,7 @@ export async function PUT(request) {
       updateData.locationName = locationName;
     }
 
-    // Validate Location Code
+    // Validate Warehouse Code
     if (body.locationCode !== undefined) {
       const locationCode = String(body.locationCode ?? "").trim();
 
@@ -529,7 +529,7 @@ export async function PUT(request) {
         return NextResponse.json(
           {
             success: false,
-            message: "Location code is required.",
+            message: "Warehouse code is required.",
           },
           { status: 400 },
         );
@@ -539,7 +539,7 @@ export async function PUT(request) {
         return NextResponse.json(
           {
             success: false,
-            message: "Location code cannot exceed 25 characters.",
+            message: "Warehouse code cannot exceed 25 characters.",
           },
           { status: 400 },
         );
@@ -566,7 +566,7 @@ export async function PUT(request) {
         return NextResponse.json(
           {
             success: false,
-            message: "This Location code already exists.",
+            message: "This Warehouse code already exists.",
           },
           { status: 409 },
         );
@@ -641,7 +641,7 @@ export async function PUT(request) {
       return NextResponse.json(
         {
           success: false,
-          message: "This Location name or code already exists.",
+          message: "This Warehouse name or code already exists.",
         },
         { status: 409 },
       );
@@ -650,7 +650,7 @@ export async function PUT(request) {
     return NextResponse.json(
       {
         success: false,
-        message: error.message || "Failed to update location.",
+        message: error.message || "Failed to update warehouse.",
       },
       { status: 500 },
     );

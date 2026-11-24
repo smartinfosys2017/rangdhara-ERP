@@ -17,6 +17,7 @@ import {
     RefreshCw,
     Search,
     Trash2,
+    Settings2,
     X,
     FileSpreadsheet,
     XCircle,
@@ -35,7 +36,7 @@ import { DataGrid } from "@/components/ui/data-grid";
 import { DataGridColumnHeader } from "@/components/ui/data-grid-column-header";
 import { DataGridPagination } from "@/components/ui/data-grid-pagination";
 import { DataGridTable } from "@/components/ui/data-grid-table";
-
+import { DataGridColumnVisibility } from '@/components/ui/data-grid-column-visibility';
 import {
     Dialog,
     DialogContent,
@@ -1545,7 +1546,7 @@ const LocationList = () => {
 
                 size: 120,
             },
-             {
+            {
                 accessorKey: "locationName",
                 id: "locationName",
 
@@ -1556,9 +1557,13 @@ const LocationList = () => {
                         visibility
                     />
                 ),
-
+                meta: {
+                    headerTitle: "Warehouse Name",
+                },
                 cell: ({ row }) => (
-                    <span className="font-medium">{row.original.locationName}</span>
+                    <span className="font-medium">
+                        {row.original.locationName}
+                    </span>
                 ),
 
                 size: 220,
@@ -1574,7 +1579,9 @@ const LocationList = () => {
                         visibility
                     />
                 ),
-
+                meta: {
+                    headerTitle: "Warehouse Code",
+                },
                 cell: ({ row }) => <span>{row.original.locationCode || "-"}</span>,
 
                 size: 180,
@@ -1976,7 +1983,18 @@ const LocationList = () => {
                     setCreatedByFilter={setCreatedByFilter}
                     updatedByFilter={updatedByFilter}
                     setUpdatedByFilter={setUpdatedByFilter}
+                    searchInput={searchInput}
+                    setSearchInput={setSearchInput}
+                    handleSearch={handleSearch}
                 />
+                <DataGridColumnVisibility
+                    table={table}
+                    trigger={
+                        <Button variant="outline">
+                            <Settings2 />
+                            Columns
+                        </Button>
+                    } />
             </div>
         </CardHeader>
     );
@@ -2246,10 +2264,10 @@ const LocationList = () => {
                         }}
                     >
                         <DialogHeader className="shrink-0 px-6 pt-6 pb-4">
-                            <DialogTitle>Email Locations</DialogTitle>
+                            <DialogTitle>Email Warehouse</DialogTitle>
 
                             <DialogDescription>
-                                Select recipients and send the Locations report.
+                                Select recipients and send the Warehouses report.
                             </DialogDescription>
                         </DialogHeader>
 

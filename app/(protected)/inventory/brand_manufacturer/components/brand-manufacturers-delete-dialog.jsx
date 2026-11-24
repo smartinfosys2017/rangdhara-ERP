@@ -9,8 +9,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+
 import { Button } from "@/components/ui/button";
+
 import { Trash2 } from "lucide-react";
+
+// =======================================================
+// COMPONENT
+// =======================================================
 
 const BrandManufacturersDeleteDialog = ({
   open,
@@ -23,7 +29,9 @@ const BrandManufacturersDeleteDialog = ({
     <Dialog
       open={open}
       onOpenChange={(nextOpen) => {
-        if (!loading) onOpenChange(nextOpen);
+        if (!loading) {
+          onOpenChange?.(nextOpen);
+        }
       }}
     >
       <DialogContent className="sm:max-w-md">
@@ -32,16 +40,22 @@ const BrandManufacturersDeleteDialog = ({
             <span className="flex size-9 items-center justify-center rounded-full bg-destructive/10">
               <Trash2 className="size-5 text-destructive" />
             </span>
+
             Delete Brand/Manufacturer
           </DialogTitle>
 
           <DialogDescription>
             Are you sure you want to delete{" "}
             <strong className="text-foreground">
-              {selectedCount} item group
+              {selectedCount} Brand/Manufacturer
               {selectedCount !== 1 ? "s" : ""}
             </strong>
-            ? This action cannot be undone.
+            ?
+
+            <span className="mt-2 block">
+              This action cannot be undone. The selected records will be
+              removed.
+            </span>
           </DialogDescription>
         </DialogHeader>
 
@@ -50,7 +64,7 @@ const BrandManufacturersDeleteDialog = ({
             type="button"
             variant="outline"
             disabled={loading}
-            onClick={() => onOpenChange(false)}
+            onClick={() => onOpenChange?.(false)}
           >
             Cancel
           </Button>
@@ -62,6 +76,7 @@ const BrandManufacturersDeleteDialog = ({
             onClick={onConfirm}
           >
             <Trash2 className="mr-2 size-4" />
+
             {loading ? "Deleting..." : "Delete Selected"}
           </Button>
         </DialogFooter>

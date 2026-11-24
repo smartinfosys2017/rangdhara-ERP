@@ -17,6 +17,7 @@ import {
   RefreshCw,
   Search,
   Trash2,
+  Settings2,
   Info,
   X,
   FileSpreadsheet,
@@ -38,6 +39,7 @@ import { DataGrid } from "@/components/ui/data-grid";
 import { DataGridColumnHeader } from "@/components/ui/data-grid-column-header";
 import { DataGridPagination } from "@/components/ui/data-grid-pagination";
 import { DataGridTable } from "@/components/ui/data-grid-table";
+import { DataGridColumnVisibility } from '@/components/ui/data-grid-column-visibility';
 import {
   Dialog,
   DialogContent,
@@ -1360,7 +1362,7 @@ export default function ItemMasterList() {
         ),
         size: 240,
         enableSorting: true,
-        enableHiding: false,
+        enableHiding: true,
         meta: {
           headerTitle: "Item Name",
           skeleton: <Skeleton className="h-7 w-40" />,
@@ -1642,6 +1644,13 @@ export default function ItemMasterList() {
                 {canEdit && (
                   <DropdownMenuItem
                     onClick={() => {
+                      console.log("EDIT ITEM MASTER:", item);
+                      console.log("ITEM MASTER BRANDS:", item?.brands);
+                      console.log(
+                        "SELECTED BRAND IDS:",
+                        item?.brands?.map((brand) => brand.ItemBrandid)
+                      );
+
                       setSelectedItemMaster(item);
                       setEditDialogOpen(true);
                     }}
@@ -1922,6 +1931,14 @@ export default function ItemMasterList() {
 
             setPagination={setPagination}
           />
+          <DataGridColumnVisibility
+          table={table}
+          trigger={
+          <Button variant="outline">
+              <Settings2 />
+              Columns
+            </Button>
+          } />
         </div>
       </CardHeader >
     );
@@ -2003,6 +2020,7 @@ export default function ItemMasterList() {
       />
 
       {/* EDIT ITEM */}
+      {/* EDIT ITEM */}
       {selectedItemMaster && editDialogOpen && (
         <ItemMasterEditDialog
           open={editDialogOpen}
@@ -2023,15 +2041,11 @@ export default function ItemMasterList() {
               message: itemForNotification?.ItemName
                 ? `Item "${itemForNotification.ItemName}" was updated successfully.`
                 : "An item was updated successfully.",
-              itemMasterId: itemForNotification?.id || null,
+              itemMasterId: itemForNotification?.id,
               itemMasterName: itemForNotification?.ItemName || "Item",
             });
 
-            showSuccessToast(
-              itemForNotification?.ItemName
-                ? `Item "${itemForNotification.ItemName}" updated successfully`
-                : "Item updated successfully",
-            );
+            showSuccessToast("Item updated successfully");
 
             await refreshItemMasters();
             await syncInventoryItemMasters();
