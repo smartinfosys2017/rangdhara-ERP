@@ -58,6 +58,7 @@ const FIELD_TO_OPTIONS = [
   { value: 'candidate', label: 'Candidate' },
   { value: 'employee', label: 'Employee' },
   { value: 'tasks', label: 'Tasks' },  
+  { value: 'production', label: 'Production' },
 ];
 
 const FIELD_TYPES = [

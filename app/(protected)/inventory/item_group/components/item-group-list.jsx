@@ -1473,6 +1473,7 @@ const ItemGroupList = () => {
                     <span>#{String(row.original.id).substring(0, 8)}</span>
                 ),
                 size: 120,
+                enableHiding: false,
             },
             {
                 accessorKey: "groupName",
@@ -1869,6 +1870,9 @@ const ItemGroupList = () => {
                         setCreatedByFilter={setCreatedByFilter}
                         updatedByFilter={updatedByFilter}
                         setUpdatedByFilter={setUpdatedByFilter}
+                        searchInput={searchInput}
+                        setSearchInput={setSearchInput}
+                        handleSearch={handleSearch}
                     />
                     <DataGridColumnVisibility
                         table={table}

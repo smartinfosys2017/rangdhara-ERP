@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import { addDays, format, parseISO } from 'date-fns';
-import { Info, CalendarDays } from 'lucide-react';
+import { Info, CalendarDays, Search, X, } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -133,6 +133,9 @@ export function StoreClientFiltersSheet({
   setCreatedByFilter,
   updatedByFilter,
   setUpdatedByFilter,
+  searchInput,
+  setSearchInput,
+  handleSearch,
 }) {
   const [open, setOpen] = useState(false);
   const [users, setUsers] = useState([]);
@@ -217,7 +220,7 @@ export function StoreClientFiltersSheet({
     setUpdatedTo('');
     setCreatedByFilter('');
     setUpdatedByFilter('');
-
+    setSearchInput("");
     setOpen(false);
   };
 
@@ -252,6 +255,41 @@ export function StoreClientFiltersSheet({
 
         <SheetBody className="py-0">
           <ScrollArea className="h-[calc(100dvh-11.5rem)]">
+            {/* SEARCH */}
+            <div className="px-5 pt-5">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+
+                <input
+                  type="text"
+                  value={searchInput}
+                  onChange={(event) => setSearchInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      handleSearch(event);
+                      setOpen(false);
+                    }
+                  }}
+                  placeholder="Search item group"
+                  className="h-9 w-full rounded-md border border-input bg-background pl-9 pr-9 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  autoComplete="off"
+                />
+
+                {searchInput.length > 0 && (
+                  <button
+                    type="button"
+                    aria-label="Clear search"
+                    onClick={() => {
+                      setSearchInput("");
+                      setOpen(false);
+                    }}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="size-4" />
+                  </button>
+                )}
+              </div>
+            </div>
             <div className="space-y-4 px-5 pt-5">
               <div className="flex items-center gap-1">
                 <span className="text-sm font-medium">Status</span>

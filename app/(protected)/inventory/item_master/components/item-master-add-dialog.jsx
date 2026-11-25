@@ -29,7 +29,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-
+import { MultiSelect } from "@/components/ui/multi-select";
+import { SelectSearch } from "@/components/ui/select-search";
 import {
   Select,
   SelectContent,
@@ -39,19 +40,15 @@ import {
 } from "@/components/ui/select";
 
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-
-import {
   RadioGroup,
   RadioGroupItem,
 } from "@/components/ui/radio-group";
 
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
-
+import ItemMasterCustomFields, {
+  validateRequiredCustomFields,
+} from "../../custom-fields/import-custom-fields";
 import { apiFetch } from "@/lib/api";
 
 // ======================================================
@@ -92,493 +89,6 @@ const createInitialForm = () => ({
 });
 
 // ======================================================
-// PAGINATED SEARCH MULTISELECT
-// Defined outside the main component to prevent remounting
-// ======================================================
-
-function PaginatedSearchSelect({
-  endpoint,
-  value,
-  onChange,
-  placeholder = "Select an option",
-  searchPlaceholder = "Search...",
-  getLabel,
-  disabled = false,
-  multiple = false,
-  knownOptions = [],
-  onOptionsLoaded,
-  onError,
-}) {
-  const [dropdownOpen, setDropdownOpen] = useState(false);
-
-  const [query, setQuery] = useState("");
-  const [debouncedQuery, setDebouncedQuery] = useState("");
-
-  const [options, setOptions] = useState([]);
-
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-
-  const [dropdownLoading, setDropdownLoading] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
-
-  const selectedValues = multiple
-    ? Array.isArray(value)
-      ? value.map(String)
-      : []
-    : value
-      ? [String(value)]
-      : [];
-
-  // ------------------------------------------------------
-  // DEBOUNCE SEARCH
-  // ------------------------------------------------------
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedQuery(query.trim());
-    }, 300);
-
-    return () => clearTimeout(timer);
-  }, [query]);
-
-  // ------------------------------------------------------
-  // FETCH OPTIONS
-  // ------------------------------------------------------
-
-  useEffect(() => {
-    if (!dropdownOpen) return;
-
-    let cancelled = false;
-
-    const fetchOptions = async () => {
-      try {
-        setDropdownLoading(true);
-        setOptions([]);
-        setPage(1);
-        setTotalPages(1);
-
-        const params = new URLSearchParams({
-          page: "1",
-          limit: "100",
-          query: debouncedQuery,
-          status: "all",
-        });
-
-        const response = await apiFetch(
-          `${endpoint}?${params.toString()}`,
-        );
-
-        const result = await response.json();
-
-        if (!response.ok || !result.success) {
-          throw new Error(
-            result.message || "Failed to load options.",
-          );
-        }
-
-        if (cancelled) return;
-
-        const records = Array.isArray(result.data)
-          ? result.data
-          : [];
-
-        setOptions(records);
-
-        onOptionsLoaded?.(records);
-
-        setPage(Number(result.pagination?.page) || 1);
-
-        setTotalPages(
-          Number(result.pagination?.totalPages) || 1,
-        );
-      } catch (error) {
-        if (!cancelled) {
-          setOptions([]);
-          setTotalPages(1);
-
-          console.error("DROPDOWN FETCH ERROR:", error);
-
-          onError?.(
-            error.message || "Failed to load options.",
-          );
-        }
-      } finally {
-        if (!cancelled) {
-          setDropdownLoading(false);
-        }
-      }
-    };
-
-    fetchOptions();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    dropdownOpen,
-    debouncedQuery,
-    endpoint,
-    onOptionsLoaded,
-    onError,
-  ]);
-
-  // ------------------------------------------------------
-  // LOAD MORE OPTIONS
-  // ------------------------------------------------------
-
-  const loadMore = async () => {
-    if (
-      dropdownLoading ||
-      loadingMore ||
-      page >= totalPages
-    ) {
-      return;
-    }
-
-    const nextPage = page + 1;
-
-    try {
-      setLoadingMore(true);
-
-      const params = new URLSearchParams({
-        page: String(nextPage),
-        limit: "100",
-        query: debouncedQuery,
-        status: "all",
-      });
-
-      const response = await apiFetch(
-        `${endpoint}?${params.toString()}`,
-      );
-
-      const result = await response.json();
-
-      if (!response.ok || !result.success) {
-        throw new Error(
-          result.message || "Failed to load more options.",
-        );
-      }
-
-      const records = Array.isArray(result.data)
-        ? result.data
-        : [];
-
-      const mergedMap = new Map(
-        options.map((item) => [String(item.id), item]),
-      );
-
-      records.forEach((item) => {
-        mergedMap.set(String(item.id), item);
-      });
-
-      const mergedOptions = Array.from(
-        mergedMap.values(),
-      );
-
-      setOptions(mergedOptions);
-
-      onOptionsLoaded?.(mergedOptions);
-
-      setPage(Number(result.pagination?.page) || nextPage);
-
-      setTotalPages(
-        Number(result.pagination?.totalPages) || totalPages,
-      );
-    } catch (error) {
-      console.error("DROPDOWN LOAD MORE ERROR:", error);
-
-      onError?.(
-        error.message || "Failed to load more options.",
-      );
-    } finally {
-      setLoadingMore(false);
-    }
-  };
-
-  // ------------------------------------------------------
-  // COMBINE CURRENT OPTIONS + PREVIOUSLY LOADED OPTIONS
-  // ------------------------------------------------------
-
-  const combinedOptionsMap = new Map();
-
-  [...knownOptions, ...options].forEach((item) => {
-    combinedOptionsMap.set(String(item.id), item);
-  });
-
-  const combinedOptions = Array.from(
-    combinedOptionsMap.values(),
-  );
-
-  const selectedOptions = selectedValues.map((id) =>
-    combinedOptions.find(
-      (item) => String(item.id) === String(id),
-    ),
-  );
-
-  // ------------------------------------------------------
-  // SELECT / DESELECT OPTION
-  // ------------------------------------------------------
-
-  const handleOptionClick = (option) => {
-    const optionId = String(option.id);
-
-    if (multiple) {
-      const updatedIds = selectedValues.includes(optionId)
-        ? selectedValues.filter((id) => id !== optionId)
-        : [...selectedValues, optionId];
-
-      onChange([...new Set(updatedIds)]);
-    } else {
-      onChange(optionId);
-      setDropdownOpen(false);
-    }
-  };
-
-  // ------------------------------------------------------
-  // SELECT ALL CURRENTLY LOADED SEARCH RESULTS
-  // ------------------------------------------------------
-
-  const handleSelectAll = () => {
-    const updatedIds = [
-      ...new Set([
-        ...selectedValues,
-        ...options.map((item) => String(item.id)),
-      ]),
-    ];
-
-    onChange(updatedIds);
-  };
-
-  // ------------------------------------------------------
-  // CLEAR ALL SELECTED OPTIONS
-  // ------------------------------------------------------
-
-  const handleClearAll = () => {
-    onChange([]);
-  };
-
-  const allLoadedSelected =
-    options.length > 0 &&
-    options.every((item) =>
-      selectedValues.includes(String(item.id)),
-    );
-
-  // ------------------------------------------------------
-  // SELECTED LABEL
-  // ------------------------------------------------------
-
-  const getSelectedLabel = () => {
-    if (multiple) {
-      if (selectedValues.length === 0) {
-        return placeholder;
-      }
-
-      const labels = selectedOptions
-        .filter(Boolean)
-        .map((item) => getLabel(item));
-
-      if (labels.length === selectedValues.length) {
-        return labels.join(", ");
-      }
-
-      return `${selectedValues.length} brand(s) selected`;
-    }
-
-    if (selectedOptions[0]) {
-      return getLabel(selectedOptions[0]);
-    }
-
-    return placeholder;
-  };
-
-  // ------------------------------------------------------
-  // RENDER
-  // ------------------------------------------------------
-
-  return (
-    <Popover
-      open={dropdownOpen}
-      onOpenChange={(value) => {
-        setDropdownOpen(value);
-
-        if (!value) {
-          setQuery("");
-          setDebouncedQuery("");
-        }
-      }}
-    >
-      <PopoverTrigger asChild>
-        <Button
-          type="button"
-          variant="outline"
-          disabled={disabled}
-          className="w-full justify-between font-normal"
-        >
-          <span className="truncate text-left">
-            {getSelectedLabel()}
-          </span>
-
-          <span className="ml-2 shrink-0">⌄</span>
-        </Button>
-      </PopoverTrigger>
-
-      <PopoverContent
-        align="start"
-        className="w-[var(--radix-popover-trigger-width)] p-2"
-      >
-        {/* SEARCH */}
-
-        <Input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder={searchPlaceholder}
-          className="mb-2"
-        />
-
-        {/* SELECT ALL / CLEAR ALL */}
-
-        {multiple && (
-          <div className="mb-2 flex items-center justify-between gap-2 border-b pb-2">
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              onClick={handleSelectAll}
-              disabled={
-                dropdownLoading ||
-                options.length === 0 ||
-                allLoadedSelected
-              }
-            >
-              Select All
-            </Button>
-
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              onClick={handleClearAll}
-              disabled={selectedValues.length === 0}
-            >
-              Clear All
-            </Button>
-          </div>
-        )}
-
-        {/* OPTIONS */}
-
-        <div
-          className="max-h-60 overflow-y-auto"
-          onScroll={(event) => {
-            const element = event.currentTarget;
-
-            const nearBottom =
-              element.scrollTop + element.clientHeight >=
-              element.scrollHeight - 30;
-
-            if (nearBottom) {
-              loadMore();
-            }
-          }}
-        >
-          {dropdownLoading ? (
-            <p className="py-4 text-center text-sm text-muted-foreground">
-              Loading...
-            </p>
-          ) : options.length > 0 ? (
-            <>
-              {options.map((option) => {
-                const optionId = String(option.id);
-
-                const isSelected =
-                  selectedValues.includes(optionId);
-
-                return (
-                  <div
-                    key={option.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => handleOptionClick(option)}
-                    onKeyDown={(event) => {
-                      if (
-                        event.key === "Enter" ||
-                        event.key === " "
-                      ) {
-                        event.preventDefault();
-                        handleOptionClick(option);
-                      }
-                    }}
-                    className={`flex w-full cursor-pointer items-center gap-2 rounded px-3 py-2 text-left text-sm hover:bg-muted ${
-                      isSelected ? "bg-muted" : ""
-                    }`}
-                  >
-                    {multiple && (
-                      <Checkbox
-                        checked={isSelected}
-                        onCheckedChange={() =>
-                          handleOptionClick(option)
-                        }
-                        onClick={(event) =>
-                          event.stopPropagation()
-                        }
-                      />
-                    )}
-
-                    <span className="flex-1">
-                      {getLabel(option)}
-                    </span>
-
-                    {!multiple && isSelected && (
-                      <span className="text-primary">✓</span>
-                    )}
-                  </div>
-                );
-              })}
-
-              {loadingMore && (
-                <p className="py-2 text-center text-xs text-muted-foreground">
-                  Loading more...
-                </p>
-              )}
-
-              {!loadingMore && page >= totalPages && (
-                <p className="py-2 text-center text-xs text-muted-foreground">
-                  No more records
-                </p>
-              )}
-            </>
-          ) : (
-            <p className="py-4 text-center text-sm text-muted-foreground">
-              No records found.
-            </p>
-          )}
-        </div>
-
-        {/* FOOTER */}
-
-        {multiple && (
-          <div className="mt-2 flex items-center justify-between border-t pt-2">
-            <span className="text-xs text-muted-foreground">
-              {selectedValues.length} selected
-            </span>
-
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => setDropdownOpen(false)}
-            >
-              Done
-            </Button>
-          </div>
-        )}
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-// ======================================================
 // MAIN COMPONENT
 // ======================================================
 
@@ -597,11 +107,12 @@ export default function ItemMasterAddDialog({
   const [itemCondition, setItemCondition] = useState([]);
 
   const [brandOptions, setBrandOptions] = useState([]);
-
+  const [brandOptionsLoading, setBrandOptionsLoading] = useState(false);
+  const [customFieldDefinitions, setCustomFieldDefinitions] = useState([]);
+  const [customFields, setCustomFields] = useState({});
   const [errors, setErrors] = useState({});
 
   const [form, setForm] = useState(createInitialForm);
-
   // ====================================================
   // TOAST HELPERS
   // ====================================================
@@ -659,8 +170,7 @@ export default function ItemMasterAddDialog({
     if (
       brandName &&
       manufacturerName &&
-      brandName.toLowerCase() !==
-        manufacturerName.toLowerCase()
+      brandName.toLowerCase() !== manufacturerName.toLowerCase()
     ) {
       return `${brandName} - ${manufacturerName}`;
     }
@@ -674,25 +184,81 @@ export default function ItemMasterAddDialog({
   }, []);
 
   // ====================================================
-  // STORE LOADED BRAND OPTIONS
+  // LOAD BRAND / MANUFACTURER OPTIONS FOR LIB MULTISELECT
   // ====================================================
 
-  const handleBrandOptionsLoaded = useCallback((records) => {
-    setBrandOptions((previous) => {
-      const merged = new Map(
-        previous.map((item) => [
-          String(item.id),
-          item,
-        ]),
-      );
+  const loadBrandOptions = useCallback(async () => {
+    try {
+      setBrandOptionsLoading(true);
 
-      records.forEach((item) => {
-        merged.set(String(item.id), item);
+      const firstParams = new URLSearchParams({
+        page: "1",
+        limit: "100",
+        query: "",
+        status: "all",
       });
 
-      return Array.from(merged.values());
-    });
-  }, []);
+      const firstResponse = await apiFetch(
+        `/api/inventory/brand_manufacturer?${firstParams.toString()}`
+      );
+      const firstResult = await firstResponse.json();
+
+      if (!firstResponse.ok || !firstResult.success) {
+        throw new Error(
+          firstResult.message || "Failed to load brands / manufacturers."
+        );
+      }
+
+      let records = Array.isArray(firstResult.data)
+        ? [...firstResult.data]
+        : [];
+
+      const totalPages = Number(firstResult.pagination?.totalPages) || 1;
+
+      for (let page = 2; page <= totalPages; page += 1) {
+        const params = new URLSearchParams({
+          page: String(page),
+          limit: "100",
+          query: "",
+          status: "all",
+        });
+
+        const response = await apiFetch(
+          `/api/inventory/brand_manufacturer?${params.toString()}`
+        );
+        const result = await response.json();
+
+        if (!response.ok || !result.success) {
+          throw new Error(
+            result.message || `Failed to load brand page ${page}.`
+          );
+        }
+
+        if (Array.isArray(result.data)) {
+          records = records.concat(result.data);
+        }
+      }
+
+      const uniqueRecords = Array.from(
+        new Map(records.map((brand) => [String(brand.id), brand])).values()
+      );
+
+      setBrandOptions(
+        uniqueRecords.map((brand) => ({
+          value: String(brand.id),
+          label: getBrandLabel(brand),
+        }))
+      );
+    } catch (error) {
+      console.error("LOAD BRAND / MANUFACTURER ERROR:", error);
+      showErrorToast(
+        error?.message || "Failed to load brands / manufacturers."
+      );
+      setBrandOptions([]);
+    } finally {
+      setBrandOptionsLoading(false);
+    }
+  }, [getBrandLabel, showErrorToast]);
 
   // ====================================================
   // RESET FORM
@@ -702,6 +268,7 @@ export default function ItemMasterAddDialog({
     setForm(createInitialForm());
     setErrors({});
     setBrandOptions([]);
+    setBrandOptionsLoading(false);
   }, []);
 
   // ====================================================
@@ -712,12 +279,13 @@ export default function ItemMasterAddDialog({
     if (!open) return;
 
     loadItemGroups();
+    loadBrandOptions();
     loadUnits();
     loadTaxes();
     loadLocations();
     loadMachines();
     loadItemCondition();
-  }, [open]);
+  }, [open, loadBrandOptions]);
 
   // ====================================================
   // LOAD ITEM GROUPS
@@ -1086,7 +654,17 @@ export default function ItemMasterAddDialog({
 
   const handleSubmit = async () => {
     if (!validate()) return;
+    const missingCustomFields = validateRequiredCustomFields(
+      customFieldDefinitions,
+      customFields,
+    );
 
+    if (missingCustomFields.length > 0) {
+      showErrorToast(
+        `Please fill in required custom fields: ${missingCustomFields.join(", ")}`,
+      );
+      return;
+    }
     try {
       setLoading(true);
 
@@ -1139,7 +717,7 @@ export default function ItemMasterAddDialog({
               form.ItemConditionid || null,
 
             status: form.status ?? true,
-
+            customFields: customFields ?? {},
             isDefault: form.isDefault ?? false,
           }),
         },
@@ -1167,70 +745,12 @@ export default function ItemMasterAddDialog({
 
       showErrorToast(
         error?.message ||
-          "Something went wrong while creating the item.",
+        "Something went wrong while creating the item.",
       );
     } finally {
       setLoading(false);
     }
   };
-
-  // ====================================================
-  // RENDER BRAND FIELD
-  // ====================================================
-
-  const renderBrandField = () => (
-    <div className="space-y-2">
-      <Label>Brand / Manufacturer</Label>
-
-      <PaginatedSearchSelect
-        endpoint="/api/inventory/brand_manufacturer"
-        value={form.BrandManufacturerids}
-        onChange={handleBrandSelection}
-        placeholder="Select Brand / Manufacturer"
-        searchPlaceholder="Search brand or manufacturer..."
-        disabled={loading}
-        multiple={true}
-        getLabel={getBrandLabel}
-        knownOptions={brandOptions}
-        onOptionsLoaded={handleBrandOptionsLoaded}
-        onError={showErrorToast}
-      />
-
-      {form.BrandManufacturerids.length > 0 && (
-        <div className="rounded-md border bg-muted/30 p-2">
-          <p className="text-xs font-medium">
-            {form.BrandManufacturerids.length} brand(s) selected
-          </p>
-
-          <div className="mt-2 flex flex-wrap gap-1">
-            {form.BrandManufacturerids.map((brandId) => {
-              const brand = brandOptions.find(
-                (item) =>
-                  String(item.id) === String(brandId),
-              );
-
-              return (
-                <span
-                  key={brandId}
-                  className="rounded-md border bg-background px-2 py-1 text-xs"
-                >
-                  {brand
-                    ? getBrandLabel(brand)
-                    : `Brand #${brandId}`}
-                </span>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {errors.BrandManufacturerids && (
-        <p className="text-sm text-destructive">
-          {errors.BrandManufacturerids}
-        </p>
-      )}
-    </div>
-  );
 
   // ====================================================
   // RENDER
@@ -1264,27 +784,23 @@ export default function ItemMasterAddDialog({
                   <span className="text-destructive">*</span>
                 </Label>
 
-                <Select
+                <SelectSearch
+                  options={itemGroups.map((item) => ({
+                    value: String(item.id),
+                    label: item.groupName,
+                  }))}
                   value={form.ItemGroupid}
                   onValueChange={(value) =>
                     updateField("ItemGroupid", value)
                   }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select Item Group" />
-                  </SelectTrigger>
-
-                  <SelectContent>
-                    {itemGroups.map((item) => (
-                      <SelectItem
-                        key={item.id}
-                        value={String(item.id)}
-                      >
-                        {item.groupName}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  placeholder="Select Item Group"
+                  searchPlaceholder="Search item group..."
+                  emptyMessage="No item group found."
+                  disabled={loading}
+                  triggerClassName={
+                    errors.ItemGroupid ? "border-destructive" : ""
+                  }
+                />
 
                 {errors.ItemGroupid && (
                   <p className="mt-1 text-sm text-destructive">
@@ -1452,13 +968,17 @@ export default function ItemMasterAddDialog({
                   )}
                 </Label>
 
-                <Select
+                <SelectSearch
+                  options={[
+                    { value: "none", label: "No Location" },
+                    ...locations.map((location) => ({
+                      value: String(location.id),
+                      label: `${location.locationName} (${location.locationCode})`,
+                    })),
+                  ]}
                   value={form.Locationid || "none"}
                   onValueChange={(value) => {
-                    updateField(
-                      "Locationid",
-                      value === "none" ? "" : value,
-                    );
+                    updateField("Locationid", value === "none" ? "" : value);
 
                     setErrors((prev) => ({
                       ...prev,
@@ -1466,33 +986,14 @@ export default function ItemMasterAddDialog({
                       Machineid: "",
                     }));
                   }}
-                >
-                  <SelectTrigger
-                    className={
-                      errors.Locationid
-                        ? "border-destructive"
-                        : ""
-                    }
-                  >
-                    <SelectValue placeholder="Select Location" />
-                  </SelectTrigger>
-
-                  <SelectContent>
-                    <SelectItem value="none">
-                      No Location
-                    </SelectItem>
-
-                    {locations.map((location) => (
-                      <SelectItem
-                        key={location.id}
-                        value={String(location.id)}
-                      >
-                        {location.locationName} (
-                        {location.locationCode})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  placeholder="Select Warehouse"
+                  searchPlaceholder="Search warehouse..."
+                  emptyMessage="No warehouse found."
+                  disabled={loading}
+                  triggerClassName={
+                    errors.Locationid ? "border-destructive" : ""
+                  }
+                />
 
                 {errors.Locationid && (
                   <p className="mt-1 text-sm text-destructive">
@@ -1511,13 +1012,17 @@ export default function ItemMasterAddDialog({
                   )}
                 </Label>
 
-                <Select
+                <SelectSearch
+                  options={[
+                    { value: "none", label: "No Machine" },
+                    ...machines.map((machine) => ({
+                      value: String(machine.id),
+                      label: `${machine.machineName} (${machine.machineCode})`,
+                    })),
+                  ]}
                   value={form.Machineid || "none"}
                   onValueChange={(value) => {
-                    updateField(
-                      "Machineid",
-                      value === "none" ? "" : value,
-                    );
+                    updateField("Machineid", value === "none" ? "" : value);
 
                     setErrors((prev) => ({
                       ...prev,
@@ -1525,33 +1030,14 @@ export default function ItemMasterAddDialog({
                       Machineid: "",
                     }));
                   }}
-                >
-                  <SelectTrigger
-                    className={
-                      errors.Machineid
-                        ? "border-destructive"
-                        : ""
-                    }
-                  >
-                    <SelectValue placeholder="Select Machine" />
-                  </SelectTrigger>
-
-                  <SelectContent>
-                    <SelectItem value="none">
-                      No Machine
-                    </SelectItem>
-
-                    {machines.map((machine) => (
-                      <SelectItem
-                        key={machine.id}
-                        value={String(machine.id)}
-                      >
-                        {machine.machineName} (
-                        {machine.machineCode})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  placeholder="Select Machine"
+                  searchPlaceholder="Search machine..."
+                  emptyMessage="No machine found."
+                  disabled={loading}
+                  triggerClassName={
+                    errors.Machineid ? "border-destructive" : ""
+                  }
+                />
 
                 {errors.Machineid && (
                   <p className="mt-1 text-sm text-destructive">
@@ -1612,7 +1098,55 @@ export default function ItemMasterAddDialog({
 
               {/* BRAND / MANUFACTURER */}
 
-              {renderBrandField()}
+              <div className="space-y-2">
+                <Label>Brand / Manufacturer</Label>
+
+                <MultiSelect
+                  options={brandOptions}
+                  value={form.BrandManufacturerids}
+                  onValueChange={handleBrandSelection}
+                  disabled={loading || brandOptionsLoading || brandOptions.length === 0}
+                  placeholder="Select Brand / Manufacturer"
+                  searchPlaceholder="Search brand / manufacturer..."
+                  emptyMessage="No brand / manufacturer found."
+                  maxDisplay={2}
+                />
+
+                {brandOptionsLoading && (
+                  <p className="text-xs text-muted-foreground">
+                    Loading brands / manufacturers...
+                  </p>
+                )}
+
+                {!brandOptionsLoading && brandOptions.length === 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    No brand / manufacturer options available.
+                  </p>
+                )}
+
+                {form.BrandManufacturerids.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {brandOptions
+                      .filter((option) =>
+                        form.BrandManufacturerids.includes(option.value)
+                      )
+                      .map((option) => (
+                        <span
+                          key={option.value}
+                          className="rounded-md border bg-muted px-2 py-1 text-xs"
+                        >
+                          {option.label}
+                        </span>
+                      ))}
+                  </div>
+                )}
+
+                {errors.BrandManufacturerids && (
+                  <p className="text-sm text-destructive">
+                    {errors.BrandManufacturerids}
+                  </p>
+                )}
+              </div>
 
               {/* RATE */}
 
@@ -1920,15 +1454,16 @@ export default function ItemMasterAddDialog({
                           <tbody>
                             {form.BrandManufacturerids.map(
                               (brandId, index) => {
+                                // MultiSelect options use { value, label }.
+                                // Match the selected ID against option.value
+                                // so the table displays the brand name, not its ID.
                                 const brand = brandOptions.find(
                                   (item) =>
-                                    String(item.id) ===
-                                    String(brandId),
+                                    String(item.value) === String(brandId),
                                 );
 
-                                const brandLabel = brand
-                                  ? getBrandLabel(brand)
-                                  : `Brand #${brandId}`;
+                                const brandLabel =
+                                  brand?.label || `Brand #${brandId}`;
 
                                 return (
                                   <tr
@@ -1950,7 +1485,7 @@ export default function ItemMasterAddDialog({
                                         placeholder="Enter quantity"
                                         value={
                                           form.BrandRestockLevels?.[
-                                            brandId
+                                          brandId
                                           ] ?? ""
                                         }
                                         aria-invalid={
@@ -2062,7 +1597,27 @@ export default function ItemMasterAddDialog({
                   </SelectContent>
                 </Select>
               </div>
+              {/* CUSTOM FIELDS */}
 
+              <div className="space-y-4 border-t pt-5">
+                <div>
+                  <h3 className="text-base font-semibold">
+                    Custom Fields
+                  </h3>
+
+                  <p className="text-sm text-muted-foreground">
+                    Additional Item information.
+                  </p>
+                </div>
+
+                <ItemMasterCustomFields
+                  values={customFields}
+                  onChange={setCustomFields}
+                  onFieldsLoaded={(loadedFields) => {
+                    setCustomFieldDefinitions(loadedFields);
+                  }}
+                />
+              </div>
             </DialogBody>
           </ScrollArea>
 

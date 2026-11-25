@@ -5,14 +5,22 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 
-import { CalendarIcon } from "lucide-react";
+import {
+    CalendarIcon,
+    Check,
+    ChevronsUpDown,
+    Search,
+} from "lucide-react";
+
 import { Calendar } from "@/components/ui/calendar";
 import {
     Popover,
     PopoverContent,
     PopoverTrigger,
 } from "@/components/ui/popover";
+
 import { Button } from "@/components/ui/button";
+
 import {
     Dialog,
     DialogContent,
@@ -22,15 +30,9 @@ import {
     DialogBody,
     DialogTitle,
 } from "@/components/ui/dialog";
+
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 import {
@@ -46,7 +48,7 @@ import {
 
 import ProductionCustomFields, {
     validateRequiredCustomFields,
-} from "../../inventory/custom-fields/import-custom-fields";
+} from "./production-custom-fields";
 
 // ======================================================
 // API ENDPOINTS
@@ -54,26 +56,21 @@ import ProductionCustomFields, {
 
 const API = {
     shifts: "/api/hr/Shift?limit=10000&status=active",
-    machines: "/api/inventory/machine-master?limit=10000&status=active",
-    items: "/api/inventory/item-master?limit=10000&status=active",
-    units: "/api/inventory/unit?limit=10000",
+    dropdowns: "/api/production?type=dropdowns",
 };
 
 // ======================================================
 // GENERAL HELPERS
 // ======================================================
 
-const getToday = () => format(new Date(), "yyyy-MM-dd");
+const getToday = () => format(new Date(), "yyyy-MM-dd'T'HH:mm");
 
 const getDefaultForm = () => ({
     productionDate: getToday(),
     shiftId: "",
     machineId: "",
     itemId: "",
-
-    // UI-only field. Unit is fetched using ItemMaster.Unitid.
     unitId: "",
-
     productionQuantity: "",
     remarks: "",
 });
@@ -111,21 +108,11 @@ const getItemUnitId = (item) =>
     item?.Unit?.id ||
     "";
 
-const normalizeItemName = (value) =>
-    String(value || "")
-        .trim()
-        .toLowerCase()
-        .replace(/\s+/g, " ");
-
 // ======================================================
 // UNIT HELPERS
 // ======================================================
 
-const getItemUnitLabel = (
-    item,
-    units = [],
-    assignedDetail = null
-) => {
+const getItemUnitLabel = (item, units = []) => {
     const unitId = getItemUnitId(item);
 
     const unit =
@@ -140,7 +127,6 @@ const getItemUnitLabel = (
         unit?.unitName ||
         item?.unitName ||
         item?.UnitName ||
-        assignedDetail?.itemUnit ||
         "";
 
     const abbreviation =
@@ -154,186 +140,6 @@ const getItemUnitLabel = (
     }
 
     return unitName || abbreviation || "Unit";
-};
-
-// ======================================================
-// MACHINE ITEM DETAILS
-// ======================================================
-
-const getMachineItemDetails = (machine) => {
-    let details =
-        machine?.itemDetails ||
-        machine?.ItemDetails ||
-        [];
-
-    if (typeof details === "string") {
-        try {
-            details = JSON.parse(details);
-        } catch (error) {
-            console.error(
-                "MACHINE ITEM DETAILS PARSE ERROR:",
-                error
-            );
-
-            return [];
-        }
-    }
-
-    return Array.isArray(details) ? details : [];
-};
-
-// ======================================================
-// GET MACHINE ASSIGNED ITEMS
-// ======================================================
-
-const getMachineAssignedItems = (
-    machine,
-    allItems = []
-) => {
-    if (!machine || !Array.isArray(allItems)) {
-        return [];
-    }
-
-    const itemDetails = getMachineItemDetails(machine);
-
-    const idMap = new Map();
-    const nameMap = new Map();
-    const skuMap = new Map();
-    const descriptionMap = new Map();
-
-    allItems.forEach((record) => {
-        const id = String(getItemId(record) || "");
-
-        if (!id) return;
-
-        idMap.set(id, record);
-
-        const name = normalizeItemName(getItemName(record));
-        const sku = normalizeItemName(record?.SKU);
-        const description = normalizeItemName(
-            record?.Description
-        );
-
-        if (name && !nameMap.has(name)) {
-            nameMap.set(name, record);
-        }
-
-        if (sku && !skuMap.has(sku)) {
-            skuMap.set(sku, record);
-        }
-
-        if (description && !descriptionMap.has(description)) {
-            descriptionMap.set(description, record);
-        }
-    });
-
-    const findItem = (candidates) => {
-        // PASS 1: EXACT MATCH
-
-        for (const value of candidates) {
-            const text = String(value ?? "").trim();
-
-            if (!text) continue;
-
-            const normalized = normalizeItemName(text);
-
-            const found =
-                idMap.get(text) ||
-                nameMap.get(normalized) ||
-                skuMap.get(normalized) ||
-                descriptionMap.get(normalized);
-
-            if (found) return found;
-        }
-
-        // PASS 2: PARTIAL MATCH
-
-        for (const value of candidates) {
-            const normalized = normalizeItemName(value);
-
-            if (normalized.length < 3) continue;
-
-            const found = allItems.find((record) =>
-                [
-                    getItemName(record),
-                    record?.SKU,
-                    record?.Description,
-                ]
-                    .map(normalizeItemName)
-                    .filter(Boolean)
-                    .some(
-                        (key) =>
-                            key.includes(normalized) ||
-                            normalized.includes(key)
-                    )
-            );
-
-            if (found) return found;
-        }
-
-        return null;
-    };
-
-    const matchedItems = [];
-    const addedIds = new Set();
-
-    itemDetails.forEach((detail) => {
-        if (detail?.deletedAt) return;
-
-        const selected =
-            detail?.Selecteditem ??
-            detail?.selectedItem ??
-            detail?.selecteditem;
-
-        const candidates = [];
-
-        candidates.push(
-            detail?.itemId,
-            detail?.ItemId,
-            detail?.ItemMasterid
-        );
-
-        if (
-            typeof selected === "object" &&
-            selected !== null
-        ) {
-            candidates.push(
-                selected.id,
-                selected.value,
-                selected.ItemMasterid,
-                selected.ItemName,
-                selected.itemName,
-                selected.label,
-                selected.name
-            );
-        } else {
-            candidates.push(selected);
-        }
-
-        const matchedItem = findItem(candidates);
-
-        if (!matchedItem) {
-            console.warn(
-                "Assigned machine item not found in Item Master:",
-                selected
-            );
-
-            return;
-        }
-
-        const itemId = String(getItemId(matchedItem));
-
-        if (addedIds.has(itemId)) return;
-
-        addedIds.add(itemId);
-
-        matchedItems.push({
-            ...matchedItem,
-            _machineItemDetail: detail,
-        });
-    });
-
-    return matchedItems;
 };
 
 // ======================================================
@@ -380,11 +186,7 @@ const showToast = (type, message) => {
         () => (
             <Alert
                 variant="mono"
-                icon={
-                    type === "success"
-                        ? "success"
-                        : "destructive"
-                }
+                icon={type === "success" ? "success" : "destructive"}
                 close={false}
             >
                 <AlertIcon>
@@ -418,14 +220,31 @@ export default function ProductionAddDialog({
     const [saving, setSaving] = useState(false);
     const [loadingDropdowns, setLoadingDropdowns] = useState(false);
 
+    // ======================================================
+    // SEARCHABLE DROPDOWN STATES
+    // ======================================================
+
+    const [shiftDropdownOpen, setShiftDropdownOpen] = useState(false);
+    const [shiftSearch, setShiftSearch] = useState("");
+
+    const [machineDropdownOpen, setMachineDropdownOpen] = useState(false);
+    const [machineSearch, setMachineSearch] = useState("");
+
+    const [itemDropdownOpen, setItemDropdownOpen] = useState(false);
+    const [itemSearch, setItemSearch] = useState("");
+
+    // ======================================================
     // DATABASE DROPDOWN DATA
+    // ======================================================
 
     const [shifts, setShifts] = useState([]);
     const [machines, setMachines] = useState([]);
     const [items, setItems] = useState([]);
     const [units, setUnits] = useState([]);
 
+    // ======================================================
     // CUSTOM FIELDS
+    // ======================================================
 
     const [customFieldDefinitions, setCustomFieldDefinitions] =
         useState([]);
@@ -433,47 +252,80 @@ export default function ProductionAddDialog({
     const [customFields, setCustomFields] = useState({});
 
     // ======================================================
-    // SELECTED MACHINE
+    // FILTERED DROPDOWN OPTIONS
     // ======================================================
 
-    const selectedMachine = useMemo(() => {
-        return (
-            machines.find(
-                (machine) =>
-                    String(machine.id) ===
-                    String(form.machineId)
-            ) || null
+    const filteredShifts = useMemo(() => {
+        const search = shiftSearch.trim().toLowerCase();
+
+        if (!search) return shifts;
+
+        return shifts.filter((shift) =>
+            String(shift.name || "")
+                .toLowerCase()
+                .includes(search)
         );
-    }, [machines, form.machineId]);
+    }, [shifts, shiftSearch]);
+
+    const filteredMachines = useMemo(() => {
+        const search = machineSearch.trim().toLowerCase();
+
+        if (!search) return machines;
+
+        return machines.filter((machine) =>
+            `${machine.machineName || ""} ${machine.machineCode || ""}`
+                .toLowerCase()
+                .includes(search)
+        );
+    }, [machines, machineSearch]);
 
     const filteredItems = useMemo(() => {
-        return items;
-    }, [items]);
+        const search = itemSearch.trim().toLowerCase();
 
-    // ======================================================
-    // SELECTED ITEM
-    // ======================================================
+        if (!search) return items;
 
-    const selectedItem = useMemo(() => {
-        return (
-            filteredItems.find(
-                (record) =>
-                    String(getItemId(record)) ===
-                    String(form.itemId)
-            ) || null
+        return items.filter((record) =>
+            String(getItemName(record))
+                .toLowerCase()
+                .includes(search)
         );
-    }, [filteredItems, form.itemId]);
+    }, [items, itemSearch]);
 
-    const selectedMachineItemDetail =
-        selectedItem?._machineItemDetail || null;
+    // ======================================================
+    // SELECTED OPTIONS
+    // ======================================================
+
+    const selectedShift = useMemo(
+        () =>
+            shifts.find(
+                (shift) =>
+                    String(shift.id) === String(form.shiftId)
+            ) || null,
+        [shifts, form.shiftId]
+    );
+
+    const selectedMachine = useMemo(
+        () =>
+            machines.find(
+                (machine) =>
+                    String(machine.id) === String(form.machineId)
+            ) || null,
+        [machines, form.machineId]
+    );
+
+    const selectedItem = useMemo(
+        () =>
+            items.find(
+                (record) =>
+                    String(getItemId(record)) === String(form.itemId)
+            ) || null,
+        [items, form.itemId]
+    );
 
     const selectedUnitLabel = selectedItem
-        ? getItemUnitLabel(
-            selectedItem,
-            units,
-            selectedMachineItemDetail
-        )
+        ? getItemUnitLabel(selectedItem, units)
         : "Unit (Abbreviation)";
+
 
     // ======================================================
     // FETCH DROPDOWNS
@@ -493,8 +345,7 @@ export default function ProductionAddDialog({
                 cache: "no-store",
             });
 
-            const contentType =
-                response.headers.get("content-type") || "";
+            const contentType = response.headers.get("content-type") || "";
 
             if (!contentType.includes("application/json")) {
                 throw new Error(
@@ -510,61 +361,60 @@ export default function ProductionAddDialog({
                 );
             }
 
-            return getResponseList(result);
+            return result;
         };
 
         const loadDropdowns = async () => {
             setLoadingDropdowns(true);
 
-            const dropdowns = [
-                {
-                    key: "shifts",
-                    url: API.shifts,
-                    setter: setShifts,
-                },
-                {
-                    key: "machines",
-                    url: API.machines,
-                    setter: setMachines,
-                },
-                {
-                    key: "items",
-                    url: API.items,
-                    setter: setItems,
-                },
-                {
-                    key: "units",
-                    url: API.units,
-                    setter: setUnits,
-                },
-            ];
-
             try {
-                await Promise.all(
-                    dropdowns.map(
-                        async ({ key, url, setter }) => {
-                            try {
-                                const data = await fetchDropdown(
-                                    url,
-                                    key
-                                );
+                // Fetch Shift separately and all other dropdowns together.
+                const [shiftResult, dropdownResult] = await Promise.allSettled([
+                    fetchDropdown(API.shifts, "shifts"),
+                    fetchDropdown(API.dropdowns, "production dropdowns"),
+                ]);
 
-                                if (!cancelled) {
-                                    setter(data);
-                                }
-                            } catch (error) {
-                                console.error(
-                                    `PRODUCTION ${key.toUpperCase()} DROPDOWN ERROR:`,
-                                    error
-                                );
+                if (cancelled) return;
 
-                                if (!cancelled) {
-                                    setter([]);
-                                }
-                            }
-                        }
-                    )
-                );
+                // SHIFT DATA
+                if (shiftResult.status === "fulfilled") {
+                    setShifts(getResponseList(shiftResult.value));
+                } else {
+                    console.error("PRODUCTION SHIFTS DROPDOWN ERROR:", shiftResult.reason);
+                    setShifts([]);
+                }
+
+                // MACHINE, ITEM AND UNIT DATA
+                if (dropdownResult.status === "fulfilled") {
+                    const dropdownData = dropdownResult.value?.data || {};
+
+                    setMachines(
+                        Array.isArray(dropdownData.machines)
+                            ? dropdownData.machines
+                            : []
+                    );
+
+                    setItems(
+                        Array.isArray(dropdownData.items)
+                            ? dropdownData.items
+                            : []
+                    );
+
+                    setUnits(
+                        Array.isArray(dropdownData.units)
+                            ? dropdownData.units
+                            : []
+                    );
+                } else {
+                    console.error(
+                        "PRODUCTION DROPDOWNS ERROR:",
+                        dropdownResult.reason
+                    );
+
+                    setMachines([]);
+                    setItems([]);
+                    setUnits([]);
+                }
             } finally {
                 if (!cancelled) {
                     setLoadingDropdowns(false);
@@ -579,6 +429,7 @@ export default function ProductionAddDialog({
         };
     }, [open]);
 
+
     // ======================================================
     // INITIALIZE FORM
     // ======================================================
@@ -586,14 +437,13 @@ export default function ProductionAddDialog({
     useEffect(() => {
         if (!open) return;
 
-        const productionItem =
-            item?.item || null;
+        const productionItem = item?.item || null;
 
         setForm({
             productionDate: item?.productionDate
                 ? format(
                     new Date(item.productionDate),
-                    "yyyy-MM-dd"
+                    "yyyy-MM-dd'T'HH:mm"
                 )
                 : getToday(),
 
@@ -616,7 +466,6 @@ export default function ProductionAddDialog({
                 ""
             ),
 
-            // Unit belongs to ItemMaster, not Production.
             unitId: String(
                 productionItem?.Unitid ||
                 productionItem?.unit?.id ||
@@ -630,8 +479,16 @@ export default function ProductionAddDialog({
         });
 
         setCustomFields(item?.customFields || {});
-        setCustomFieldDefinitions([]);
+        // setCustomFieldDefinitions([]);
         setErrors({});
+
+        setShiftSearch("");
+        setMachineSearch("");
+        setItemSearch("");
+
+        setShiftDropdownOpen(false);
+        setMachineDropdownOpen(false);
+        setItemDropdownOpen(false);
     }, [open, item]);
 
     // ======================================================
@@ -646,9 +503,7 @@ export default function ProductionAddDialog({
         if (!unitId) return;
 
         setForm((previous) => {
-            if (
-                String(previous.unitId) === String(unitId)
-            ) {
+            if (String(previous.unitId) === String(unitId)) {
                 return previous;
             }
 
@@ -680,15 +535,7 @@ export default function ProductionAddDialog({
     // ======================================================
 
     const handleMachineChange = (value) => {
-        setForm((prev) => ({
-            ...prev,
-            machineId: value,
-        }));
-
-        setErrors((prev) => ({
-            ...prev,
-            machineId: "",
-        }));
+        updateField("machineId", value);
     };
 
     // ======================================================
@@ -696,7 +543,7 @@ export default function ProductionAddDialog({
     // ======================================================
 
     const handleItemChange = (value) => {
-        const selected = filteredItems.find(
+        const selected = items.find(
             (record) =>
                 String(getItemId(record)) === String(value)
         );
@@ -704,9 +551,7 @@ export default function ProductionAddDialog({
         setForm((previous) => ({
             ...previous,
             itemId: value,
-            unitId: String(
-                getItemUnitId(selected) || ""
-            ),
+            unitId: String(getItemUnitId(selected) || ""),
         }));
 
         setErrors((previous) => ({
@@ -728,41 +573,27 @@ export default function ProductionAddDialog({
         }
 
         if (!form.shiftId) {
-            newErrors.shiftId =
-                "Please select a shift.";
-        } else if (
-            !shifts.some(
-                (record) =>
-                    String(record.id) ===
-                    String(form.shiftId)
-            )
-        ) {
-            newErrors.shiftId =
-                "Please select a valid shift.";
+            newErrors.shiftId = "Please select a shift.";
+        } else if (!selectedShift) {
+            newErrors.shiftId = "Please select a valid shift.";
         }
 
         if (!form.machineId) {
-            newErrors.machineId =
-                "Please select a machine.";
+            newErrors.machineId = "Please select a machine.";
         } else if (!selectedMachine) {
-            newErrors.machineId =
-                "Please select a valid machine.";
+            newErrors.machineId = "Please select a valid machine.";
         }
 
         if (!form.itemId) {
-            newErrors.itemId =
-                "Please select an item.";
+            newErrors.itemId = "Please select an item.";
         } else if (!selectedItem) {
-            newErrors.itemId =
-                "Selected item is not assigned to this machine.";
+            newErrors.itemId = "Please select a valid item.";
         }
 
         if (
             form.productionQuantity !== "" &&
             (
-                !Number.isFinite(
-                    Number(form.productionQuantity)
-                ) ||
+                !Number.isFinite(Number(form.productionQuantity)) ||
                 Number(form.productionQuantity) < 0
             )
         ) {
@@ -809,19 +640,14 @@ export default function ProductionAddDialog({
 
         if (!selectedItem || !selectedMachine) {
             showErrorToast(
-                "Please select a valid machine and its assigned item."
+                "Please select a valid machine and item."
             );
 
             return;
         }
 
-        // IMPORTANT:
-        // Only send fields that exist in the current Production model.
-        // Do not send productionCode, productionName, unitId or quantity.
-
         const productionData = {
             productionDate: form.productionDate,
-
             shiftId: form.shiftId,
             machineId: form.machineId,
             itemId: String(getItemId(selectedItem)),
@@ -832,7 +658,6 @@ export default function ProductionAddDialog({
                     : Number(form.productionQuantity),
 
             remarks: form.remarks.trim(),
-
             customFields: customFields || {},
         };
 
@@ -860,8 +685,7 @@ export default function ProductionAddDialog({
 
             if (!response.ok || !result.success) {
                 throw new Error(
-                    result.message ||
-                    "Failed to save production."
+                    result.message || "Failed to save production."
                 );
             }
 
@@ -879,10 +703,7 @@ export default function ProductionAddDialog({
 
             closeDialog?.();
         } catch (error) {
-            console.error(
-                "PRODUCTION SAVE ERROR:",
-                error
-            );
+            console.error("PRODUCTION SAVE ERROR:", error);
 
             showErrorToast(
                 error.message || "Something went wrong."
@@ -903,6 +724,14 @@ export default function ProductionAddDialog({
         setForm(getDefaultForm());
         setCustomFields({});
 
+        setShiftSearch("");
+        setMachineSearch("");
+        setItemSearch("");
+
+        setShiftDropdownOpen(false);
+        setMachineDropdownOpen(false);
+        setItemDropdownOpen(false);
+
         closeDialog?.();
     };
 
@@ -922,9 +751,7 @@ export default function ProductionAddDialog({
 
                     <DialogHeader>
                         <DialogTitle>
-                            {item
-                                ? "Edit Production"
-                                : "Add Production"}
+                            {item ? "Edit Production" : "Add Production"}
                         </DialogTitle>
 
                         <DialogDescription>
@@ -942,9 +769,7 @@ export default function ProductionAddDialog({
                             <div>
                                 <label className="mb-2 block text-sm font-medium">
                                     Select Date{" "}
-                                    <span className="text-destructive">
-                                        *
-                                    </span>
+                                    <span className="text-destructive">*</span>
                                 </label>
 
                                 <Popover>
@@ -956,12 +781,10 @@ export default function ProductionAddDialog({
                                         >
                                             {form.productionDate
                                                 ? format(
-                                                    new Date(
-                                                        `${form.productionDate}T00:00:00`
-                                                    ),
-                                                    "MM/dd/yyyy"
+                                                    new Date(`${form.productionDate.slice(0, 10)}T00:00:00`),
+                                                    "dd MMM yyyy"
                                                 )
-                                                : "MM/DD/YYYY"}
+                                                : "Pick a date"}
 
                                             <CalendarIcon className="size-4 text-muted-foreground" />
                                         </Button>
@@ -975,19 +798,14 @@ export default function ProductionAddDialog({
                                             mode="single"
                                             selected={
                                                 form.productionDate
-                                                    ? new Date(
-                                                        `${form.productionDate}T00:00:00`
-                                                    )
+                                                    ? new Date(`${form.productionDate.slice(0, 10)}T00:00:00`)
                                                     : undefined
                                             }
                                             onSelect={(date) =>
                                                 updateField(
                                                     "productionDate",
                                                     date
-                                                        ? format(
-                                                            date,
-                                                            "yyyy-MM-dd"
-                                                        )
+                                                        ? `${format(date, "yyyy-MM-dd")}T${form.productionDate?.slice(11, 16) || format(new Date(), "HH:mm")}`
                                                         : ""
                                                 )
                                             }
@@ -1008,44 +826,92 @@ export default function ProductionAddDialog({
                             <div className="space-y-2">
                                 <label className="text-sm font-medium">
                                     Select Shift{" "}
-                                    <span className="text-destructive">
-                                        *
-                                    </span>
+                                    <span className="text-destructive">*</span>
                                 </label>
 
-                                <Select
-                                    value={form.shiftId}
-                                    onValueChange={(value) =>
-                                        updateField(
-                                            "shiftId",
-                                            value
-                                        )
-                                    }
-                                    disabled={loadingDropdowns}
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue
-                                            placeholder={
-                                                loadingDropdowns
-                                                    ? "Loading shifts..."
-                                                    : "Select shift"
-                                            }
-                                        />
-                                    </SelectTrigger>
+                                <Popover
+                                    open={shiftDropdownOpen}
+                                    onOpenChange={(value) => {
+                                        setShiftDropdownOpen(value);
 
-                                    <SelectContent>
-                                        {shifts.map((shift) => (
-                                            <SelectItem
-                                                key={shift.id}
-                                                value={String(
-                                                    shift.id
+                                        if (!value) {
+                                            setShiftSearch("");
+                                        }
+                                    }}
+                                >
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            role="combobox"
+                                            aria-expanded={shiftDropdownOpen}
+                                            disabled={loadingDropdowns}
+                                            className="w-full justify-between font-normal"
+                                        >
+                                            <span className="truncate">
+                                                {loadingDropdowns
+                                                    ? "Loading shifts..."
+                                                    : selectedShift?.name || "Select shift"}
+                                            </span>
+
+                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                        </Button>
+                                    </PopoverTrigger>
+
+                                    <PopoverContent
+                                        align="start"
+                                        className="w-[var(--radix-popover-trigger-width)] p-0"
+                                    >
+                                        <div className="flex items-center border-b px-3">
+                                            <Search className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" />
+
+                                            <Input
+                                                value={shiftSearch}
+                                                onChange={(e) =>
+                                                    setShiftSearch(e.target.value)
+                                                }
+                                                placeholder="Search shift..."
+                                                className="h-10 border-0 shadow-none focus-visible:ring-0"
+                                            />
+                                        </div>
+
+                                        <div className="max-h-56 overflow-y-auto overscroll-contain">
+                                            <div className="p-1">
+                                                {filteredShifts.length > 0 ? (
+                                                    filteredShifts.map((shift) => (
+                                                        <button
+                                                            key={shift.id}
+                                                            type="button"
+                                                            onClick={() => {
+                                                                updateField(
+                                                                    "shiftId",
+                                                                    String(shift.id)
+                                                                );
+
+                                                                setShiftDropdownOpen(false);
+                                                                setShiftSearch("");
+                                                            }}
+                                                            className="flex w-full items-center justify-between rounded-sm px-3 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground"
+                                                        >
+                                                            <span>{shift.name}</span>
+
+                                                            <Check
+                                                                className={`ml-2 h-4 w-4 ${String(form.shiftId) === String(shift.id)
+                                                                    ? "opacity-100"
+                                                                    : "opacity-0"
+                                                                    }`}
+                                                            />
+                                                        </button>
+                                                    ))
+                                                ) : (
+                                                    <p className="px-3 py-6 text-center text-sm text-muted-foreground">
+                                                        No shifts found.
+                                                    </p>
                                                 )}
-                                            >
-                                                {shift.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                            </div>
+                                        </div>
+                                    </PopoverContent>
+                                </Popover>
 
                                 {errors.shiftId && (
                                     <p className="text-xs text-destructive">
@@ -1059,42 +925,95 @@ export default function ProductionAddDialog({
                             <div>
                                 <label className="mb-2 block text-sm font-medium">
                                     Select Machine{" "}
-                                    <span className="text-destructive">
-                                        *
-                                    </span>
+                                    <span className="text-destructive">*</span>
                                 </label>
 
-                                <Select
-                                    value={form.machineId}
-                                    onValueChange={
-                                        handleMachineChange
-                                    }
-                                    disabled={loadingDropdowns}
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue
-                                            placeholder={
-                                                loadingDropdowns
-                                                    ? "Loading machines..."
-                                                    : "Select machine"
-                                            }
-                                        />
-                                    </SelectTrigger>
+                                <Popover
+                                    open={machineDropdownOpen}
+                                    onOpenChange={(value) => {
+                                        setMachineDropdownOpen(value);
 
-                                    <SelectContent>
-                                        {machines.map((machine) => (
-                                            <SelectItem
-                                                key={machine.id}
-                                                value={String(
-                                                    machine.id
+                                        if (!value) {
+                                            setMachineSearch("");
+                                        }
+                                    }}
+                                >
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            role="combobox"
+                                            aria-expanded={machineDropdownOpen}
+                                            disabled={loadingDropdowns}
+                                            className="w-full justify-between font-normal"
+                                        >
+                                            <span className="truncate">
+                                                {loadingDropdowns
+                                                    ? "Loading machines..."
+                                                    : selectedMachine
+                                                        ? `${selectedMachine.machineName} (${selectedMachine.machineCode})`
+                                                        : "Select machine"}
+                                            </span>
+
+                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                        </Button>
+                                    </PopoverTrigger>
+
+                                    <PopoverContent
+                                        align="start"
+                                        className="w-[var(--radix-popover-trigger-width)] p-0"
+                                    >
+                                        <div className="flex items-center border-b px-3">
+                                            <Search className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" />
+
+                                            <Input
+                                                value={machineSearch}
+                                                onChange={(e) =>
+                                                    setMachineSearch(e.target.value)
+                                                }
+                                                placeholder="Search machine..."
+                                                className="h-10 border-0 shadow-none focus-visible:ring-0"
+                                            />
+                                        </div>
+
+                                        <div className="max-h-56 overflow-y-auto overscroll-contain">
+                                            <div className="p-1">
+                                                {filteredMachines.length > 0 ? (
+                                                    filteredMachines.map((machine) => (
+                                                        <button
+                                                            key={machine.id}
+                                                            type="button"
+                                                            onClick={() => {
+                                                                handleMachineChange(
+                                                                    String(machine.id)
+                                                                );
+
+                                                                setMachineDropdownOpen(false);
+                                                                setMachineSearch("");
+                                                            }}
+                                                            className="flex w-full items-center justify-between rounded-sm px-3 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground"
+                                                        >
+                                                            <span>
+                                                                {machine.machineName} ({machine.machineCode})
+                                                            </span>
+
+                                                            <Check
+                                                                className={`ml-2 h-4 w-4 ${String(form.machineId) === String(machine.id)
+                                                                    ? "opacity-100"
+                                                                    : "opacity-0"
+                                                                    }`}
+                                                            />
+                                                        </button>
+                                                    ))
+                                                ) : (
+                                                    <p className="px-3 py-6 text-center text-sm text-muted-foreground">
+                                                        No machines found.
+                                                    </p>
                                                 )}
-                                            >
-                                                {machine.machineName} (
-                                                {machine.machineCode})
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                            </div>
+                                        </div>
+                                    </PopoverContent>
+                                </Popover>
 
                                 {errors.machineId && (
                                     <p className="mt-1 text-xs text-destructive">
@@ -1103,42 +1022,98 @@ export default function ProductionAddDialog({
                                 )}
                             </div>
 
-                            {/* MACHINE-WISE ITEM */}
+                            {/* ITEM */}
 
                             <div>
                                 <label className="mb-2 block text-sm font-medium">
                                     Item{" "}
-                                    <span className="text-destructive">
-                                        *
-                                    </span>
+                                    <span className="text-destructive">*</span>
                                 </label>
 
-                                <Select
-                                    value={form.itemId}
-                                    onValueChange={handleItemChange}
-                                    disabled={loadingDropdowns || filteredItems.length === 0}
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue
-                                            placeholder={
-                                                loadingDropdowns
-                                                    ? "Loading items..."
-                                                    : "Select item"
-                                            }
-                                        />
-                                    </SelectTrigger>
+                                <Popover
+                                    open={itemDropdownOpen}
+                                    onOpenChange={(value) => {
+                                        setItemDropdownOpen(value);
 
-                                    <SelectContent>
-                                        {filteredItems.map((record) => (
-                                            <SelectItem
-                                                key={getItemId(record)}
-                                                value={String(getItemId(record))}
-                                            >
-                                                {getItemName(record)}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                        if (!value) {
+                                            setItemSearch("");
+                                        }
+                                    }}
+                                >
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            role="combobox"
+                                            aria-expanded={itemDropdownOpen}
+                                            disabled={loadingDropdowns || items.length === 0}
+                                            className="w-full justify-between font-normal"
+                                        >
+                                            <span className="truncate">
+                                                {loadingDropdowns
+                                                    ? "Loading items..."
+                                                    : selectedItem
+                                                        ? getItemName(selectedItem)
+                                                        : "Select item"}
+                                            </span>
+
+                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                        </Button>
+                                    </PopoverTrigger>
+
+                                    <PopoverContent
+                                        align="start"
+                                        className="w-[var(--radix-popover-trigger-width)] p-0"
+                                    >
+                                        <div className="flex items-center border-b px-3">
+                                            <Search className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" />
+
+                                            <Input
+                                                value={itemSearch}
+                                                onChange={(e) =>
+                                                    setItemSearch(e.target.value)
+                                                }
+                                                placeholder="Search item..."
+                                                className="h-10 border-0 shadow-none focus-visible:ring-0"
+                                            />
+                                        </div>
+
+                                        <div className="max-h-56 overflow-y-auto overscroll-contain">
+                                            <div className="p-1">
+                                                {filteredItems.length > 0 ? (
+                                                    filteredItems.map((record) => (
+                                                        <button
+                                                            key={getItemId(record)}
+                                                            type="button"
+                                                            onClick={() => {
+                                                                handleItemChange(
+                                                                    String(getItemId(record))
+                                                                );
+
+                                                                setItemDropdownOpen(false);
+                                                                setItemSearch("");
+                                                            }}
+                                                            className="flex w-full items-center justify-between rounded-sm px-3 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground"
+                                                        >
+                                                            <span>{getItemName(record)}</span>
+
+                                                            <Check
+                                                                className={`ml-2 h-4 w-4 ${String(form.itemId) === String(getItemId(record))
+                                                                    ? "opacity-100"
+                                                                    : "opacity-0"
+                                                                    }`}
+                                                            />
+                                                        </button>
+                                                    ))
+                                                ) : (
+                                                    <p className="px-3 py-6 text-center text-sm text-muted-foreground">
+                                                        No items found.
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </PopoverContent>
+                                </Popover>
 
                                 {errors.itemId && (
                                     <p className="mt-1 text-xs text-destructive">
@@ -1159,9 +1134,7 @@ export default function ProductionAddDialog({
                                         type="number"
                                         min="0"
                                         step="any"
-                                        value={
-                                            form.productionQuantity
-                                        }
+                                        value={form.productionQuantity}
                                         placeholder="Enter production quantity"
                                         onChange={(e) =>
                                             updateField(
@@ -1195,10 +1168,7 @@ export default function ProductionAddDialog({
                                     placeholder="Enter remarks"
                                     rows={3}
                                     onChange={(e) =>
-                                        updateField(
-                                            "remarks",
-                                            e.target.value
-                                        )
+                                        updateField("remarks", e.target.value)
                                     }
                                 />
                             </div>
@@ -1219,12 +1189,8 @@ export default function ProductionAddDialog({
                                 <ProductionCustomFields
                                     values={customFields}
                                     onChange={setCustomFields}
-                                    onFieldsLoaded={(
-                                        loadedFields
-                                    ) => {
-                                        setCustomFieldDefinitions(
-                                            loadedFields
-                                        );
+                                    onFieldsLoaded={(loadedFields) => {
+                                        setCustomFieldDefinitions(loadedFields);
                                     }}
                                 />
                             </div>
@@ -1245,9 +1211,7 @@ export default function ProductionAddDialog({
                         <Button
                             type="button"
                             onClick={handleSave}
-                            disabled={
-                                saving || loadingDropdowns
-                            }
+                            disabled={saving || loadingDropdowns}
                         >
                             {saving
                                 ? "Saving..."

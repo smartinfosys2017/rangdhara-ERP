@@ -1401,6 +1401,7 @@ const ProductTypeList = () => {
         ),
         size: 120,
         enableSorting: false,
+        enableHiding: false,
         meta: {
           headerTitle: "ID",
           skeleton: <Skeleton className="h-7 w-12" />,
@@ -1873,6 +1874,9 @@ const ProductTypeList = () => {
 
             updatedBy={updatedBy}
             setUpdatedBy={setUpdatedBy}
+            searchInput={searchInput}
+            setSearchInput={setSearchInput}
+            handleSearch={handleSearch}
           />
           <DataGridColumnVisibility
             table={table}

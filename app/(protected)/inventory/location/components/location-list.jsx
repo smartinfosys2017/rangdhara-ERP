@@ -1545,6 +1545,7 @@ const LocationList = () => {
                 ),
 
                 size: 120,
+                enableHiding: false,
             },
             {
                 accessorKey: "locationName",

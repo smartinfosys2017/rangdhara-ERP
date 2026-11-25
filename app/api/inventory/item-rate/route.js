@@ -30,7 +30,53 @@ const ALLOWED_SORT_FIELDS = [
 // ======================================================
 // HELPERS
 // ======================================================
+const getDateOnly = (value) => {
+  if (!value) return null;
 
+  let year;
+  let month;
+  let day;
+
+  if (value instanceof Date) {
+    year = value.getUTCFullYear();
+    month = value.getUTCMonth() + 1;
+    day = value.getUTCDate();
+  } else {
+    const dateString = String(value).trim();
+
+    // YYYY-MM-DD or ISO date
+    let match = dateString.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+
+    if (match) {
+      [, year, month, day] = match;
+    } else {
+      // DD/MM/YYYY
+      match = dateString.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+
+      if (!match) return null;
+
+      [, day, month, year] = match;
+    }
+
+    year = Number(year);
+    month = Number(month);
+    day = Number(day);
+  }
+
+  const timestamp = Date.UTC(year, month - 1, day);
+  const check = new Date(timestamp);
+
+  // Reject invalid calendar dates
+  if (
+    check.getUTCFullYear() !== year ||
+    check.getUTCMonth() + 1 !== month ||
+    check.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  return timestamp;
+};
 const getClientIp = (request) =>
   request.headers
     .get("x-forwarded-for")
@@ -536,9 +582,10 @@ const getItemRateWhere = (searchParams, options = {}) => {
   };
 };
 
-// ======================================================
-// GET RELATED DISPLAY DATA
-// ======================================================
+
+/* ======================================================
+   GET RELATED DISPLAY DATA
+====================================================== */
 
 const addRelatedDisplayData = async (items) => {
   if (!items.length) return [];
@@ -552,21 +599,7 @@ const addRelatedDisplayData = async (items) => {
   ];
 
   const brandIds = [
-    ...new Set(
-      items
-        .map((item) => item.BrandManufacturerid)
-        .filter(Boolean)
-    ),
-  ];
-
-  const unitIds = [
-    ...new Set(items.map((item) => item.Unitid).filter(Boolean)),
-  ];
-
-  const conditionIds = [
-    ...new Set(
-      items.map((item) => item.ItemConditionid).filter(Boolean)
-    ),
+    ...new Set(items.map((item) => item.BrandManufacturerid).filter(Boolean)),
   ];
 
   const userIds = [
@@ -578,13 +611,8 @@ const addRelatedDisplayData = async (items) => {
     ),
   ];
 
-  const [
-    groups,
-    itemMasters,
-    brands,
-    units,
-    users,
-  ] = await Promise.all([
+  // Fetch Item Master with Item Condition and Unit IDs
+  const [groups, itemMasters, brands, users] = await Promise.all([
     groupIds.length
       ? prisma.itemGroup.findMany({
         where: { id: { in: groupIds } },
@@ -601,6 +629,8 @@ const addRelatedDisplayData = async (items) => {
         select: {
           id: true,
           ItemName: true,
+          ItemConditionid: true,
+          Unitid: true,
         },
       })
       : [],
@@ -608,26 +638,13 @@ const addRelatedDisplayData = async (items) => {
     brandIds.length
       ? prisma.brandManufacturer.findMany({
         where: {
-          id: {
-            in: brandIds,
-          },
+          id: { in: brandIds },
           deletedAt: null,
         },
         select: {
           id: true,
           brandName: true,
           manufacturerName: true,
-        },
-      })
-      : [],
-
-    unitIds.length
-      ? prisma.unit.findMany({
-        where: { id: { in: unitIds } },
-        select: {
-          id: true,
-          unitName: true,
-          abbreviation: true,
         },
       })
       : [],
@@ -643,6 +660,50 @@ const addRelatedDisplayData = async (items) => {
       : [],
   ]);
 
+  // Get Condition and Unit IDs from Item Master
+  const conditionIds = [
+    ...new Set(
+      itemMasters.map((item) => item.ItemConditionid).filter(Boolean)
+    ),
+  ];
+
+  const unitIds = [
+    ...new Set(
+      itemMasters.map((item) => item.Unitid).filter(Boolean)
+    ),
+  ];
+
+  // Fetch Condition and Unit names
+  const [conditions, units] = await Promise.all([
+    conditionIds.length
+      ? prisma.ptoductType.findMany({
+        where: {
+          id: { in: conditionIds },
+          deletedAt: null,
+        },
+        select: {
+          id: true,
+          ProductType: true,
+        },
+      })
+      : [],
+
+    unitIds.length
+      ? prisma.unit.findMany({
+        where: {
+          id: { in: unitIds },
+          deletedAt: null,
+        },
+        select: {
+          id: true,
+          unitName: true,
+          abbreviation: true,
+        },
+      })
+      : [],
+  ]);
+
+  // Maps
   const groupMap = new Map(
     groups.map((item) => [
       String(item.id),
@@ -650,27 +711,41 @@ const addRelatedDisplayData = async (items) => {
     ])
   );
 
-  const itemMap = new Map(
+  const itemMasterMap = new Map(
     itemMasters.map((item) => [
       String(item.id),
-      item.ItemName || "-",
+      item,
     ])
   );
 
   const brandMap = new Map(
-    brands.map((item) => [
+    brands.map((item) => {
+      const brandName = item.brandName || "";
+      const manufacturerName = item.manufacturerName || "";
+
+      const displayName =
+        brandName &&
+          manufacturerName &&
+          brandName.toLowerCase() !== manufacturerName.toLowerCase()
+          ? `${brandName} - ${manufacturerName}`
+          : brandName || manufacturerName || "-";
+
+      return [String(item.id), displayName];
+    })
+  );
+
+  const conditionMap = new Map(
+    conditions.map((item) => [
       String(item.id),
-      item.BrandManufacturerName || "-",
+      item.ProductType || "-",
     ])
   );
 
   const unitMap = new Map(
     units.map((item) => [
       String(item.id),
-      {
-        unitName: item.unitName || "-",
-        abbreviation: item.abbreviation || "",
-      },
+      `${item.unitName || "-"}${item.abbreviation ? ` (${item.abbreviation})` : ""
+      }`,
     ])
   );
 
@@ -681,33 +756,29 @@ const addRelatedDisplayData = async (items) => {
     ])
   );
 
-  // ItemCondition relation model name was not supplied.
-  // Its ID is returned as-is until its actual model/delegate is confirmed.
-
   return items.map((item) => {
-    const unit = unitMap.get(String(item.Unitid));
+    const master = itemMasterMap.get(String(item.ItemMasterid || ""));
 
     return {
       ...item,
 
       GroupName:
-        groupMap.get(String(item.ItemGroupid)) || "-",
+        groupMap.get(String(item.ItemGroupid || "")) || "-",
 
       ItemMasterName:
-        itemMap.get(String(item.ItemMasterid)) || "-",
+        master?.ItemName || "-",
 
       BrandManufacturerName:
-        brandMap.get(String(item.BrandManufacturerid)) || "-",
+        brandMap.get(String(item.BrandManufacturerid || "")) || "-",
 
-      ItemConditionName: String(
-        item.ItemConditionid || "-"
-      ),
+      // Condition comes from Item Master
+      ItemConditionName: master
+        ? conditionMap.get(String(master.ItemConditionid || "")) || "-"
+        : "-",
 
-      UnitName: unit
-        ? `${unit.unitName}${unit.abbreviation
-          ? ` (${unit.abbreviation})`
-          : ""
-        }`
+      // Unit comes from Item Master
+      UnitName: master
+        ? unitMap.get(String(master.Unitid || "")) || "-"
         : "-",
 
       createdByName:
@@ -719,9 +790,9 @@ const addRelatedDisplayData = async (items) => {
   });
 };
 
-// ======================================================
-// GET ITEM RATE LIST
-// ======================================================
+/* ======================================================
+   GET ITEM RATE LIST
+====================================================== */
 
 export async function GET(request) {
   try {
@@ -734,10 +805,7 @@ export async function GET(request) {
     // Pagination
     const page = Math.max(
       1,
-      Number.parseInt(
-        searchParams.get("page") || "1",
-        10
-      ) || 1
+      Number.parseInt(searchParams.get("page") || "1", 10) || 1
     );
 
     const requestedLimit = Number.parseInt(
@@ -747,29 +815,19 @@ export async function GET(request) {
 
     const limit = Math.min(
       10000,
-      Math.max(
-        1,
-        Number.isFinite(requestedLimit)
-          ? requestedLimit
-          : 10
-      )
+      Math.max(1, Number.isFinite(requestedLimit) ? requestedLimit : 10)
     );
 
     // Sorting
     const sort = searchParams.get("sort") || "createdAt";
-
-    const dir =
-      searchParams.get("dir") === "asc"
-        ? "asc"
-        : "desc";
+    const dir = searchParams.get("dir") === "asc" ? "asc" : "desc";
 
     const sortField = ALLOWED_SORT_FIELDS.includes(sort)
       ? sort
       : "createdAt";
 
     // Search and filters
-    const query =
-      searchParams.get("query")?.trim() || "";
+    const query = searchParams.get("query")?.trim() || "";
 
     const groupIds = [
       ...new Set(
@@ -780,109 +838,115 @@ export async function GET(request) {
       ),
     ];
 
-    const createdBy =
-      searchParams.get("createdBy")?.trim() || "";
+    const createdBy = searchParams.get("createdBy")?.trim() || "";
+    const updatedBy = searchParams.get("updatedBy")?.trim() || "";
 
-    const updatedBy =
-      searchParams.get("updatedBy")?.trim() || "";
-
-    // Lookup records for global search
-    const [
-      groups,
-      itemMasters,
-      brands,
-      units,
-    ] = await Promise.all([
-      query
-        ? prisma.itemGroup.findMany({
-          where: {
-            deletedAt: null,
-            groupName: {
-              contains: query,
-              mode: "insensitive",
+    // Global search lookup
+    const [groups, itemMasters, brands, units, conditions] =
+      await Promise.all([
+        query
+          ? prisma.itemGroup.findMany({
+            where: {
+              deletedAt: null,
+              groupName: {
+                contains: query,
+                mode: "insensitive",
+              },
             },
-          },
-          select: { id: true },
-        })
-        : [],
+            select: { id: true },
+          })
+          : [],
 
-      query
-        ? prisma.itemMaster.findMany({
-          where: {
-            deletedAt: null,
-            ItemName: {
-              contains: query,
-              mode: "insensitive",
+        query
+          ? prisma.itemMaster.findMany({
+            where: {
+              deletedAt: null,
+              ItemName: {
+                contains: query,
+                mode: "insensitive",
+              },
             },
-          },
-          select: { id: true },
-        })
-        : [],
+            select: { id: true },
+          })
+          : [],
 
-      query
-        ? prisma.brandManufacturer.findMany({
-          where: {
-            deletedAt: null,
-            OR: [
-              {
-                brandName: {
-                  contains: query,
-                  mode: "insensitive",
+        query
+          ? prisma.brandManufacturer.findMany({
+            where: {
+              deletedAt: null,
+              OR: [
+                {
+                  brandName: {
+                    contains: query,
+                    mode: "insensitive",
+                  },
                 },
-              },
-              {
-                manufacturerName: {
-                  contains: query,
-                  mode: "insensitive",
+                {
+                  manufacturerName: {
+                    contains: query,
+                    mode: "insensitive",
+                  },
                 },
-              },
-            ],
-          },
-          select: { id: true },
-        })
-        : [],
+              ],
+            },
+            select: { id: true },
+          })
+          : [],
 
-      query
-        ? prisma.unit.findMany({
-          where: {
-            deletedAt: null,
-            OR: [
-              {
-                unitName: {
-                  contains: query,
-                  mode: "insensitive",
+        query
+          ? prisma.unit.findMany({
+            where: {
+              deletedAt: null,
+              OR: [
+                {
+                  unitName: {
+                    contains: query,
+                    mode: "insensitive",
+                  },
                 },
-              },
-              {
-                abbreviation: {
-                  contains: query,
-                  mode: "insensitive",
+                {
+                  abbreviation: {
+                    contains: query,
+                    mode: "insensitive",
+                  },
                 },
+              ],
+            },
+            select: { id: true },
+          })
+          : [],
+
+        query
+          ? prisma.ptoductType.findMany({
+            where: {
+              deletedAt: null,
+              ProductType: {
+                contains: query,
+                mode: "insensitive",
               },
-            ],
-          },
-          select: { id: true },
-        })
-        : [],
-    ]);
+            },
+            select: { id: true },
+          })
+          : [],
+      ]);
 
     const searchGroupIds = groups.map((item) => item.id);
     const searchItemIds = itemMasters.map((item) => item.id);
     const searchBrandIds = brands.map((item) => item.id);
     const searchUnitIds = units.map((item) => item.id);
+    const searchConditionIds = conditions.map((item) => item.id);
 
-    const filterResult = getItemRateWhere(
-      searchParams,
-      {
-        groupIds,
-        createdBy,
-        updatedBy,
-        searchGroupIds,
-        searchItemIds,
-        searchBrandIds,
-        searchUnitIds,
-      }
-    );
+    // Build filters
+    const filterResult = getItemRateWhere(searchParams, {
+      groupIds,
+      createdBy,
+      updatedBy,
+      searchGroupIds,
+      searchItemIds,
+      searchBrandIds,
+      searchUnitIds,
+      searchConditionIds,
+    });
 
     if (filterResult.error) {
       return NextResponse.json(
@@ -910,6 +974,7 @@ export async function GET(request) {
       }),
     ]);
 
+    // Add related display names
     const data = await addRelatedDisplayData(itemRates);
 
     return NextResponse.json({
@@ -929,8 +994,7 @@ export async function GET(request) {
     return NextResponse.json(
       {
         success: false,
-        message:
-          error.message || "Failed to fetch Item Rates.",
+        message: error.message || "Failed to fetch Item Rates.",
       },
       { status: 500 }
     );
@@ -991,7 +1055,141 @@ export async function POST(request) {
         { status: 400 }
       );
     }
+    // ======================================================
+    // VALIDATE OVERLAPPING ITEM RATE DATE
+    // ======================================================
 
+    const fromDate = new Date(
+      `${String(data.ApplicableFromDate).slice(0, 10)}T00:00:00.000Z`
+    );
+
+    const toDate = data.ApplicableToDate
+      ? new Date(
+        `${String(data.ApplicableToDate).slice(0, 10)}T00:00:00.000Z`
+      )
+      : null;
+
+    // Validate date range
+    if (toDate && toDate < fromDate) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Applicable To Date must be after Applicable From Date.",
+        },
+        { status: 400 }
+      );
+    }
+
+    // Find existing rates for the same Item, Brand, Condition and Unit
+    const fromTimestamp = getDateOnly(data.ApplicableFromDate);
+
+    const toTimestamp = data.ApplicableToDate
+      ? getDateOnly(data.ApplicableToDate)
+      : null;
+
+    // Validate date values
+    if (
+      fromTimestamp === null ||
+      (data.ApplicableToDate && toTimestamp === null)
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Invalid Applicable From Date or Applicable To Date.",
+        },
+        { status: 400 }
+      );
+    }
+
+    // Validate date range
+    if (toTimestamp !== null && toTimestamp < fromTimestamp) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Applicable To Date must be after Applicable From Date.",
+        },
+        { status: 400 }
+      );
+    }
+
+    // ======================================================
+    // FIND EXISTING RATES
+    // ======================================================
+
+    const existingRates = await prisma.itemRates.findMany({
+      where: {
+        ItemMasterid: data.ItemMasterid,
+        BrandManufacturerid: data.BrandManufacturerid,
+        ItemConditionid: data.ItemConditionid,
+        Unitid: data.Unitid,
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+        ApplicableFromDate: true,
+        ApplicableToDate: true,
+      },
+    });
+
+    // ======================================================
+    // CHECK COMPLETE DATE RANGE OVERLAP
+    // ======================================================
+
+    // Find the latest previous rate that overlaps the new start date.
+    // This rate will automatically be closed inside the transaction.
+    const previousRateToClose = existingRates
+      .filter((rate) => {
+        const existingFrom = getDateOnly(rate.ApplicableFromDate);
+        const existingTo = rate.ApplicableToDate
+          ? getDateOnly(rate.ApplicableToDate)
+          : null;
+
+        return (
+          existingFrom !== null &&
+          existingFrom < fromTimestamp &&
+          (existingTo === null || existingTo >= fromTimestamp)
+        );
+      })
+      .sort(
+        (a, b) =>
+          getDateOnly(b.ApplicableFromDate) -
+          getDateOnly(a.ApplicableFromDate)
+      )[0];
+
+    // Check overlap with all other rates.
+    // The previous overlapping rate is excluded because it will be closed.
+    const conflictingRate = existingRates.find((rate) => {
+      if (previousRateToClose?.id === rate.id) {
+        return false;
+      }
+
+      const existingFrom = getDateOnly(rate.ApplicableFromDate);
+
+      const existingTo = rate.ApplicableToDate
+        ? getDateOnly(rate.ApplicableToDate)
+        : null;
+
+      if (existingFrom === null) return false;
+
+      const newEnd = toTimestamp ?? Infinity;
+      const existingEnd = existingTo ?? Infinity;
+
+      return (
+        fromTimestamp <= existingEnd &&
+        newEnd >= existingFrom
+      );
+    });
+
+    if (conflictingRate) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "This date range overlaps with an existing Item Rate. Please select another date range.",
+        },
+        { status: 400 }
+      );
+    }
     // Create Item Rate
     const itemRate = await prisma.$transaction(async (tx) => {
       const fromDate = new Date(
@@ -1018,15 +1216,23 @@ export async function POST(request) {
 
       // Find the closest previous rate.
       const previousRate = matchingRates
-        .filter(
-          (rate) =>
-            new Date(rate.ApplicableFromDate).getTime() <
-            fromDate.getTime(),
-        )
+        .filter((rate) => {
+          const existingFrom = getDateOnly(rate.ApplicableFromDate);
+          const existingTo = rate.ApplicableToDate
+            ? getDateOnly(rate.ApplicableToDate)
+            : null;
+
+          return (
+            existingFrom !== null &&
+            existingFrom < getDateOnly(fromDate) &&
+            (existingTo === null ||
+              existingTo >= getDateOnly(fromDate))
+          );
+        })
         .sort(
           (a, b) =>
-            new Date(b.ApplicableFromDate).getTime() -
-            new Date(a.ApplicableFromDate).getTime(),
+            getDateOnly(b.ApplicableFromDate) -
+            getDateOnly(a.ApplicableFromDate)
         )[0];
 
       // Find the closest future rate.
@@ -1238,18 +1444,187 @@ export async function PUT(request) {
         { status: 400 }
       );
     }
+    // Validate Applicable From and To dates
+    // ======================================================
+    // VALIDATE ITEM RATE DATE RANGE
+    // ======================================================
 
-    const updatedItemRate =
-      await prisma.itemRates.update({
+    const fromTimestamp = getDateOnly(finalData.ApplicableFromDate);
+
+    const toTimestamp = finalData.ApplicableToDate
+      ? getDateOnly(finalData.ApplicableToDate)
+      : null;
+
+    // Validate dates
+    if (
+      fromTimestamp === null ||
+      (finalData.ApplicableToDate && toTimestamp === null)
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Invalid Applicable From Date or Applicable To Date.",
+        },
+        { status: 400 }
+      );
+    }
+
+    // Validate date range
+    if (toTimestamp !== null && toTimestamp < fromTimestamp) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Applicable To Date must be after Applicable From Date.",
+        },
+        { status: 400 }
+      );
+    }
+
+    // ======================================================
+    // FIND EXISTING RATES
+    // ======================================================
+
+    const existingRates = await prisma.itemRates.findMany({
+      where: {
+        id: {
+          not: existingItemRate.id,
+        },
+        ItemMasterid: finalData.ItemMasterid,
+        BrandManufacturerid: finalData.BrandManufacturerid,
+        ItemConditionid: finalData.ItemConditionid,
+        Unitid: finalData.Unitid,
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+        ApplicableFromDate: true,
+        ApplicableToDate: true,
+      },
+    });
+
+    // ======================================================
+    // CHECK DATE RANGE OVERLAP
+    // ======================================================
+
+    const previousRateToClose = existingRates
+      .filter((rate) => {
+        const existingFrom = getDateOnly(rate.ApplicableFromDate);
+
+        const existingTo = rate.ApplicableToDate
+          ? getDateOnly(rate.ApplicableToDate)
+          : null;
+
+        return (
+          existingFrom !== null &&
+          existingFrom < fromTimestamp &&
+          (existingTo === null || existingTo >= fromTimestamp)
+        );
+      })
+      .sort(
+        (a, b) =>
+          getDateOnly(b.ApplicableFromDate) -
+          getDateOnly(a.ApplicableFromDate)
+      )[0];
+
+    const conflictingRate = existingRates.find((rate) => {
+      if (previousRateToClose?.id === rate.id) {
+        return false;
+      }
+
+      const existingFrom = getDateOnly(rate.ApplicableFromDate);
+
+      const existingTo = rate.ApplicableToDate
+        ? getDateOnly(rate.ApplicableToDate)
+        : null;
+
+      if (existingFrom === null) return false;
+
+      const newEnd = toTimestamp ?? Infinity;
+      const existingEnd = existingTo ?? Infinity;
+
+      return (
+        fromTimestamp <= existingEnd &&
+        newEnd >= existingFrom
+      );
+    });
+
+    if (conflictingRate) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "This date range overlaps with an existing Item Rate. Please select another date range.",
+        },
+        { status: 400 }
+      );
+    }
+    const updatedItemRate = await prisma.$transaction(async (tx) => {
+      // Close the previous rate if the new start date overlaps it.
+      if (previousRateToClose) {
+        const previousDay = new Date(fromTimestamp);
+
+        previousDay.setUTCDate(previousDay.getUTCDate() - 1);
+
+        await tx.itemRates.update({
+          where: {
+            id: previousRateToClose.id,
+          },
+          data: {
+            ApplicableToDate: previousDay,
+            updateby: String(user.id),
+            lastSyncAt: new Date(),
+          },
+        });
+      }
+
+      // Find the next future rate.
+      const nextRate = await tx.itemRates.findFirst({
+        where: {
+          id: {
+            not: existingItemRate.id,
+          },
+          ItemMasterid: finalData.ItemMasterid,
+          BrandManufacturerid: finalData.BrandManufacturerid,
+          ItemConditionid: finalData.ItemConditionid,
+          Unitid: finalData.Unitid,
+          deletedAt: null,
+          ApplicableFromDate: {
+            gt: new Date(fromTimestamp),
+          },
+        },
+        orderBy: {
+          ApplicableFromDate: "asc",
+        },
+      });
+
+      let applicableToDate = finalData.ApplicableToDate;
+
+      // Close the updated rate one day before the next rate.
+      if (nextRate) {
+        const nextDay = new Date(nextRate.ApplicableFromDate);
+
+        nextDay.setUTCDate(nextDay.getUTCDate() - 1);
+
+        if (
+          !applicableToDate ||
+          getDateOnly(applicableToDate) > getDateOnly(nextDay)
+        ) {
+          applicableToDate = nextDay;
+        }
+      }
+
+      return tx.itemRates.update({
         where: {
           id: existingItemRate.id,
         },
         data: {
           ...updateData,
+          ApplicableToDate: applicableToDate,
           updateby: String(user.id),
           lastSyncAt: new Date(),
         },
       });
+    });
 
     const [formattedItemRate] =
       await addRelatedDisplayData([updatedItemRate]);

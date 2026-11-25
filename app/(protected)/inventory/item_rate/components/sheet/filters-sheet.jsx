@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react";
 import { format, parseISO } from "date-fns";
-import { CalendarDays, ChevronDown, Info } from "lucide-react";
+import { CalendarDays, ChevronDown, Info, Search, X, } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -249,7 +249,9 @@ export function StoreClientFiltersSheet({
 
   closingBalanceTo = "",
   setClosingBalanceTo,
-
+  searchInput,
+  setSearchInput,
+  handleSearch,
   setPagination,
 }) {
   const [open, setOpen] = useState(false);
@@ -540,7 +542,7 @@ export function StoreClientFiltersSheet({
     setClosingBalanceTo?.("");
 
     setGroupDropdownOpen(false);
-
+    setSearchInput("");
     resetPagination();
     setOpen(false);
   };
@@ -637,6 +639,41 @@ export function StoreClientFiltersSheet({
 
         <SheetBody className="min-h-0 flex-1 py-0">
           <ScrollArea className="h-[calc(100dvh-12rem)]">
+            {/* SEARCH */}
+            <div className="px-5 pt-5">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+
+                <input
+                  type="text"
+                  value={searchInput}
+                  onChange={(event) => setSearchInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      handleSearch(event);
+                      setOpen(false);
+                    }
+                  }}
+                  placeholder="Search item rate"
+                  className="h-9 w-full rounded-md border border-input bg-background pl-9 pr-9 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  autoComplete="off"
+                />
+
+                {searchInput.length > 0 && (
+                  <button
+                    type="button"
+                    aria-label="Clear search"
+                    onClick={() => {
+                      setSearchInput("");
+                      setOpen(false);
+                    }}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="size-4" />
+                  </button>
+                )}
+              </div>
+            </div>
             {/* STATUS */}
             <div className="space-y-3 px-5 pt-5">
               <div className="flex items-center gap-1">

@@ -220,7 +220,7 @@ export function StoreClientFiltersSheet({
     setUpdatedTo('');
     setCreatedByFilter('');
     setUpdatedByFilter('');
-
+    setSearchInput("");
     setOpen(false);
   };
 

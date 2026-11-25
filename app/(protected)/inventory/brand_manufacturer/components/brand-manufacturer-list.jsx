@@ -1752,6 +1752,7 @@ const BrandManufacturerList = () => {
                 ),
 
                 size: 120,
+                enableHiding: false,
             },
 
             {
@@ -2327,6 +2328,9 @@ const BrandManufacturerList = () => {
                     setCreatedByFilter={setCreatedByFilter}
                     updatedByFilter={updatedByFilter}
                     setUpdatedByFilter={setUpdatedByFilter}
+                    searchInput={searchInput}
+                    setSearchInput={setSearchInput}
+                    handleSearch={handleSearch}
                 />
                 <DataGridColumnVisibility
                     table={table}

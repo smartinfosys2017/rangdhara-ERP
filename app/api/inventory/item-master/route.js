@@ -394,7 +394,15 @@ export async function GET(request) {
     const query = searchParams.get("query")?.trim() || "";
     const unitName = searchParams.get("unitName")?.trim() || "";
     const groupName = searchParams.get("groupName")?.trim() || "";
-
+    // Item Group IDs (used to filter Item Master dropdown)
+    const itemGroupIds = [
+      ...new Set(
+        (searchParams.get("itemGroupIds") || "")
+          .split(",")
+          .map((id) => id.trim())
+          .filter(Boolean),
+      ),
+    ];
     const createdBy = searchParams.get("createdBy")?.trim() || "";
     const updatedBy = searchParams.get("updatedBy")?.trim() || "";
 
@@ -461,14 +469,36 @@ export async function GET(request) {
     }
 
     // Fetch lookup records
-    const [units, itemGroups] = await Promise.all([
-      prisma.unit.findMany({
-        where: { deletedAt: null },
-      }),
-      prisma.itemGroup.findMany({
-        where: { deletedAt: null },
-      }),
-    ]);
+    const [units, itemGroups, locations, machines, itemConditions] =
+      await Promise.all([
+        prisma.unit.findMany({
+          where: { deletedAt: null },
+        }),
+        prisma.itemGroup.findMany({
+          where: { deletedAt: null },
+        }),
+        prisma.location.findMany({
+          where: { deletedAt: null },
+          select: {
+            id: true,
+            locationName: true,
+          },
+        }),
+        prisma.machineMaster.findMany({
+          where: { deletedAt: null },
+          select: {
+            id: true,
+            machineName: true,
+          },
+        }),
+        prisma.PtoductType.findMany({
+          where: { deletedAt: null },
+          select: {
+            id: true,
+            ProductType: true,
+          },
+        }),
+      ]);
 
     // Global search: unit name
     const searchUnitIds = query
@@ -506,7 +536,29 @@ export async function GET(request) {
         )
         .map((group) => group.id)
       : undefined;
+    // Warehouse map
+    const locationMap = new Map(
+      locations.map((location) => [
+        String(location.id),
+        location.locationName || "-",
+      ]),
+    );
 
+    // Machine map
+    const machineMap = new Map(
+      machines.map((machine) => [
+        String(machine.id),
+        machine.machineName || "-",
+      ]),
+    );
+
+    // Item Condition map
+    const itemConditionMap = new Map(
+      itemConditions.map((condition) => [
+        String(condition.id),
+        condition.ProductType || "-",
+      ]),
+    );
     const createdById = createdBy || undefined;
     const updatedById = updatedBy || undefined;
 
@@ -549,7 +601,26 @@ export async function GET(request) {
     }
 
     let where = filterResult.where;
+    // Filter items by selected Item Group IDs
+    if (itemGroupIds.length > 0) {
+      const existingAnd = where.AND
+        ? Array.isArray(where.AND)
+          ? where.AND
+          : [where.AND]
+        : [];
 
+      where = {
+        ...where,
+        AND: [
+          ...existingAnd,
+          {
+            ItemGroupid: {
+              in: itemGroupIds,
+            },
+          },
+        ],
+      };
+    }
     // Numeric restock level filter
     if (
       (restockLevelMin !== null && restockLevelMin !== "") ||
@@ -694,8 +765,19 @@ export async function GET(request) {
     // Add display names
     const data = items.map((item) => ({
       ...item,
+
       UnitName: unitMap.get(String(item.Unitid)) || "-",
       GroupName: groupMap.get(String(item.ItemGroupid)) || "-",
+
+      WarehouseName:
+        locationMap.get(String(item.Locationid)) || "-",
+
+      MachineName:
+        machineMap.get(String(item.Machineid)) || "-",
+
+      ItemConditionName:
+        itemConditionMap.get(String(item.ItemConditionid)) || "-",
+
       createdByName: userMap.get(String(item.createby || "").trim()) || "-",
       updatedByName: userMap.get(String(item.updateby || "").trim()) || "-",
     }));
@@ -1069,7 +1151,7 @@ export async function POST(request) {
 
           status: body.status ?? true,
           isDefault: body.isDefault ?? false,
-
+          customFields: body.customFields ?? {},
           createby: String(user.id),
           updateby: String(user.id),
           lastSyncAt: new Date(),
@@ -1514,6 +1596,7 @@ export async function PUT(request) {
           ItemConditionid,
           RestockLevelType,
           updateby: String(user.id),
+          customFields: body.customFields ?? {},
           lastSyncAt: new Date(),
         },
       });

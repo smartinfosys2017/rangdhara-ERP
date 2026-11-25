@@ -36,7 +36,9 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 import { apiFetch } from "@/lib/api";
-
+import ItemRateCustomFields, {
+  validateRequiredCustomFields,
+} from "../../custom-fields/import-custom-fields";
 export default function ItemRateEditDialog({
   open,
   closeDialog,
@@ -53,7 +55,9 @@ export default function ItemRateEditDialog({
   const [units, setUnits] = useState([]);
 
   const [errors, setErrors] = useState({});
-
+  const [customFieldDefinitions, setCustomFieldDefinitions] = useState([]);
+  const [customFieldsReady, setCustomFieldsReady] = useState(false);
+  const [customFields, setCustomFields] = useState({});
   const [form, setForm] = useState({
     id: "",
     ItemGroupid: "",
@@ -231,7 +235,9 @@ export default function ItemRateEditDialog({
       Unitid: String(ItemRate.Unitid || ""),
       Comments: ItemRate.Comments || "",
     });
-
+    setCustomFields(ItemRate?.customFields ?? {});
+    setCustomFieldDefinitions([]);
+    setCustomFieldsReady(false);
     setErrors({});
   }, [open, ItemRate]);
 
@@ -321,7 +327,17 @@ export default function ItemRateEditDialog({
 
   const handleSubmit = async () => {
     if (!validate()) return;
+    const missingCustomFields = validateRequiredCustomFields(
+      customFieldDefinitions,
+      customFields,
+    );
 
+    if (missingCustomFields.length > 0) {
+      showErrorToast(
+        `Please fill in required custom fields: ${missingCustomFields.join(", ")}`,
+      );
+      return;
+    }
     try {
       setLoading(true);
 
@@ -336,6 +352,7 @@ export default function ItemRateEditDialog({
         Rate: Number(form.Rate),
         Unitid: form.Unitid,
         Comments: form.Comments.trim() || null,
+        customFields: customFields ?? {},
       };
 
       const response = await apiFetch("/api/inventory/item-rate", {
@@ -414,7 +431,7 @@ export default function ItemRateEditDialog({
             </DialogDescription>
           </DialogHeader>
 
-           <ScrollArea className="grow min-h-0 flex flex-col h-full max-h-[90vh] overflow-hidden">
+          <ScrollArea className="grow min-h-0 flex flex-col h-full max-h-[90vh] overflow-hidden">
             <DialogBody className="space-y-6 pt-0 px-0 min-h-0">
 
               {/* ITEM GROUP */}
@@ -688,7 +705,27 @@ export default function ItemRateEditDialog({
                   {form.Comments.length}/255 characters
                 </p>
               </div>
+              {/* CUSTOM FIELDS */}
 
+              <div className="space-y-4 border-t pt-5">
+                <div>
+                  <h3 className="text-base font-semibold">
+                    Custom Fields
+                  </h3>
+
+                  <p className="text-sm text-muted-foreground">
+                    Additional Item information.
+                  </p>
+                </div>
+
+                <ItemRateCustomFields
+                  values={customFields}
+                  onChange={setCustomFields}
+                  onFieldsLoaded={(loadedFields) => {
+                    setCustomFieldDefinitions(loadedFields);
+                  }}
+                />
+              </div>
             </DialogBody>
           </ScrollArea>
 

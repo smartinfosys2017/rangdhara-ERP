@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { format, parseISO } from 'date-fns';
-import { CalendarDays, ChevronDown } from 'lucide-react';
+import { CalendarDays, ChevronDown, Search, X, } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -82,9 +82,8 @@ function MultiSelectDropdown({
           </span>
 
           <ChevronDown
-            className={`ml-2 size-4 shrink-0 transition-transform ${
-              isOpen ? 'rotate-180' : ''
-            }`}
+            className={`ml-2 size-4 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''
+              }`}
           />
         </Button>
 
@@ -177,9 +176,9 @@ function DateRangeFilter({ label, date, setDate }) {
               {date?.from
                 ? date.to
                   ? `${format(date.from, 'LLL dd, y')} - ${format(
-                      date.to,
-                      'LLL dd, y',
-                    )}`
+                    date.to,
+                    'LLL dd, y',
+                  )}`
                   : format(date.from, 'LLL dd, y')
                 : 'Select date range'}
             </span>
@@ -287,6 +286,9 @@ export function StoreClientFiltersSheet({
   setCreatedBy,
   updatedBy = '',
   setUpdatedBy,
+  searchInput,
+  setSearchInput,
+  handleSearch,
 }) {
   const [open, setOpen] = useState(false);
 
@@ -601,7 +603,7 @@ export function StoreClientFiltersSheet({
 
     setCreatedBy?.('');
     setUpdatedBy?.('');
-
+    setSearchInput("");
     resetPagination();
     setOpen(false);
   };
@@ -647,6 +649,41 @@ export function StoreClientFiltersSheet({
 
         <SheetBody className="min-h-0 flex-1 py-0">
           <ScrollArea className="h-[calc(100dvh-12rem)]">
+            {/* SEARCH */}
+            <div className="px-5 pt-5">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+
+                <input
+                  type="text"
+                  value={searchInput}
+                  onChange={(event) => setSearchInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      handleSearch(event);
+                      setOpen(false);
+                    }
+                  }}
+                  placeholder="Search stock movement"
+                  className="h-9 w-full rounded-md border border-input bg-background pl-9 pr-9 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  autoComplete="off"
+                />
+
+                {searchInput.length > 0 && (
+                  <button
+                    type="button"
+                    aria-label="Clear search"
+                    onClick={() => {
+                      setSearchInput("");
+                      setOpen(false);
+                    }}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="size-4" />
+                  </button>
+                )}
+              </div>
+            </div>
             <div className="space-y-5 p-5">
               {/* QUANTITY RANGE */}
               <div className="space-y-2">
@@ -775,9 +812,8 @@ export function StoreClientFiltersSheet({
                     </span>
 
                     <ChevronDown
-                      className={`ml-2 size-4 transition-transform ${
-                        groupDropdownOpen ? 'rotate-180' : ''
-                      }`}
+                      className={`ml-2 size-4 transition-transform ${groupDropdownOpen ? 'rotate-180' : ''
+                        }`}
                     />
                   </Button>
 

@@ -34,6 +34,29 @@ export default async function Page() {
   }
   return (
     <>
+      {/* <Container>
+        <Toolbar>
+          <ToolbarHeading>
+            <ToolbarTitle>Customers</ToolbarTitle>
+    
+            <Breadcrumb>
+              <BreadcrumbList>
+                <BreadcrumbItem>
+                  <BreadcrumbLink href="/">Home</BreadcrumbLink>
+                </BreadcrumbItem>
+
+                <BreadcrumbSeparator />
+
+                <BreadcrumbItem>
+                  <BreadcrumbPage>Customer Management</BreadcrumbPage>
+                </BreadcrumbItem>
+              </BreadcrumbList>
+                </Breadcrumb>
+          </ToolbarHeading>
+
+          <ToolbarActions />
+        </Toolbar>
+      </Container> */}
       <Container>
         <ProductionList />
       </Container>

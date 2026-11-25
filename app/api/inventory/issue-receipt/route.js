@@ -1215,7 +1215,7 @@ export async function POST(request) {
 
             ToType: toType,
             ToId: toId,
-
+            customFields: body.customFields ?? {},
             Comment: parseOptionalString(body.Comment),
             createby: userId,
           },
@@ -2177,7 +2177,7 @@ export async function PUT(request) {
 
           ToType: toType,
           ToId: toId,
-
+          customFields: body.customFields ?? {},
           DestinationType: getLegacyDestinationType(toType),
           DestinationId: toId,
 

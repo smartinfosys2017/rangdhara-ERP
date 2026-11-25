@@ -647,17 +647,18 @@ model ItemGroup {
 }
 
 model Unit {
-  id           String    @id @default(uuid())
-  unitName     String    @db.VarChar(255)
-  abbreviation String    @db.VarChar(255)
-  status       Boolean   @default(true)
+  id           String       @id @default(uuid())
+  unitName     String       @db.VarChar(255)
+  abbreviation String       @db.VarChar(255)
+  status       Boolean      @default(true)
   createby     String?
   updateby     String?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
   deletedAt    DateTime?
   lastSyncAt   DateTime?
-  customFields Json?     @default("{}")
+  customFields Json?        @default("{}")
+  Production   Production[]
 
   @@map("Unit")
 }
@@ -719,14 +720,16 @@ model ItemMaster {
   Machineid                  String?
   ItemConditionid            String?
 
-  status     Boolean   @default(true)
-  isDefault  Boolean   @default(false)
-  createby   String?
-  updateby   String?
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-  deletedAt  DateTime?
-  lastSyncAt DateTime?
+  status       Boolean      @default(true)
+  isDefault    Boolean      @default(false)
+  customFields Json?        @default("{}")
+  createby     String?
+  updateby     String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  deletedAt    DateTime?
+  lastSyncAt   DateTime?
+  Production   Production[]
 
   @@unique([ItemName, ItemConditionid])
   @@map("ItemMaster")
@@ -806,22 +809,22 @@ model IssueReceipt {
   RecivedBy String? @db.VarChar(36)
 
   // Location / Machinery
-  DestinationType String? @db.VarChar(20)
-  DestinationId   String? @db.VarChar(36)
+  DestinationType String?   @db.VarChar(20)
+  DestinationId   String?   @db.VarChar(36)
   // Stock source
-  FromType        String? @db.VarChar(20) // VENDOR, LOCATION, MACHINE
-  FromId          String? @db.VarChar(36)
-
+  FromType        String?   @db.VarChar(20) // VENDOR, LOCATION, MACHINE
+  FromId          String?   @db.VarChar(36)
+  customFields    Json?     @default("{}")
   // Stock destination
-  ToType     String?   @db.VarChar(20) // VENDOR, LOCATION, MACHINE
-  ToId       String?   @db.VarChar(36)
-  Comment    String?
-  createby   String?
-  updateby   String?
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-  deletedAt  DateTime?
-  lastSyncAt DateTime?
+  ToType          String?   @db.VarChar(20) // VENDOR, LOCATION, MACHINE
+  ToId            String?   @db.VarChar(36)
+  Comment         String?
+  createby        String?
+  updateby        String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+  lastSyncAt      DateTime?
 
   @@index([ItemGroupid])
   @@index([ItemMasterid])
@@ -1022,24 +1025,25 @@ model BreakTime {
 }
 
 model Shift {
-  id              String    @id @default(uuid())
-  name            String    @db.VarChar(255)
-  inTime          String    @db.VarChar(5)
-  outTime         String    @db.VarChar(5)
-  graceTime       Int       @default(0)
-  description     String?   @db.VarChar(1000)
-  crossesMidnight Boolean   @default(false)
-  earlyInMinutes  Int       @default(0)
-  lateOutMinutes  Int       @default(0)
-  halfDayMinutes  Int       @default(240)
-  fullDayMinutes  Int       @default(480)
-  status          Boolean   @default(true)
+  id              String       @id @default(uuid())
+  name            String       @db.VarChar(255)
+  inTime          String       @db.VarChar(5)
+  outTime         String       @db.VarChar(5)
+  graceTime       Int          @default(0)
+  description     String?      @db.VarChar(1000)
+  crossesMidnight Boolean      @default(false)
+  earlyInMinutes  Int          @default(0)
+  lateOutMinutes  Int          @default(0)
+  halfDayMinutes  Int          @default(240)
+  fullDayMinutes  Int          @default(480)
+  status          Boolean      @default(true)
   createby        String?
   updateby        String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
   deletedAt       DateTime?
   lastSyncAt      DateTime?
+  Production      Production[]
 
   @@index([name])
   @@index([status])
@@ -1558,6 +1562,7 @@ model MachineMaster {
   customFields  Json?                @default("{}")
   itemDetails   MachineItemDetails[]
   changeLogs    MachineChangeLog[]
+  Production    Production[]
 
   @@index([machineName])
   @@index([OperateId])
@@ -1713,7 +1718,7 @@ model ItemRates {
   updatedAt           DateTime  @updatedAt
   deletedAt           DateTime?
   lastSyncAt          DateTime?
-  customFields        Json?
+  customFields        Json?     @default("{}")
 
   @@index([ItemGroupid])
   @@index([ItemMasterid])
@@ -1722,4 +1727,37 @@ model ItemRates {
   @@index([Unitid])
   @@index([ApplicableFromDate])
   @@map("ItemRates")
+}
+
+model Production {
+  id                 String    @id @default(uuid()) @db.VarChar(36)
+  productionDate     DateTime  @default(now())
+  shiftId            String?   @db.VarChar(36)
+  machineId          String?   @db.VarChar(36)
+  itemId             String?   @db.VarChar(36)
+  productionQuantity Float     @default(0)
+  remarks            String?
+  customFields       Json?     @default("{}")
+  status             Boolean   @default(true)
+  createby           String?
+  updateby           String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  deletedAt          DateTime?
+  lastSyncAt         DateTime?
+
+  item    ItemMaster?    @relation(fields: [itemId], references: [id])
+  machine MachineMaster? @relation(fields: [machineId], references: [id])
+  shift   Shift?         @relation(fields: [shiftId], references: [id])
+  Unit    Unit?          @relation(fields: [unitId], references: [id])
+  unitId  String?
+
+  @@index([productionDate])
+  @@index([shiftId])
+  @@index([machineId])
+  @@index([itemId])
+  @@index([status])
+  @@index([deletedAt])
+  @@index([createdAt])
+  @@map("Production")
 }

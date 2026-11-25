@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import * as XLSX from "xlsx";
+import { format } from "date-fns";
 import {
     CheckCircle,
     Copy,
@@ -22,6 +23,7 @@ import {
     FileSpreadsheet,
     XCircle,
     Settings2,
+    CalendarIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -37,6 +39,13 @@ import { DataGrid } from "@/components/ui/data-grid";
 import { DataGridColumnHeader } from "@/components/ui/data-grid-column-header";
 import { DataGridPagination } from "@/components/ui/data-grid-pagination";
 import { DataGridTable } from "@/components/ui/data-grid-table";
+import { Calendar } from "@/components/ui/calendar";
+
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from "@/components/ui/popover";
 
 import {
     Dialog,
@@ -142,6 +151,44 @@ const formatDate = (value) => {
         });
 };
 
+const getToday = () => format(new Date(), "yyyy-MM-dd");
+
+const getCopyProductionDate = (value) => {
+    if (!value) return getToday();
+
+    const date = new Date(value);
+
+    return Number.isNaN(date.getTime())
+        ? getToday()
+        : format(date, "yyyy-MM-dd");
+};
+
+const getDateInputValue = (value) => {
+    if (!value) return "";
+
+    const rawValue = String(value);
+
+    // Preserve the date portion if the API returns an ISO date/timestamp.
+    if (/^\d{4}-\d{2}-\d{2}/.test(rawValue)) {
+        return rawValue.slice(0, 10);
+    }
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) return "";
+
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+
+    return `${year}-${month}-${day}`;
+};
+
+const getBooleanStatus = (value) =>
+    value === true ||
+    value === 1 ||
+    String(value).toLowerCase() === "true";
+
 const formatDateTime = (value) => {
     if (!value) return "-";
 
@@ -191,7 +238,7 @@ const createProductionNotification = async ({
                 "Content-Type": "application/json",
             },
             body: JSON.stringify({
-                module: "inventory",
+                module: "production",
                 action,
                 title,
                 message,
@@ -352,6 +399,7 @@ const ProductionList = () => {
 
     const [copyDialogOpen, setCopyDialogOpen] = useState(false);
     const [copySourceItem, setCopySourceItem] = useState(null);
+    const [copyProductionDate, setCopyProductionDate] = useState("");
     const [copyLoading, setCopyLoading] = useState(false);
 
     // ===================================================
@@ -363,51 +411,6 @@ const ProductionList = () => {
             queryKey: ["production"],
         });
     }, [queryClient]);
-
-    // ===================================================
-    // INVENTORY SYNC
-    // ===================================================
-
-    const syncInventoryProductions = useCallback(async () => {
-        if (typeof navigator !== "undefined" && !navigator.onLine) {
-            setIsOnline(false);
-            return null;
-        }
-
-        if (syncingRef.current) return null;
-
-        try {
-            syncingRef.current = true;
-            setSyncing(true);
-
-            // Keep this endpoint if Production records are included
-            // in your existing inventory synchronization process.
-            const response = await fetch("/api/sync/inventory-local", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                cache: "no-store",
-            });
-
-            const result = await response.json();
-
-            if (!response.ok || !result.success) {
-                throw new Error(result?.message || "Inventory sync failed");
-            }
-
-            window.dispatchEvent(new CustomEvent("notifications-refresh"));
-
-            return result;
-        } catch (error) {
-            console.error("PRODUCTION SYNC ERROR:", error);
-            showError(error.message);
-            return null;
-        } finally {
-            syncingRef.current = false;
-            setSyncing(false);
-        }
-    }, []);
 
     // ===================================================
     // DATABASE STATUS
@@ -942,7 +945,6 @@ const ProductionList = () => {
             setSelectedProduction(null);
 
             await refreshProductions();
-            await syncInventoryProductions();
         } catch (error) {
             console.error("PRODUCTION DELETE ERROR:", error);
             showError(error.message || "Failed to delete production.");
@@ -953,12 +955,11 @@ const ProductionList = () => {
         selectedProduction,
         deleteLoading,
         refreshProductions,
-        syncInventoryProductions,
     ]);
 
-    // ===================================================
+    // =======================================================
     // COPY PRODUCTION
-    // ===================================================
+    // =======================================================
 
     const handleCopyProduction = useCallback((item) => {
         if (!item?.id) {
@@ -967,6 +968,13 @@ const ProductionList = () => {
         }
 
         setCopySourceItem(item);
+
+        // Keep the original production date as the default,
+        // using the same date format as ProductionAddDialog.
+        setCopyProductionDate(
+            getCopyProductionDate(item.productionDate)
+        );
+
         setCopyDialogOpen(true);
     }, []);
 
@@ -975,19 +983,90 @@ const ProductionList = () => {
             return;
         }
 
+        // Validate production date.
+        if (!copyProductionDate) {
+            showError("Please select a production date.");
+            return;
+        }
+
+        // Validate source item.
+        const itemId =
+            copySourceItem.itemId ||
+            copySourceItem.item?.id ||
+            copySourceItem.ItemMasterid ||
+            "";
+
+        if (!itemId) {
+            showError("Item is missing. Cannot copy this production record.");
+            return;
+        }
+
+        if (!getItemName(copySourceItem) || getItemName(copySourceItem) === "-") {
+            showError("Invalid item. Please check the original production record.");
+            return;
+        }
+
+        // Validate machine.
+        const machineId =
+            copySourceItem.machineId ||
+            copySourceItem.machine?.id ||
+            "";
+
+        if (!machineId) {
+            showError("Machine is missing. Cannot copy this production record.");
+            return;
+        }
+
+        // Validate shift.
+        const shiftId =
+            copySourceItem.shiftId ||
+            copySourceItem.shift?.id ||
+            "";
+
+        if (!shiftId) {
+            showError("Shift is missing. Cannot copy this production record.");
+            return;
+        }
+
+        // Validate quantity.
+        const quantity = Number(copySourceItem.productionQuantity ?? 0);
+
+        if (!Number.isFinite(quantity) || quantity < 0) {
+            showError("Invalid production quantity.");
+            return;
+        }
+
+        // Validate date format.
+        const parsedDate = new Date(`${copyProductionDate}T00:00:00`);
+
+        if (
+            Number.isNaN(parsedDate.getTime()) ||
+            format(parsedDate, "yyyy-MM-dd") !== copyProductionDate
+        ) {
+            showError("Please select a valid production date.");
+            return;
+        }
+
         try {
             setCopyLoading(true);
 
             const payload = {
-                productionDate: copySourceItem.productionDate,
-                shiftId: copySourceItem.shiftId || null,
-                machineId: copySourceItem.machineId || null,
-                itemId: copySourceItem.itemId || null,
-                productionQuantity:
-                    Number(copySourceItem.productionQuantity) || 0,
+                productionDate: copyProductionDate,
+
+                shiftId: String(shiftId),
+                machineId: String(machineId),
+                itemId: String(itemId),
+
+                productionQuantity: quantity,
+
                 remarks: copySourceItem.remarks || "",
+
                 customFields: copySourceItem.customFields || {},
-                status: Boolean(copySourceItem.status),
+
+                status:
+                    copySourceItem.status === true ||
+                    copySourceItem.status === 1 ||
+                    String(copySourceItem.status).toLowerCase() === "true",
             };
 
             const response = await apiFetch("/api/production", {
@@ -1002,7 +1081,7 @@ const ProductionList = () => {
 
             if (!response.ok || !result.success) {
                 throw new Error(
-                    result.message || "Failed to copy production.",
+                    result.message || "Failed to copy production."
                 );
             }
 
@@ -1020,9 +1099,10 @@ const ProductionList = () => {
 
             setCopyDialogOpen(false);
             setCopySourceItem(null);
+            setCopyProductionDate("");
 
             await refreshProductions();
-            await syncInventoryProductions();
+
         } catch (error) {
             console.error("PRODUCTION COPY ERROR:", error);
             showError(error.message || "Failed to copy production.");
@@ -1031,9 +1111,9 @@ const ProductionList = () => {
         }
     }, [
         copySourceItem,
+        copyProductionDate,
         copyLoading,
         refreshProductions,
-        syncInventoryProductions,
     ]);
 
     // ===================================================
@@ -1068,13 +1148,12 @@ const ProductionList = () => {
                 );
 
                 await refreshProductions();
-                await syncInventoryProductions();
             } catch (error) {
                 console.error("PRODUCTION STATUS ERROR:", error);
                 showError(error.message);
             }
         },
-        [refreshProductions, syncInventoryProductions],
+        [refreshProductions],
     );
 
     // ===================================================
@@ -1127,7 +1206,6 @@ const ProductionList = () => {
                 setSelectedIds([]);
 
                 await refreshProductions();
-                await syncInventoryProductions();
             } catch (error) {
                 console.error("BULK PRODUCTION STATUS ERROR:", error);
                 showError(error.message);
@@ -1140,7 +1218,6 @@ const ProductionList = () => {
             canManage,
             canEdit,
             refreshProductions,
-            syncInventoryProductions,
         ],
     );
 
@@ -1195,7 +1272,6 @@ const ProductionList = () => {
             setSelectedIds([]);
 
             await refreshProductions();
-            await syncInventoryProductions();
         } catch (error) {
             console.error("BULK PRODUCTION DELETE ERROR:", error);
             showError(error.message);
@@ -1206,7 +1282,6 @@ const ProductionList = () => {
         selectedIds,
         bulkLoading,
         refreshProductions,
-        syncInventoryProductions,
     ]);
 
     // ===================================================
@@ -1445,7 +1520,6 @@ const ProductionList = () => {
             setIsOnline(true);
 
             await checkDbStatus();
-            await syncInventoryProductions();
             await refreshProductions();
         };
 
@@ -1468,7 +1542,6 @@ const ProductionList = () => {
         };
     }, [
         checkDbStatus,
-        syncInventoryProductions,
         refreshProductions,
     ]);
 
@@ -1554,6 +1627,9 @@ const ProductionList = () => {
                         visibility
                     />
                 ),
+                meta: {
+                    headerTitle: "Production Date",
+                },
 
                 cell: ({ row }) =>
                     formatDate(row.original.productionDate),
@@ -1572,6 +1648,9 @@ const ProductionList = () => {
                         visibility
                     />
                 ),
+                meta: {
+                    headerTitle: "Shift",
+                },
 
                 cell: ({ row }) => getShiftName(row.original),
 
@@ -1596,6 +1675,9 @@ const ProductionList = () => {
                         <p>{getMachineName(row.original)}</p>
                     </div>
                 ),
+                meta: {
+                    headerTitle: "Machine",
+                },
 
                 size: 180,
                 // enableSorting: false,
@@ -1618,6 +1700,9 @@ const ProductionList = () => {
                         <p>{getItemName(row.original)}</p>
                     </div>
                 ),
+                meta: {
+                    headerTitle: "Item",
+                },
 
                 size: 200,
                 // enableSorting: false,
@@ -1639,6 +1724,9 @@ const ProductionList = () => {
                 cell: ({ row }) =>
                     row.original.productionQuantity ?? "-",
 
+                meta: {
+                    headerTitle: "Production Quantity",
+                },
                 size: 180,
             },
 
@@ -2100,6 +2188,9 @@ const ProductionList = () => {
                     setCreatedByFilter={setCreatedByFilter}
                     updatedByFilter={updatedByFilter}
                     setUpdatedByFilter={setUpdatedByFilter}
+                    searchInput={searchInput}
+                    setSearchInput={setSearchInput}
+                    handleSearch={handleSearch}
                 />
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -2134,6 +2225,7 @@ const ProductionList = () => {
                                         createdByName: "Created By",
                                         updatedAt: "Updated Date",
                                         updatedByName: "Updated By",
+                                        actions: "Actions",
                                     }[column.id] || column.id}
                                 </DropdownMenuCheckboxItem>
                             ))}
@@ -2219,7 +2311,6 @@ const ProductionList = () => {
                     });
 
                     await refreshProductions();
-                    await syncInventoryProductions();
                 }}
             />
 
@@ -2259,7 +2350,6 @@ const ProductionList = () => {
                     setSelectedProduction(null);
 
                     await refreshProductions();
-                    await syncInventoryProductions();
                 }}
             />
 
@@ -2294,6 +2384,7 @@ const ProductionList = () => {
 
                     if (!open) {
                         setCopySourceItem(null);
+                        setCopyProductionDate("");
                     }
                 }}
             >
@@ -2302,51 +2393,161 @@ const ProductionList = () => {
                         <DialogTitle>Copy Production</DialogTitle>
 
                         <DialogDescription>
-                            Are you sure you want to copy this production record?
+                            Select a production date. All other details will be
+                            copied from the original production record.
                         </DialogDescription>
                     </DialogHeader>
 
                     {copySourceItem && (
-                        <div className="space-y-3 rounded-lg border bg-muted/30 p-4">
-                            <div className="flex items-center justify-between gap-3">
-                                <span className="text-sm text-muted-foreground">
-                                    Production
-                                </span>
+                        <div className="space-y-4">
 
-                                <span className="text-sm font-medium">
-                                    1 Record
-                                </span>
+                            {/* PRODUCTION DATE - SAME AS ADD DIALOG */}
+
+                            <div>
+                                <label className="mb-2 block text-sm font-medium">
+                                    Select Date{" "}
+                                    <span className="text-destructive">*</span>
+                                </label>
+
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            disabled={copyLoading}
+                                            className="w-full justify-between font-normal"
+                                        >
+                                            {copyProductionDate
+                                                ? format(
+                                                    new Date(
+                                                        `${copyProductionDate}T00:00:00`
+                                                    ),
+                                                    "MM/dd/yyyy"
+                                                )
+                                                : "MM/DD/YYYY"}
+
+                                            <CalendarIcon className="size-4 text-muted-foreground" />
+                                        </Button>
+                                    </PopoverTrigger>
+
+                                    <PopoverContent
+                                        className="w-auto p-0"
+                                        align="start"
+                                    >
+                                        <Calendar
+                                            mode="single"
+                                            selected={
+                                                copyProductionDate
+                                                    ? new Date(
+                                                        `${copyProductionDate}T00:00:00`
+                                                    )
+                                                    : undefined
+                                            }
+                                            onSelect={(date) =>
+                                                setCopyProductionDate(
+                                                    date
+                                                        ? format(date, "yyyy-MM-dd")
+                                                        : ""
+                                                )
+                                            }
+                                            initialFocus
+                                        />
+                                    </PopoverContent>
+                                </Popover>
+
+                                {!copyProductionDate && (
+                                    <p className="mt-1 text-xs text-destructive">
+                                        Production date is required.
+                                    </p>
+                                )}
                             </div>
 
-                            <div className="flex items-center justify-between gap-3">
-                                <span className="text-sm text-muted-foreground">
-                                    Item Name
-                                </span>
+                            {/* ORIGINAL PRODUCTION DETAILS */}
 
-                                <span className="text-right text-sm font-medium">
-                                    {getItemName(copySourceItem)}
-                                </span>
+                            <div className="space-y-3 rounded-lg border bg-muted/30 p-4">
+
+                                <div className="flex items-center justify-between gap-3">
+                                    <span className="text-sm text-muted-foreground">
+                                        Original Date
+                                    </span>
+
+                                    <span className="text-sm font-medium">
+                                        {formatDate(copySourceItem.productionDate)}
+                                    </span>
+                                </div>
+
+                                <div className="flex items-center justify-between gap-3">
+                                    <span className="text-sm text-muted-foreground">
+                                        Shift
+                                    </span>
+
+                                    <span className="text-right text-sm font-medium">
+                                        {getShiftName(copySourceItem)}
+                                    </span>
+                                </div>
+
+                                <div className="flex items-center justify-between gap-3">
+                                    <span className="text-sm text-muted-foreground">
+                                        Machine
+                                    </span>
+
+                                    <span className="text-right text-sm font-medium">
+                                        {getMachineName(copySourceItem)}
+                                    </span>
+                                </div>
+
+                                <div className="flex items-center justify-between gap-3">
+                                    <span className="text-sm text-muted-foreground">
+                                        Item
+                                    </span>
+
+                                    <span className="text-right text-sm font-medium">
+                                        {getItemName(copySourceItem)}
+                                    </span>
+                                </div>
+
+                                <div className="flex items-center justify-between gap-3">
+                                    <span className="text-sm text-muted-foreground">
+                                        Production Quantity
+                                    </span>
+
+                                    <span className="text-sm font-medium">
+                                        {copySourceItem.productionQuantity ?? 0}
+                                    </span>
+                                </div>
+
+                                <div className="flex items-center justify-between gap-3">
+                                    <span className="text-sm text-muted-foreground">
+                                        Status
+                                    </span>
+
+                                    <span className="text-sm font-medium">
+                                        {copySourceItem.status === true ||
+                                            copySourceItem.status === 1 ||
+                                            String(copySourceItem.status).toLowerCase() === "true"
+                                            ? "Active"
+                                            : "Inactive"}
+                                    </span>
+                                </div>
+
+                                {copySourceItem.remarks && (
+                                    <div className="space-y-1 border-t pt-3">
+                                        <span className="text-sm text-muted-foreground">
+                                            Remarks
+                                        </span>
+
+                                        <p className="text-sm font-medium">
+                                            {copySourceItem.remarks}
+                                        </p>
+                                    </div>
+                                )}
                             </div>
 
-                            <div className="flex items-center justify-between gap-3">
-                                <span className="text-sm text-muted-foreground">
-                                    Machine
-                                </span>
-
-                                <span className="text-right text-sm font-medium">
-                                    {getMachineName(copySourceItem)}
-                                </span>
-                            </div>
-
-                            <div className="flex items-center justify-between gap-3">
-                                <span className="text-sm text-muted-foreground">
-                                    Production Quantity
-                                </span>
-
-                                <span className="text-sm font-medium">
-                                    {copySourceItem.productionQuantity ?? 0}
-                                </span>
-                            </div>
+                            <p className="text-xs text-muted-foreground">
+                                Only the production date can be changed.
+                                Shift, machine, item, quantity, remarks,
+                                custom fields and status will remain the same.
+                            </p>
                         </div>
                     )}
 
@@ -2359,6 +2560,7 @@ const ProductionList = () => {
 
                                 setCopyDialogOpen(false);
                                 setCopySourceItem(null);
+                                setCopyProductionDate("");
                             }}
                             disabled={copyLoading}
                         >
@@ -2368,7 +2570,11 @@ const ProductionList = () => {
                         <Button
                             type="button"
                             onClick={handleConfirmCopyProduction}
-                            disabled={copyLoading || !copySourceItem}
+                            disabled={
+                                copyLoading ||
+                                !copySourceItem ||
+                                !copyProductionDate
+                            }
                         >
                             <Copy className="mr-2 size-4" />
 

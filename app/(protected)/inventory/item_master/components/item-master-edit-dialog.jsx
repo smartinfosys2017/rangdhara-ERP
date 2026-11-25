@@ -28,6 +28,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 import {
   Select,
@@ -38,19 +40,15 @@ import {
 } from "@/components/ui/select";
 
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-
-import {
   RadioGroup,
   RadioGroupItem,
 } from "@/components/ui/radio-group";
 
-import { Checkbox } from "@/components/ui/checkbox";
-import { ScrollArea } from "@/components/ui/scroll-area";
-
+import { MultiSelect } from "@/components/ui/multi-select";
+import { SelectSearch } from "@/components/ui/select-search";
+import ItemCustomFields, {
+  validateRequiredCustomFields,
+} from "../../custom-fields/import-custom-fields";
 import { apiFetch } from "@/lib/api";
 
 // ======================================================
@@ -86,77 +84,124 @@ const createInitialForm = () => ({
   BrandManufacturerids: [],
   BrandRestockLevels: {},
 });
+
 // ======================================================
-// BOOLEAN VALUE HELPER
+// HELPERS
 // ======================================================
 
-const isTrue = (value) => {
-  return (
-    value === true ||
-    value === 1 ||
-    value === "1" ||
-    String(value).toLowerCase() === "true"
-  );
-};
-const normalizeIds = (values = []) =>
-  [...new Set(
+const isTrue = (value) =>
+  value === true ||
+  value === 1 ||
+  value === "1" ||
+  String(value).toLowerCase() === "true";
+
+const normalizeIds = (values = []) => [
+  ...new Set(
     (Array.isArray(values) ? values : [])
-      .filter((value) => value !== null && value !== undefined && value !== "")
-      .map(String)
-  )];
+      .map((value) => {
+        if (value === null || value === undefined) return "";
+
+        if (typeof value === "object") {
+          return String(
+            value.value ??
+            value.id ??
+            value.ItemBrandid ??
+            value.BrandManufacturerid ??
+            ""
+          );
+        }
+
+        return String(value);
+      })
+      .filter(Boolean)
+  ),
+];
 
 const getBrandLabel = (brand) => {
-  if (!brand) return "Unknown Brand";
+  const brandName =
+    brand?.brandName ||
+    brand?.BrandName ||
+    "";
 
-  const brandName = brand.brandName || brand.BrandName || "";
   const manufacturerName =
-    brand.manufacturerName || brand.ManufacturerName || "";
+    brand?.manufacturerName ||
+    brand?.ManufacturerName ||
+    "";
 
-  if (brandName && manufacturerName) {
-    return `${brandName} (${manufacturerName})`;
+  if (
+    brandName &&
+    manufacturerName &&
+    brandName.toLowerCase() !== manufacturerName.toLowerCase()
+  ) {
+    return `${brandName} - ${manufacturerName}`;
   }
 
   return (
     brandName ||
     manufacturerName ||
-    brand.name ||
-    `Brand #${brand.id || ""}`
+    brand?.name ||
+    `Brand #${brand?.id}`
   );
 };
+
 const getBrandRestockData = (itemMaster) => {
-  const relations = Array.isArray(itemMaster?.ItemMasterBrand)
-    ? itemMaster.ItemMasterBrand
-    : [];
+  // Support the different relation names that may be returned by the API.
+  const relations =
+    itemMaster?.ItemMasterBrand ||
+    itemMaster?.ItemMasterBrands ||
+    itemMaster?.brands ||
+    [];
 
   const brandIds = [];
   const restockLevels = {};
   const brands = [];
 
+  if (!Array.isArray(relations)) {
+    return { brandIds, restockLevels, brands };
+  }
+
   relations.forEach((relation) => {
-    const brandId = relation?.ItemBrandid;
-
-    if (!brandId) return;
-
-    const id = String(brandId);
-
-    brandIds.push(id);
-
-    restockLevels[id] =
-      relation.RestockLevel !== null &&
-        relation.RestockLevel !== undefined
-        ? String(relation.RestockLevel)
-        : "";
-
     const brand =
-      relation.brand ||
-      relation.BrandManufacturer ||
-      relation.Brand ||
-      null;
+      relation?.brand ||
+      relation?.BrandManufacturer ||
+      relation?.Brand ||
+      relation;
 
-    if (brand) {
+    const rawBrandId =
+      relation?.ItemBrandid ??
+      relation?.BrandManufacturerid ??
+      relation?.brandId ??
+      relation?.Brandid ??
+      brand?.id;
+
+    if (
+      rawBrandId === null ||
+      rawBrandId === undefined ||
+      rawBrandId === ""
+    ) {
+      return;
+    }
+
+    const brandId = String(rawBrandId);
+
+    brandIds.push(brandId);
+
+    const restockValue =
+      relation?.RestockLevel ??
+      relation?.restockLevel ??
+      relation?.BrandRestockLevel ??
+      relation?.restock_level ??
+      "";
+
+    restockLevels[brandId] =
+      restockValue === null || restockValue === undefined
+        ? ""
+        : String(restockValue);
+
+    if (brand && typeof brand === "object") {
       brands.push({
         ...brand,
-        id,
+        id: brandId,
       });
     }
   });
@@ -168,445 +213,6 @@ const getBrandRestockData = (itemMaster) => {
   };
 };
 
-// ======================================================
-// PAGINATED SEARCH MULTISELECT
-// ======================================================
-
-function PaginatedSearchSelect({
-  endpoint,
-  value,
-  onChange,
-  placeholder = "Select an option",
-  searchPlaceholder = "Search...",
-  getLabel,
-  disabled = false,
-  multiple = false,
-  knownOptions = [],
-  onOptionsLoaded,
-  onError,
-}) {
-  const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const [debouncedQuery, setDebouncedQuery] = useState("");
-  const [options, setOptions] = useState([]);
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [dropdownLoading, setDropdownLoading] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
-
-  const selectedValues = multiple
-    ? Array.isArray(value)
-      ? value.map(String)
-      : []
-    : value
-      ? [String(value)]
-      : [];
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedQuery(query.trim());
-    }, 300);
-
-    return () => clearTimeout(timer);
-  }, [query]);
-
-  // Fetch options when dropdown opens or search changes.
-  useEffect(() => {
-    if (!dropdownOpen) return;
-
-    let cancelled = false;
-
-    const fetchOptions = async () => {
-      try {
-        setDropdownLoading(true);
-        setOptions([]);
-        setPage(1);
-        setTotalPages(1);
-
-        const params = new URLSearchParams({
-          page: "1",
-          limit: "100",
-          query: debouncedQuery,
-          status: "all",
-        });
-
-        const response = await apiFetch(
-          `${endpoint}?${params.toString()}`
-        );
-
-        const result = await response.json().catch(() => ({}));
-
-        if (!response.ok || !result.success) {
-          throw new Error(
-            result.message || "Failed to load options."
-          );
-        }
-
-        if (cancelled) return;
-
-        // Corrected: do not reassign a const variable.
-        const records = Array.isArray(result.data)
-          ? result.data
-          : [];
-
-        setOptions(records);
-
-        onOptionsLoaded?.(records);
-
-        setPage(Number(result.pagination?.page) || 1);
-
-        setTotalPages(
-          Number(result.pagination?.totalPages) || 1
-        );
-      } catch (error) {
-        if (!cancelled) {
-          setOptions([]);
-          setTotalPages(1);
-
-          console.error("DROPDOWN FETCH ERROR:", error);
-
-          onError?.(
-            error.message || "Failed to load options."
-          );
-        }
-      } finally {
-        if (!cancelled) {
-          setDropdownLoading(false);
-        }
-      }
-    };
-
-    fetchOptions();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    dropdownOpen,
-    debouncedQuery,
-    endpoint,
-    onOptionsLoaded,
-    onError,
-  ]);
-
-  // Load next page.
-  const loadMore = async () => {
-    if (
-      dropdownLoading ||
-      loadingMore ||
-      page >= totalPages
-    ) {
-      return;
-    }
-
-    const nextPage = page + 1;
-
-    try {
-      setLoadingMore(true);
-
-      const params = new URLSearchParams({
-        page: String(nextPage),
-        limit: "100",
-        query: debouncedQuery,
-        status: "all",
-      });
-
-      const response = await apiFetch(
-        `${endpoint}?${params.toString()}`,
-      );
-
-      const result = await response.json().catch(() => ({}));
-
-      if (!response.ok || !result.success) {
-        throw new Error(
-          result.message || "Failed to load more options.",
-        );
-      }
-
-      const records = Array.isArray(result.data)
-        ? result.data
-        : [];
-
-      setOptions((previous) => {
-        const mergedMap = new Map(
-          previous.map((item) => [String(item.id), item]),
-        );
-
-        records.forEach((item) => {
-          mergedMap.set(String(item.id), item);
-        });
-
-        return Array.from(mergedMap.values());
-      });
-
-      // Notify the parent outside the state updater.
-      if (onOptionsLoaded) {
-        onOptionsLoaded(records);
-      }
-
-      setPage(Number(result.pagination?.page) || nextPage);
-
-      setTotalPages(
-        Number(result.pagination?.totalPages) || totalPages,
-      );
-    } catch (error) {
-      console.error("LOAD MORE ERROR:", error);
-
-      onError?.(
-        error.message || "Failed to load more options.",
-      );
-    } finally {
-      setLoadingMore(false);
-    }
-  };
-
-  // Combine selected known options and currently loaded options.
-  const combinedOptionsMap = new Map();
-
-  [...knownOptions, ...options].forEach((item) => {
-    if (item?.id !== null && item?.id !== undefined) {
-      combinedOptionsMap.set(String(item.id), item);
-    }
-  });
-
-  const combinedOptions = Array.from(
-    combinedOptionsMap.values(),
-  );
-
-  const selectedOptions = selectedValues.map((id) =>
-    combinedOptions.find(
-      (item) => String(item.id) === String(id),
-    ),
-  );
-
-  const handleOptionClick = (option) => {
-    const optionId = String(option.id);
-
-    if (multiple) {
-      const updatedIds = selectedValues.includes(optionId)
-        ? selectedValues.filter((id) => id !== optionId)
-        : [...selectedValues, optionId];
-
-      onChange([...new Set(updatedIds)]);
-    } else {
-      onChange(optionId);
-      setDropdownOpen(false);
-    }
-  };
-
-  const handleSelectAll = () => {
-    const updatedIds = [
-      ...new Set([
-        ...selectedValues,
-        ...options.map((item) => String(item.id)),
-      ]),
-    ];
-
-    onChange(updatedIds);
-  };
-
-  const handleClearAll = () => {
-    onChange([]);
-  };
-
-  const allLoadedSelected =
-    options.length > 0 &&
-    options.every((item) =>
-      selectedValues.includes(String(item.id)),
-    );
-
-  const getSelectedLabel = () => {
-    if (multiple) {
-      if (selectedValues.length === 0) {
-        return placeholder;
-      }
-
-      const labels = selectedOptions
-        .filter(Boolean)
-        .map((item) => getLabel(item));
-
-      return labels.length === selectedValues.length
-        ? labels.join(", ")
-        : `${selectedValues.length} brand(s) selected`;
-    }
-
-    return selectedOptions[0]
-      ? getLabel(selectedOptions[0])
-      : placeholder;
-  };
-
-  return (
-    <Popover
-      open={dropdownOpen}
-      onOpenChange={(value) => {
-        setDropdownOpen(value);
-
-        if (!value) {
-          setQuery("");
-          setDebouncedQuery("");
-        }
-      }}
-    >
-      <PopoverTrigger asChild>
-        <Button
-          type="button"
-          variant="outline"
-          disabled={disabled}
-          className="w-full justify-between font-normal"
-        >
-          <span className="truncate text-left">
-            {getSelectedLabel()}
-          </span>
-
-          <span className="ml-2 shrink-0">⌄</span>
-        </Button>
-      </PopoverTrigger>
-
-      <PopoverContent
-        align="start"
-        className="w-[var(--radix-popover-trigger-width)] p-2"
-      >
-        <Input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder={searchPlaceholder}
-          className="mb-2"
-        />
-
-        {multiple && (
-          <div className="mb-2 flex items-center justify-between gap-2 border-b pb-2">
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              onClick={handleSelectAll}
-              disabled={
-                dropdownLoading ||
-                options.length === 0 ||
-                allLoadedSelected
-              }
-            >
-              Select All
-            </Button>
-
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              onClick={handleClearAll}
-              disabled={selectedValues.length === 0}
-            >
-              Clear All
-            </Button>
-          </div>
-        )}
-
-        <div
-          className="max-h-60 overflow-y-auto"
-          onScroll={(event) => {
-            const element = event.currentTarget;
-
-            const nearBottom =
-              element.scrollTop + element.clientHeight >=
-              element.scrollHeight - 30;
-
-            if (nearBottom) {
-              loadMore();
-            }
-          }}
-        >
-          {dropdownLoading ? (
-            <p className="py-4 text-center text-sm text-muted-foreground">
-              Loading...
-            </p>
-          ) : options.length > 0 ? (
-            <>
-              {options.map((option) => {
-                const optionId = String(option.id);
-
-                const isSelected =
-                  selectedValues.includes(optionId);
-
-                return (
-                  <div
-                    key={option.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => handleOptionClick(option)}
-                    onKeyDown={(event) => {
-                      if (
-                        event.key === "Enter" ||
-                        event.key === " "
-                      ) {
-                        event.preventDefault();
-                        handleOptionClick(option);
-                      }
-                    }}
-                    className={`flex w-full cursor-pointer items-center gap-2 rounded px-3 py-2 text-left text-sm hover:bg-muted ${isSelected ? "bg-muted" : ""
-                      }`}
-                  >
-                    {multiple && (
-                      <Checkbox
-                        checked={isSelected}
-                        onCheckedChange={() =>
-                          handleOptionClick(option)
-                        }
-                        onClick={(event) =>
-                          event.stopPropagation()
-                        }
-                      />
-                    )}
-
-                    <span className="flex-1">
-                      {getLabel(option)}
-                    </span>
-
-                    {!multiple && isSelected && (
-                      <span className="text-primary">✓</span>
-                    )}
-                  </div>
-                );
-              })}
-
-              {loadingMore && (
-                <p className="py-2 text-center text-xs text-muted-foreground">
-                  Loading more...
-                </p>
-              )}
-
-              {!loadingMore && page >= totalPages && (
-                <p className="py-2 text-center text-xs text-muted-foreground">
-                  No more records
-                </p>
-              )}
-            </>
-          ) : (
-            <p className="py-4 text-center text-sm text-muted-foreground">
-              No records found.
-            </p>
-          )}
-        </div>
-
-        {multiple && (
-          <div className="mt-2 flex items-center justify-between border-t pt-2">
-            <span className="text-xs text-muted-foreground">
-              {selectedValues.length} selected
-            </span>
-
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => setDropdownOpen(false)}
-            >
-              Done
-            </Button>
-          </div>
-        )}
-      </PopoverContent>
-    </Popover>
-  );
-}
 // ======================================================
 // MAIN COMPONENT
 // ======================================================
@@ -625,11 +231,42 @@ export default function ItemMasterEditDialog({
   const [locations, setLocations] = useState([]);
   const [machines, setMachines] = useState([]);
   const [itemCondition, setItemCondition] = useState([]);
-
   const [brandOptions, setBrandOptions] = useState([]);
-
+  const [customFieldDefinitions, setCustomFieldDefinitions] = useState([]);
+  const [customFieldsReady, setCustomFieldsReady] = useState(false);
+  const [customFields, setCustomFields] = useState({});
   const [errors, setErrors] = useState({});
   const [form, setForm] = useState(createInitialForm);
+
+  // ====================================================
+  // DROPDOWN OPTIONS
+  // ====================================================
+
+  const itemGroupOptions = itemGroups.map((item) => ({
+    label: item.groupName || item.name || "-",
+    value: String(item.id),
+  }));
+
+  const locationOptions = locations.map((item) => ({
+    label: `${item.locationName || "-"}${item.locationCode
+      ? ` (${item.locationCode})`
+      : ""
+      }`,
+    value: String(item.id),
+  }));
+
+  const machineOptions = machines.map((item) => ({
+    label: `${item.machineName || "-"}${item.machineCode
+      ? ` (${item.machineCode})`
+      : ""
+      }`,
+    value: String(item.id),
+  }));
+
+  const brandSelectOptions = brandOptions.map((brand) => ({
+    label: getBrandLabel(brand),
+    value: String(brand.id),
+  }));
 
   // ====================================================
   // TOAST HELPERS
@@ -671,56 +308,6 @@ export default function ItemMasterEditDialog({
   }, []);
 
   // ====================================================
-  // BRAND LABEL
-  // ====================================================
-
-  const getBrandLabel = useCallback((brand) => {
-    const brandName =
-      brand.brandName ||
-      brand.BrandName ||
-      "";
-
-    const manufacturerName =
-      brand.manufacturerName ||
-      brand.ManufacturerName ||
-      "";
-
-    if (
-      brandName &&
-      manufacturerName &&
-      brandName.toLowerCase() !==
-      manufacturerName.toLowerCase()
-    ) {
-      return `${brandName} - ${manufacturerName}`;
-    }
-
-    return (
-      brandName ||
-      manufacturerName ||
-      brand.name ||
-      `Brand #${brand.id}`
-    );
-  }, []);
-
-  // ====================================================
-  // STORE LOADED BRAND OPTIONS
-  // ====================================================
-
-  const handleBrandOptionsLoaded = useCallback((records) => {
-    setBrandOptions((previous) => {
-      const merged = new Map(
-        previous.map((item) => [String(item.id), item])
-      );
-
-      records.forEach((item) => {
-        merged.set(String(item.id), item);
-      });
-
-      return Array.from(merged.values());
-    });
-  }, []);
-
-  // ====================================================
   // RESET FORM
   // ====================================================
 
@@ -743,9 +330,6 @@ export default function ItemMasterEditDialog({
       brands,
     } = getBrandRestockData(ItemMaster);
 
-    // Add existing selected brands to dropdown options.
-    // This is important because the dropdown may not have loaded
-    // these brands from its API yet.
     setBrandOptions((previous) => {
       const optionsMap = new Map();
 
@@ -770,7 +354,9 @@ export default function ItemMasterEditDialog({
         : hasBrandRestockLevels
           ? "BRAND"
           : "ITEM";
-
+    setCustomFields(ItemMaster?.customFields ?? {});
+    setCustomFieldDefinitions([]);
+    setCustomFieldsReady(false);
     setForm({
       id: ItemMaster.id || "",
 
@@ -796,33 +382,23 @@ export default function ItemMasterEditDialog({
 
       RestockLevelType: restockLevelType,
 
-      ApplicableForRelocateLevel: Boolean(
+      ApplicableForRelocateLevel: isTrue(
         ItemMaster.ApplicableForRelocateLevel
       ),
 
       RelocateLevel: String(ItemMaster.RelocateLevel ?? ""),
 
-      // Existing brand-wise restock values.
       BrandRestockLevels: restockLevels,
 
-      status:
-        ItemMaster.status === true ||
-        ItemMaster.status === 1 ||
-        ItemMaster.status === "1" ||
-        ItemMaster.status === "true",
-
-      isDefault:
-        ItemMaster.isDefault === true ||
-        ItemMaster.isDefault === 1 ||
-        ItemMaster.isDefault === "1" ||
-        ItemMaster.isDefault === "true",
+      status: isTrue(ItemMaster.status),
+      isDefault: isTrue(ItemMaster.isDefault),
     });
 
     setErrors({});
   }, [open, ItemMaster]);
 
   // ====================================================
-  // LOAD DROPDOWNS
+  // LOAD STANDARD DROPDOWNS
   // ====================================================
 
   useEffect(() => {
@@ -932,6 +508,70 @@ export default function ItemMasterEditDialog({
   }, [open, showErrorToast]);
 
   // ====================================================
+  // LOAD ALL BRAND OPTIONS
+  // ====================================================
+
+  useEffect(() => {
+    if (!open) return;
+
+    let cancelled = false;
+
+    const loadBrands = async () => {
+      try {
+        const response = await apiFetch(
+          "/api/inventory/brand_manufacturer?limit=10000&status=all"
+        );
+
+        const result = await response.json();
+
+        if (!response.ok || !result.success) {
+          throw new Error(
+            result.message || "Failed to load brands."
+          );
+        }
+
+        if (cancelled) return;
+
+        const apiBrands = Array.isArray(result.data)
+          ? result.data
+          : [];
+
+        setBrandOptions((previous) => {
+          const optionsMap = new Map();
+
+          // Keep already-loaded selected brands.
+          previous.forEach((brand) => {
+            optionsMap.set(String(brand.id), brand);
+          });
+
+          // Add or update brands returned by the API.
+          apiBrands.forEach((brand) => {
+            if (brand?.id !== undefined && brand?.id !== null) {
+              optionsMap.set(String(brand.id), brand);
+            }
+          });
+
+          return Array.from(optionsMap.values());
+        });
+      } catch (error) {
+        if (!cancelled) {
+          console.error("LOAD BRANDS ERROR:", error);
+
+          showErrorToast(
+            error.message || "Failed to load brands."
+          );
+        }
+      }
+    };
+
+    loadBrands();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, showErrorToast]);
+
+  // ====================================================
   // UPDATE FIELD
   // ====================================================
 
@@ -950,7 +590,6 @@ export default function ItemMasterEditDialog({
   // ====================================================
   // BRAND SELECTION
   // ====================================================
-
   const handleBrandSelection = (selectedIds) => {
     const normalizedIds = normalizeIds(selectedIds);
 
@@ -1194,7 +833,17 @@ export default function ItemMasterEditDialog({
 
   const handleSubmit = async () => {
     if (!validate()) return;
+    const missingCustomFields = validateRequiredCustomFields(
+      customFieldDefinitions,
+      customFields,
+    );
 
+    if (missingCustomFields.length > 0) {
+      showErrorToast(
+        `Please fill in required custom fields: ${missingCustomFields.join(", ")}`,
+      );
+      return;
+    }
     try {
       setLoading(true);
 
@@ -1236,7 +885,7 @@ export default function ItemMasterEditDialog({
 
         ItemConditionid:
           form.ItemConditionid || null,
-
+        customFields: customFields ?? {},
         status: form.status ?? true,
         isDefault: form.isDefault ?? false,
       };
@@ -1270,7 +919,8 @@ export default function ItemMasterEditDialog({
 
       if (!response.ok || !result.success) {
         throw new Error(
-          result?.message || "Failed updating item.",
+          result?.message ||
+          "Failed updating item.",
         );
       }
 
@@ -1297,24 +947,20 @@ export default function ItemMasterEditDialog({
   };
 
   // ====================================================
-  // RENDER BRAND FIELD
+  // BRAND FIELD
   // ====================================================
-
   const renderBrandField = () => (
     <div className="space-y-2">
       <Label>Brand / Manufacturer</Label>
 
-      <PaginatedSearchSelect
-        endpoint="/api/inventory/brand_manufacturer"
-        value={form.BrandManufacturerids}
-        onChange={handleBrandSelection}
-        multiple
-        knownOptions={brandOptions}
-        onOptionsLoaded={handleBrandOptionsLoaded}
-        onError={showErrorToast}
-        getLabel={getBrandLabel}
+      <MultiSelect
+        options={brandSelectOptions}
+        value={normalizeIds(form.BrandManufacturerids)}
+        onValueChange={handleBrandSelection}
         placeholder="Select Brand / Manufacturer"
         searchPlaceholder="Search brand or manufacturer..."
+        className="w-full"
+        disabled={loading}
       />
 
       {form.BrandManufacturerids.length > 0 && (
@@ -1326,7 +972,7 @@ export default function ItemMasterEditDialog({
           <div className="mt-2 flex flex-wrap gap-1">
             {form.BrandManufacturerids.map((brandId) => {
               const brand = brandOptions.find(
-                (item) => String(item.id) === String(brandId),
+                (item) => String(item.id) === String(brandId)
               );
 
               return (
@@ -1367,7 +1013,7 @@ export default function ItemMasterEditDialog({
       }}
     >
       <DialogContent>
-        <div className="flex flex-col h-full max-h-[90vh] overflow-hidden">
+        <div className="flex h-full max-h-[90vh] flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle>Edit Item</DialogTitle>
 
@@ -1376,40 +1022,28 @@ export default function ItemMasterEditDialog({
             </DialogDescription>
           </DialogHeader>
 
-          <ScrollArea className="grow min-h-0 flex flex-col h-full max-h-[90vh] overflow-hidden">
-            <DialogBody className="space-y-6 pt-0 px-0 min-h-0">
+          <ScrollArea className="grow flex h-full min-h-0 max-h-[90vh] flex-col overflow-hidden">
+            <DialogBody className="min-h-0 space-y-6 px-0 pt-0">
 
               {/* ITEM GROUP */}
 
               <div>
                 <Label>
                   Item Group{" "}
-                  <span className="text-destructive">
-                    *
-                  </span>
+                  <span className="text-destructive">*</span>
                 </Label>
 
-                <Select
+                <SelectSearch
+                  options={itemGroupOptions}
                   value={form.ItemGroupid}
                   onValueChange={(value) =>
                     updateField("ItemGroupid", value)
                   }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select Item Group" />
-                  </SelectTrigger>
-
-                  <SelectContent>
-                    {itemGroups.map((item) => (
-                      <SelectItem
-                        key={item.id}
-                        value={String(item.id)}
-                      >
-                        {item.groupName}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  placeholder="Select Item Group"
+                  searchPlaceholder="Search Item Group..."
+                  emptyMessage="No Item Groups found."
+                  disabled={loading}
+                />
 
                 {errors.ItemGroupid && (
                   <p className="mt-1 text-sm text-destructive">
@@ -1423,19 +1057,14 @@ export default function ItemMasterEditDialog({
               <div>
                 <Label>
                   Item Name{" "}
-                  <span className="text-destructive">
-                    *
-                  </span>
+                  <span className="text-destructive">*</span>
                 </Label>
 
                 <Input
                   value={form.ItemName}
                   maxLength={255}
                   onChange={(e) =>
-                    updateField(
-                      "ItemName",
-                      e.target.value,
-                    )
+                    updateField("ItemName", e.target.value)
                   }
                 />
 
@@ -1464,9 +1093,7 @@ export default function ItemMasterEditDialog({
                   placeholder="Enter SKU"
                   aria-invalid={!!errors.SKU}
                   className={
-                    errors.SKU
-                      ? "border-destructive"
-                      : ""
+                    errors.SKU ? "border-destructive" : ""
                   }
                 />
 
@@ -1490,10 +1117,7 @@ export default function ItemMasterEditDialog({
                   value={form.Barcode}
                   maxLength={100}
                   onChange={(e) =>
-                    updateField(
-                      "Barcode",
-                      e.target.value,
-                    )
+                    updateField("Barcode", e.target.value)
                   }
                   placeholder="Enter Barcode"
                   aria-invalid={!!errors.Barcode}
@@ -1520,9 +1144,7 @@ export default function ItemMasterEditDialog({
               <div>
                 <Label>
                   Unit (Abbreviation){" "}
-                  <span className="text-destructive">
-                    *
-                  </span>
+                  <span className="text-destructive">*</span>
                 </Label>
 
                 <Select
@@ -1559,9 +1181,7 @@ export default function ItemMasterEditDialog({
               <div>
                 <Label>
                   Opening Balance{" "}
-                  <span className="text-destructive">
-                    *
-                  </span>
+                  <span className="text-destructive">*</span>
                 </Label>
 
                 <Input
@@ -1603,25 +1223,21 @@ export default function ItemMasterEditDialog({
                 </p>
               </div>
 
-              {/* LOCATION */}
+              {/* WAREHOUSE */}
 
               <div>
                 <Label>
                   Warehouse
                   {Number(form.openingBalance || 0) > 0 && (
-                    <span className="text-destructive">
-                      {" "}*
-                    </span>
+                    <span className="text-destructive"> *</span>
                   )}
                 </Label>
 
-                <Select
-                  value={form.Locationid || "none"}
+                <SelectSearch
+                  options={locationOptions}
+                  value={form.Locationid}
                   onValueChange={(value) => {
-                    updateField(
-                      "Locationid",
-                      value === "none" ? "" : value,
-                    );
+                    updateField("Locationid", value);
 
                     setErrors((previous) => ({
                       ...previous,
@@ -1629,33 +1245,11 @@ export default function ItemMasterEditDialog({
                       Machineid: "",
                     }));
                   }}
-                >
-                  <SelectTrigger
-                    className={
-                      errors.Locationid
-                        ? "border-destructive"
-                        : ""
-                    }
-                  >
-                    <SelectValue placeholder="Select Location" />
-                  </SelectTrigger>
-
-                  <SelectContent>
-                    <SelectItem value="none">
-                      No Location
-                    </SelectItem>
-
-                    {locations.map((location) => (
-                      <SelectItem
-                        key={location.id}
-                        value={String(location.id)}
-                      >
-                        {location.locationName} (
-                        {location.locationCode})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  placeholder="Select Warehouse"
+                  searchPlaceholder="Search Warehouse..."
+                  emptyMessage="No Warehouses found."
+                  disabled={loading}
+                />
 
                 {errors.Locationid && (
                   <p className="mt-1 text-sm text-destructive">
@@ -1670,19 +1264,15 @@ export default function ItemMasterEditDialog({
                 <Label>
                   Machine
                   {Number(form.openingBalance || 0) > 0 && (
-                    <span className="text-destructive">
-                      {" "}*
-                    </span>
+                    <span className="text-destructive"> *</span>
                   )}
                 </Label>
 
-                <Select
-                  value={form.Machineid || "none"}
+                <SelectSearch
+                  options={machineOptions}
+                  value={form.Machineid}
                   onValueChange={(value) => {
-                    updateField(
-                      "Machineid",
-                      value === "none" ? "" : value,
-                    );
+                    updateField("Machineid", value);
 
                     setErrors((previous) => ({
                       ...previous,
@@ -1690,33 +1280,11 @@ export default function ItemMasterEditDialog({
                       Machineid: "",
                     }));
                   }}
-                >
-                  <SelectTrigger
-                    className={
-                      errors.Machineid
-                        ? "border-destructive"
-                        : ""
-                    }
-                  >
-                    <SelectValue placeholder="Select Machine" />
-                  </SelectTrigger>
-
-                  <SelectContent>
-                    <SelectItem value="none">
-                      No Machine
-                    </SelectItem>
-
-                    {machines.map((machine) => (
-                      <SelectItem
-                        key={machine.id}
-                        value={String(machine.id)}
-                      >
-                        {machine.machineName} (
-                        {machine.machineCode})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  placeholder="Select Machine"
+                  searchPlaceholder="Search Machine..."
+                  emptyMessage="No Machines found."
+                  disabled={loading}
+                />
 
                 {errors.Machineid && (
                   <p className="mt-1 text-sm text-destructive">
@@ -1730,9 +1298,7 @@ export default function ItemMasterEditDialog({
               <div>
                 <Label>
                   Item Condition{" "}
-                  <span className="text-destructive">
-                    *
-                  </span>
+                  <span className="text-destructive">*</span>
                 </Label>
 
                 <Select
@@ -1786,12 +1352,9 @@ export default function ItemMasterEditDialog({
               <div className="space-y-2">
                 <Label>
                   Rate (₹)
-                  {form.BrandManufacturerids.length ===
-                    1 && (
-                      <span className="text-destructive">
-                        {" "}*
-                      </span>
-                    )}
+                  {form.BrandManufacturerids.length === 1 && (
+                    <span className="text-destructive"> *</span>
+                  )}
                 </Label>
 
                 <Input
@@ -1800,8 +1363,8 @@ export default function ItemMasterEditDialog({
                   step="any"
                   value={form.rather ?? "0"}
                   disabled={
-                    form.BrandManufacturerids.length !==
-                    1 || loading
+                    form.BrandManufacturerids.length !== 1 ||
+                    loading
                   }
                   onChange={(e) =>
                     updateField("rather", e.target.value)
@@ -1957,19 +1520,16 @@ export default function ItemMasterEditDialog({
                   </Label>
 
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Choose whether the restock level should
-                    apply to the entire item or individually
-                    to each selected brand.
+                    Choose whether the restock level should apply
+                    to the entire item or individually to each
+                    selected brand.
                   </p>
                 </div>
 
                 <RadioGroup
                   value={form.RestockLevelType}
                   onValueChange={(value) =>
-                    updateField(
-                      "RestockLevelType",
-                      value,
-                    )
+                    updateField("RestockLevelType", value)
                   }
                   className="flex flex-col gap-3 sm:flex-row"
                 >
@@ -2029,9 +1589,7 @@ export default function ItemMasterEditDialog({
                     <div className="space-y-2">
                       <Label>
                         Restock Level{" "}
-                        <span className="text-destructive">
-                          *
-                        </span>
+                        <span className="text-destructive">*</span>
                       </Label>
 
                       <Input
@@ -2045,9 +1603,7 @@ export default function ItemMasterEditDialog({
                           )
                         }
                         placeholder="Enter restock level"
-                        aria-invalid={
-                          !!errors.RelocateLevel
-                        }
+                        aria-invalid={!!errors.RelocateLevel}
                         className={
                           errors.RelocateLevel
                             ? "border-destructive"
@@ -2082,50 +1638,57 @@ export default function ItemMasterEditDialog({
                         <Label>Restock Level</Label>
                       </div>
 
-                      {form.BrandManufacturerids.map((brandId) => {
-                        const brand = brandOptions.find(
-                          (item) => String(item.id) === String(brandId)
-                        );
+                      {form.BrandManufacturerids.map(
+                        (brandId) => {
+                          const brand = brandOptions.find(
+                            (item) =>
+                              String(item.id) ===
+                              String(brandId),
+                          );
 
-                        return (
-                          <div
-                            key={brandId}
-                            className="grid grid-cols-2 items-center gap-4 border-b p-3 last:border-b-0"
-                          >
-                            <div className="text-sm font-medium">
-                              {brand
-                                ? getBrandLabel(brand)
-                                : `Brand #${brandId}`}
+                          return (
+                            <div
+                              key={brandId}
+                              className="grid grid-cols-2 items-center gap-4 border-b p-3 last:border-b-0"
+                            >
+                              <div className="text-sm font-medium">
+                                {brand
+                                  ? getBrandLabel(brand)
+                                  : `Brand #${brandId}`}
+                              </div>
+
+                              <Input
+                                type="number"
+                                min="0"
+                                step="any"
+                                value={
+                                  form.BrandRestockLevels?.[
+                                  brandId
+                                  ] ?? ""
+                                }
+                                placeholder="Enter restock level"
+                                onChange={(event) => {
+                                  const value =
+                                    event.target.value;
+
+                                  setForm((previous) => ({
+                                    ...previous,
+                                    BrandRestockLevels: {
+                                      ...previous.BrandRestockLevels,
+                                      [brandId]: value,
+                                    },
+                                  }));
+
+                                  setErrors((previous) => ({
+                                    ...previous,
+                                    BrandRestockLevels: "",
+                                  }));
+                                }}
+                              />
                             </div>
-
-                            <Input
-                              type="number"
-                              min="0"
-                              step="any"
-                              value={
-                                form.BrandRestockLevels?.[brandId] ?? ""
-                              }
-                              placeholder="Enter restock level"
-                              onChange={(event) => {
-                                const value = event.target.value;
-
-                                setForm((previous) => ({
-                                  ...previous,
-                                  BrandRestockLevels: {
-                                    ...previous.BrandRestockLevels,
-                                    [brandId]: value,
-                                  },
-                                }));
-
-                                setErrors((previous) => ({
-                                  ...previous,
-                                  BrandRestockLevels: "",
-                                }));
-                              }}
-                            />
-                          </div>
-                        );
-                      })}
+                          );
+                        },
+                      )}
                     </div>
                   )}
 
@@ -2142,18 +1705,13 @@ export default function ItemMasterEditDialog({
               <div>
                 <Label>
                   Status{" "}
-                  <span className="text-destructive">
-                    *
-                  </span>
+                  <span className="text-destructive">*</span>
                 </Label>
 
                 <Select
                   value={String(form.status)}
                   onValueChange={(value) =>
-                    updateField(
-                      "status",
-                      value === "true",
-                    )
+                    updateField("status", value === "true")
                   }
                 >
                   <SelectTrigger>
@@ -2177,18 +1735,13 @@ export default function ItemMasterEditDialog({
               <div>
                 <Label>
                   Is Default{" "}
-                  <span className="text-destructive">
-                    *
-                  </span>
+                  <span className="text-destructive">*</span>
                 </Label>
 
                 <Select
                   value={String(form.isDefault)}
                   onValueChange={(value) =>
-                    updateField(
-                      "isDefault",
-                      value === "true",
-                    )
+                    updateField("isDefault", value === "true")
                   }
                 >
                   <SelectTrigger>
@@ -2206,7 +1759,27 @@ export default function ItemMasterEditDialog({
                   </SelectContent>
                 </Select>
               </div>
+              {/* CUSTOM FIELDS */}
 
+              <div className="space-y-4 border-t pt-5">
+                <div>
+                  <h3 className="text-base font-semibold">
+                    Custom Fields
+                  </h3>
+
+                  <p className="text-sm text-muted-foreground">
+                    Additional Item information.
+                  </p>
+                </div>
+
+                <ItemCustomFields
+                  values={customFields}
+                  onChange={setCustomFields}
+                  onFieldsLoaded={(loadedFields) => {
+                    setCustomFieldDefinitions(loadedFields);
+                  }}
+                />
+              </div>
             </DialogBody>
           </ScrollArea>
 

@@ -1654,21 +1654,19 @@ const TransactionTypeList = () => {
             setCreatedBy={setCreatedByFilter}
             updatedBy={updatedByFilter}
             setUpdatedBy={setUpdatedByFilter}
+            searchInput={searchInput}
+            setSearchInput={setSearchInput}
+            handleSearch={handleSearch}
           />
           <DataGridColumnVisibility
-          table={table}
-          trigger={
-          <Button variant="outline">
-              <Settings2 />
-              Columns
-            </Button>
-          } />
-          {/* {hasActiveFilters && (
-                        <Button type="button" variant="ghost" onClick={clearFilters}>
-                            <X className="mr-2 size-4" />
-                            Clear Filters
-                        </Button>
-                    )} */}
+            table={table}
+            trigger={
+              <Button variant="outline">
+                <Settings2 />
+                Columns
+              </Button>
+            } />
+
         </div>
       </CardHeader>
     );

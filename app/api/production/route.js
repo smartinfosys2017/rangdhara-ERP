@@ -23,6 +23,81 @@ const parseDate = (value) => {
   return Number.isNaN(date.getTime()) ? null : date;
 };
 
+// ======================================================
+// PRODUCTION DATE RANGE
+// ======================================================
+
+const getProductionDayRange = (value) => {
+  const date = parseDate(value);
+
+  if (!date) return null;
+
+  const start = new Date(
+    Date.UTC(
+      date.getUTCFullYear(),
+      date.getUTCMonth(),
+      date.getUTCDate()
+    )
+  );
+
+  const end = new Date(start);
+  end.setUTCDate(end.getUTCDate() + 1);
+
+  return { start, end };
+};
+
+// ======================================================
+// DUPLICATE PRODUCTION VALIDATION
+// Same item cannot have multiple production records
+// on the same date.
+// ======================================================
+
+const DUPLICATE_PRODUCTION_MESSAGE =
+  "This item is already added for this date. Please select another date or item.";
+
+const findDuplicateProduction = async ({
+  productionDate,
+  itemId,
+  excludeId = null,
+}) => {
+  if (!productionDate || !itemId) {
+    return null;
+  }
+
+  const range = getProductionDayRange(productionDate);
+
+  if (!range) {
+    return null;
+  }
+
+  return prisma.production.findFirst({
+    where: {
+      itemId: String(itemId),
+      deletedAt: null,
+
+      productionDate: {
+        gte: range.start,
+        lt: range.end,
+      },
+
+      ...(excludeId
+        ? {
+            id: {
+              not: String(excludeId),
+            },
+          }
+        : {}),
+    },
+    select: {
+      id: true,
+    },
+  });
+};
+
+// ======================================================
+// DATE VALIDATION
+// ======================================================
+
 const validDate = (value) => {
   if (!value) return null;
 
@@ -212,7 +287,6 @@ const validateQuantity = (value) =>
 
 // ======================================================
 // PRISMA SELECT
-// Explicitly select current Production fields only.
 // Production.unitId does not exist.
 // ======================================================
 
@@ -353,7 +427,10 @@ const logProduction = async ({
       ipAddress: getClientIp(request),
     });
   } catch (error) {
-    console.error("PRODUCTION LOG ERROR (ignored):", error.message);
+    console.error(
+      "PRODUCTION LOG ERROR (ignored):",
+      error.message
+    );
   }
 };
 
@@ -431,9 +508,122 @@ export async function GET(request) {
     if (accessError) return accessError;
 
     const { searchParams } = new URL(request.url);
+
+    const type = searchParams.get("type");
+
+    // ======================================================
+    // CHECK DUPLICATE PRODUCTION
+    // GET /api/production?type=check-duplicate
+    // ======================================================
+
+    if (type === "check-duplicate") {
+      const productionDate = searchParams.get("productionDate");
+      const itemId = searchParams.get("itemId");
+      const excludeId = searchParams.get("excludeId");
+
+      if (!productionDate || !itemId) {
+        return fail("Production date and item are required.");
+      }
+
+      if (!parseDate(productionDate)) {
+        return fail("A valid production date is required.");
+      }
+
+      const duplicate = await findDuplicateProduction({
+        productionDate,
+        itemId,
+        excludeId,
+      });
+
+      return NextResponse.json({
+        success: true,
+        isDuplicate: Boolean(duplicate),
+        message: duplicate
+          ? DUPLICATE_PRODUCTION_MESSAGE
+          : "No duplicate production found.",
+      });
+    }
+
+    // ======================================================
+    // PRODUCTION DROPDOWN DATA
+    // GET /api/production?type=dropdowns
+    // ======================================================
+
+    if (type === "dropdowns") {
+      const [items, machines, units] = await Promise.all([
+        prisma.itemMaster.findMany({
+          where: {
+            deletedAt: null,
+            status: true,
+          },
+          select: {
+            id: true,
+            ItemName: true,
+            SKU: true,
+            Unitid: true,
+          },
+          orderBy: {
+            ItemName: "asc",
+          },
+        }),
+
+        prisma.machineMaster.findMany({
+          where: {
+            deletedAt: null,
+            status: true,
+          },
+          select: {
+            id: true,
+            machineName: true,
+            machineCode: true,
+            machineNumber: true,
+          },
+          orderBy: {
+            machineName: "asc",
+          },
+        }),
+
+        prisma.unit.findMany({
+          where: {
+            deletedAt: null,
+          },
+          select: {
+            id: true,
+            unitName: true,
+            abbreviation: true,
+          },
+          orderBy: {
+            unitName: "asc",
+          },
+        }),
+      ]);
+
+      const unitMap = new Map(
+        units.map((unit) => [String(unit.id), unit])
+      );
+
+      const itemsWithUnits = items.map((item) => ({
+        ...item,
+        unit: unitMap.get(String(item.Unitid)) || null,
+      }));
+
+      return NextResponse.json({
+        success: true,
+        message: "Production dropdowns fetched successfully.",
+        data: {
+          items: itemsWithUnits,
+          machines,
+          units,
+        },
+      });
+    }
+
     const id = searchParams.get("id");
 
+    // ======================================================
     // SINGLE PRODUCTION
+    // ======================================================
+
     if (id) {
       let production = await prisma.production.findFirst({
         where: {
@@ -489,7 +679,10 @@ export async function GET(request) {
       });
     }
 
+    // ======================================================
     // PAGINATION
+    // ======================================================
+
     const page = Math.max(
       1,
       Number.parseInt(searchParams.get("page") || "1", 10) || 1
@@ -508,7 +701,10 @@ export async function GET(request) {
       )
     );
 
+    // ======================================================
     // SORTING
+    // ======================================================
+
     const sort = searchParams.get("sort") || "createdAt";
     const dir =
       searchParams.get("dir") === "asc" ? "asc" : "desc";
@@ -554,7 +750,10 @@ export async function GET(request) {
 
     const productionsWithUnits = await attachItemUnit(productions);
 
+    // ======================================================
     // FETCH USERS
+    // ======================================================
+
     const userIds = [
       ...new Set(
         productionsWithUnits
@@ -649,6 +848,11 @@ export async function POST(request) {
       ? String(body.itemId).trim()
       : null;
 
+    // ITEM IS REQUIRED
+    if (!itemId) {
+      return fail("Please select an item.");
+    }
+
     for (const [label, value] of [
       ["Shift", shiftId],
       ["Machine", machineId],
@@ -658,6 +862,10 @@ export async function POST(request) {
         return fail(`Invalid ${label} ID.`);
       }
     }
+
+    // ======================================================
+    // REFERENCE VALIDATION
+    // ======================================================
 
     const referenceError = await validateReferences({
       shiftId,
@@ -669,6 +877,10 @@ export async function POST(request) {
       return fail(referenceError);
     }
 
+    // ======================================================
+    // CUSTOM FIELDS VALIDATION
+    // ======================================================
+
     let customFields = {};
 
     if (body.customFields !== undefined) {
@@ -678,6 +890,10 @@ export async function POST(request) {
 
       customFields = body.customFields;
     }
+
+    // ======================================================
+    // PRODUCTION DATE VALIDATION
+    // ======================================================
 
     let productionDate = new Date();
 
@@ -689,11 +905,32 @@ export async function POST(request) {
       }
     }
 
+    // ======================================================
+    // DUPLICATE ITEM + DATE VALIDATION
+    // ======================================================
+
+    const duplicate = await findDuplicateProduction({
+      productionDate,
+      itemId,
+    });
+
+    if (duplicate) {
+      return fail(DUPLICATE_PRODUCTION_MESSAGE, 409);
+    }
+
+    // ======================================================
+    // AUTHENTICATED USER
+    // ======================================================
+
     const user = await getAuthenticatedUser();
 
     if (!user?.id) {
       return fail("Unauthorized. Please log in again.", 401);
     }
+
+    // ======================================================
+    // CREATE PRODUCTION
+    // ======================================================
 
     const production = await prisma.production.create({
       data: {
@@ -769,6 +1006,10 @@ export async function PUT(request) {
 
     const productionId = String(body.id);
 
+    // ======================================================
+    // FIND EXISTING PRODUCTION
+    // ======================================================
+
     const existing = await prisma.production.findFirst({
       where: {
         id: productionId,
@@ -776,6 +1017,7 @@ export async function PUT(request) {
       },
       select: {
         id: true,
+        productionDate: true,
         shiftId: true,
         machineId: true,
         itemId: true,
@@ -791,6 +1033,10 @@ export async function PUT(request) {
       lastSyncAt: new Date(),
     };
 
+    // ======================================================
+    // PRODUCTION DATE VALIDATION
+    // ======================================================
+
     if (body.productionDate !== undefined) {
       const productionDate = parseDate(body.productionDate);
 
@@ -801,6 +1047,10 @@ export async function PUT(request) {
       updateData.productionDate = productionDate;
     }
 
+    // ======================================================
+    // QUANTITY VALIDATION
+    // ======================================================
+
     if (body.productionQuantity !== undefined) {
       if (!validateQuantity(body.productionQuantity)) {
         return fail("A valid production quantity is required.");
@@ -809,11 +1059,19 @@ export async function PUT(request) {
       updateData.productionQuantity = body.productionQuantity;
     }
 
+    // ======================================================
+    // REMARKS
+    // ======================================================
+
     if (body.remarks !== undefined) {
       updateData.remarks = body.remarks
         ? String(body.remarks).trim() || null
         : null;
     }
+
+    // ======================================================
+    // STATUS
+    // ======================================================
 
     if (body.status !== undefined) {
       if (typeof body.status !== "boolean") {
@@ -822,6 +1080,10 @@ export async function PUT(request) {
 
       updateData.status = body.status;
     }
+
+    // ======================================================
+    // REFERENCE VALIDATION
+    // ======================================================
 
     const referenceFields = [
       ["shiftId", "Shift"],
@@ -853,6 +1115,10 @@ export async function PUT(request) {
       }
     }
 
+    // ======================================================
+    // FINAL REFERENCES
+    // ======================================================
+
     const finalReferences = {
       shiftId:
         updateData.shiftId !== undefined
@@ -870,6 +1136,11 @@ export async function PUT(request) {
           : existing.itemId,
     };
 
+    // ITEM IS REQUIRED
+    if (!finalReferences.itemId) {
+      return fail("Please select an item.");
+    }
+
     const referenceError = await validateReferences(
       finalReferences,
       changedReferences
@@ -879,6 +1150,10 @@ export async function PUT(request) {
       return fail(referenceError);
     }
 
+    // ======================================================
+    // CUSTOM FIELDS VALIDATION
+    // ======================================================
+
     if (body.customFields !== undefined) {
       if (!validateCustomFields(body.customFields)) {
         return fail("customFields must be a valid object.");
@@ -886,6 +1161,28 @@ export async function PUT(request) {
 
       updateData.customFields = body.customFields;
     }
+
+    // ======================================================
+    // DUPLICATE ITEM + DATE VALIDATION
+    // Exclude current production ID during editing.
+    // ======================================================
+
+    const finalProductionDate =
+      updateData.productionDate ?? existing.productionDate;
+
+    const duplicate = await findDuplicateProduction({
+      productionDate: finalProductionDate,
+      itemId: finalReferences.itemId,
+      excludeId: productionId,
+    });
+
+    if (duplicate) {
+      return fail(DUPLICATE_PRODUCTION_MESSAGE, 409);
+    }
+
+    // ======================================================
+    // UPDATE PRODUCTION
+    // ======================================================
 
     const updated = await prisma.production.update({
       where: {

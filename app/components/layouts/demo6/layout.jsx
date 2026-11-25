@@ -60,10 +60,10 @@ const Demo6Layout = ({ children }) => {
 
                     <ToolbarActions>
                       <>
-                        {["/unit","/item_group", "/product_type", "/transaction_type","/item_master","/issue_receipt","/inventory_register","/inventory_change_log","/Holiday","/BreakTime","/Shift","/Security","/Position","/Checklist","/ContactCategory","/EmployeeCandidate","/QuestionnaireCategory","/QuestionnaireType","/Question","/machine-master","/location","/brand_manufacturer"].some(route => pathname.includes(route)) && (
+                        {["/unit","/item_group", "/product_type", "/transaction_type","/item_master","/item_rate","/issue_receipt","/inventory_register","/inventory_change_log","/Holiday","/BreakTime","/Shift","/Security","/Position","/Checklist","/ContactCategory","/EmployeeCandidate","/QuestionnaireCategory","/QuestionnaireType","/Question","/machine-master","/location","/brand_manufacturer","/production"].some(route => pathname.includes(route)) && (
                           <div className="flex items-center justify-end">
                             <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-                              {!pathname.includes('/transaction_type') && !pathname.includes('/inventory_change_log') &&(
+                              {/* {!pathname.includes('/transaction_type') && !pathname.includes('/inventory_change_log') &&( */}
                               <Button
                                 type="button"
                                 id="Print"
@@ -73,7 +73,7 @@ const Demo6Layout = ({ children }) => {
                                 <Printer className="mr-2 size-4" />
                                 Print
                               </Button>
-                              )}
+                              {/* )} */}
                               <Button
                                 type="button"
                                 id="Export"

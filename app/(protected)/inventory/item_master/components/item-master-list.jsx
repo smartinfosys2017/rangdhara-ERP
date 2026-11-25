@@ -259,6 +259,42 @@ export default function ItemMasterList() {
   const refreshItemMasters = useCallback(async () => {
     await queryClient.invalidateQueries({ queryKey: ["item-master"] });
   }, [queryClient]);
+  // Add these helper functions above your columns useMemo.
+  const getBrandNames = (item) => {
+    if (!Array.isArray(item?.brands) || item.brands.length === 0) return "-";
+
+    return item.brands
+      .map((entry) => {
+        const brand = entry?.brand;
+        const name =
+          brand?.brandName ||
+          brand?.manufacturerName ||
+          (entry?.ItemBrandid ? `Brand #${entry.ItemBrandid}` : "");
+        return name;
+      })
+      .filter(Boolean)
+      .join(", ") || "-";
+  };
+
+  const getBrandRestockLevels = (item) => {
+    if (!Array.isArray(item?.brands) || item.brands.length === 0) return "-";
+
+    return item.brands
+      .map((entry) => {
+        const brand = entry?.brand;
+        const name =
+          brand?.brandName ||
+          brand?.manufacturerName ||
+          (entry?.ItemBrandid ? `Brand #${entry.ItemBrandid}` : "Unknown brand");
+
+        return `${name}: ${entry?.RestockLevel ?? "-"}`;
+      })
+      .join(" | ");
+  };
+
+  const getYesNo = (value) => (value === true || value === 1 ? "Yes" : "No");
+  const getDisplayValue = (value) =>
+    value === null || value === undefined || value === "" ? "-" : String(value);
 
   const syncInventoryItemMasters = useCallback(async () => {
     if (typeof navigator !== "undefined" && !navigator.onLine) {
@@ -1289,7 +1325,7 @@ export default function ItemMasterList() {
 
     return () => clearInterval(interval);
   }, [checkDbStatus]);
-
+  // Keep your existing imports, handlers, permissions, and surrounding component code.
   const columns = useMemo(
     () => [
       {
@@ -1299,13 +1335,7 @@ export default function ItemMasterList() {
             aria-label="Select all rows on this page"
             checked={allCurrentPageSelected}
             onClick={(event) => event.stopPropagation()}
-            onCheckedChange={(checked) => {
-              if (checked === true) {
-                toggleCurrentPageSelection();
-              } else {
-                toggleCurrentPageSelection();
-              }
-            }}
+            onCheckedChange={() => toggleCurrentPageSelection()}
             disabled={!itemMasters.length || bulkLoading}
           />
         ),
@@ -1334,16 +1364,10 @@ export default function ItemMasterList() {
           <DataGridColumnHeader title="ID" column={column} visibility />
         ),
         cell: ({ row }) => {
-          const id = row.original.id;
-          const displayId = id !== null && id !== undefined ? String(id) : "-";
-
-          return (
-            <span>
-              #{displayId.length > 8 ? displayId.substring(0, 8) : displayId}
-            </span>
-          );
+          const id = getDisplayValue(row.original.id);
+          return <span>#{id.length > 8 ? id.substring(0, 8) : id}</span>;
         },
-        size: 100,
+        size: 110,
         enableSorting: true,
         enableHiding: false,
         meta: {
@@ -1360,7 +1384,7 @@ export default function ItemMasterList() {
         cell: ({ row }) => (
           <span className="font-medium">{row.original.ItemName || "-"}</span>
         ),
-        size: 240,
+        size: 220,
         enableSorting: true,
         enableHiding: true,
         meta: {
@@ -1369,15 +1393,42 @@ export default function ItemMasterList() {
         },
       },
       {
-        accessorKey: "Unitid",
-        id: "Unitid",
+        accessorKey: "SKU",
+        id: "SKU",
+        header: ({ column }) => (
+          <DataGridColumnHeader title="SKU" column={column} visibility />
+        ),
+        cell: ({ row }) => <span>{getDisplayValue(row.original.SKU)}</span>,
+        size: 140,
+        enableSorting: true,
+        enableHiding: true,
+        meta: { headerTitle: "SKU", skeleton: <Skeleton className="h-7 w-24" /> },
+      },
+      {
+        accessorKey: "Barcode",
+        id: "Barcode",
+        header: ({ column }) => (
+          <DataGridColumnHeader title="Barcode" column={column} visibility />
+        ),
+        cell: ({ row }) => <span>{getDisplayValue(row.original.Barcode)}</span>,
+        size: 150,
+        enableSorting: true,
+        enableHiding: true,
+        meta: {
+          headerTitle: "Barcode",
+          skeleton: <Skeleton className="h-7 w-24" />,
+        },
+      },
+      {
+        accessorKey: "UnitName",
+        id: "UnitName",
         header: ({ column }) => (
           <DataGridColumnHeader title="Unit (Abbreviation)" column={column} visibility />
         ),
         cell: ({ row }) => (
-          <span>{row.original?.UnitName || row.original?.unitName || "-"}</span>
+          <span>{row.original.UnitName || row.original.unitName || "-"}</span>
         ),
-        size: 150,
+        size: 160,
         enableSorting: true,
         enableHiding: true,
         meta: {
@@ -1386,14 +1437,12 @@ export default function ItemMasterList() {
         },
       },
       {
-        accessorKey: "groupName",
-        id: "groupName",
+        accessorKey: "GroupName",
+        id: "GroupName",
         header: ({ column }) => (
           <DataGridColumnHeader title="Item Group" column={column} visibility />
         ),
-        cell: ({ row }) => (
-          <span>{row.original.GroupName || row.original?.GroupName || "-"}</span>
-        ),
+        cell: ({ row }) => <span>{row.original.GroupName || "-"}</span>,
         size: 160,
         enableSorting: true,
         enableHiding: true,
@@ -1408,14 +1457,94 @@ export default function ItemMasterList() {
         header: ({ column }) => (
           <DataGridColumnHeader title="Opening Balance" column={column} visibility />
         ),
-        cell: ({ row }) => (
-          <span>{row.original.openingBalance ?? 0}</span>
-        ),
-        size: 150,
+        cell: ({ row }) => <span>{row.original.openingBalance ?? 0}</span>,
+        size: 140,
         enableSorting: true,
         enableHiding: true,
         meta: {
           headerTitle: "Opening Balance",
+          skeleton: <Skeleton className="h-7 w-20" />,
+        },
+      },
+      {
+        accessorKey: "WarehouseName",
+        header: ({ column }) => (
+          <DataGridColumnHeader column={column} title="Warehouse" />
+        ),
+        cell: ({ row }) => (
+          <span>{row.original.WarehouseName || "-"}</span>
+        ),
+      },
+      {
+        accessorKey: "MachineName",
+        header: ({ column }) => (
+          <DataGridColumnHeader column={column} title="Machine" />
+        ),
+        cell: ({ row }) => (
+          <span>{row.original.MachineName || "-"}</span>
+        ),
+      },
+      {
+        accessorKey: "ItemConditionName",
+        header: ({ column }) => (
+          <DataGridColumnHeader column={column} title="Item Condition" />
+        ),
+        cell: ({ row }) => (
+          <span>{row.original.ItemConditionName || "-"}</span>
+        ),
+      },
+      {
+        accessorKey: "brands",
+        id: "brands",
+        header: ({ column }) => (
+          <DataGridColumnHeader title="Brand / Manufacturer" column={column} visibility />
+        ),
+        cell: ({ row }) => (
+          <span className="block max-w-[300px] whitespace-normal">
+            {getBrandNames(row.original)}
+          </span>
+        ),
+        size: 260,
+        enableSorting: false,
+        enableHiding: true,
+        meta: {
+          headerTitle: "Brand / Manufacturer",
+          skeleton: <Skeleton className="h-7 w-36" />,
+        },
+      },
+      {
+        accessorKey: "brandRestockLevels",
+        id: "brandRestockLevels",
+        header: ({ column }) => (
+          <DataGridColumnHeader title="Brand Wise Restock Level" column={column} visibility />
+        ),
+        cell: ({ row }) => (
+          <span className="block max-w-[360px] whitespace-normal">
+            {getBrandRestockLevels(row.original)}
+          </span>
+        ),
+        size: 320,
+        enableSorting: false,
+        enableHiding: true,
+        meta: {
+          headerTitle: "Brand Wise Restock Level",
+          skeleton: <Skeleton className="h-7 w-40" />,
+        },
+      },
+      {
+        accessorKey: "RestockLevelType",
+        id: "RestockLevelType",
+        header: ({ column }) => (
+          <DataGridColumnHeader title="Restock Level Type" column={column} visibility />
+        ),
+        cell: ({ row }) => (
+          <span>{getDisplayValue(row.original.RestockLevelType)}</span>
+        ),
+        size: 160,
+        enableSorting: true,
+        enableHiding: true,
+        meta: {
+          headerTitle: "Restock Level Type",
           skeleton: <Skeleton className="h-7 w-24" />,
         },
       },
@@ -1423,16 +1552,10 @@ export default function ItemMasterList() {
         accessorKey: "ApplicableForRelocateLevel",
         id: "ApplicableForRelocateLevel",
         header: ({ column }) => (
-          <DataGridColumnHeader
-            title="Applicable for Restock"
-            column={column}
-            visibility
-          />
+          <DataGridColumnHeader title="Applicable for Restock" column={column} visibility />
         ),
         cell: ({ row }) => (
-          <span>
-            {row.original.ApplicableForRelocateLevel ? "Yes" : "No"}
-          </span>
+          <span>{getYesNo(row.original.ApplicableForRelocateLevel)}</span>
         ),
         size: 180,
         enableSorting: true,
@@ -1446,51 +1569,28 @@ export default function ItemMasterList() {
         accessorKey: "RelocateLevel",
         id: "RelocateLevel",
         header: ({ column }) => (
-          <DataGridColumnHeader title="Restock Level" column={column} visibility />
+          <DataGridColumnHeader title="Item Restock Level" column={column} visibility />
         ),
         cell: ({ row }) => (
           <span>
             {row.original.ApplicableForRelocateLevel
-              ? row.original.RelocateLevel ?? "-"
+              ? getDisplayValue(row.original.RelocateLevel)
               : "-"}
           </span>
         ),
-        size: 140,
+        size: 150,
         enableSorting: true,
         enableHiding: true,
         meta: {
-          headerTitle: "Restock Level",
+          headerTitle: "Item Restock Level",
           skeleton: <Skeleton className="h-7 w-20" />,
-        },
-      },
-      {
-        accessorKey: "description",
-        id: "description",
-        header: ({ column }) => (
-          <DataGridColumnHeader
-            title="Description"
-            column={column}
-            visibility
-          />
-        ),
-        cell: ({ row }) => (
-          <span className="block max-w-[350px] truncate">
-            {row.original.Description || "-"}
-          </span>
-        ),
-        size: 300,
-        enableSorting: true,
-        enableHiding: true,
-        meta: {
-          headerTitle: "Description",
-          skeleton: <Skeleton className="h-7 w-48" />,
         },
       },
       {
         accessorKey: "rather",
         id: "rather",
         header: ({ column }) => (
-          <DataGridColumnHeader title="Rate" column={column} visibility />
+          <DataGridColumnHeader title="Rate (₹)" column={column} visibility />
         ),
         cell: ({ row }) => (
           <span className="font-medium">{row.original.rather ?? "-"}</span>
@@ -1504,12 +1604,55 @@ export default function ItemMasterList() {
         },
       },
       {
+        accessorKey: "Tax1",
+        id: "Tax1",
+        header: ({ column }) => (
+          <DataGridColumnHeader title="Tax 1" column={column} visibility />
+        ),
+        cell: ({ row }) => <span>{getDisplayValue(row.original.Tax1)}</span>,
+        size: 100,
+        enableSorting: true,
+        enableHiding: true,
+        meta: { headerTitle: "Tax 1", skeleton: <Skeleton className="h-7 w-16" /> },
+      },
+      {
+        accessorKey: "Tax2",
+        id: "Tax2",
+        header: ({ column }) => (
+          <DataGridColumnHeader title="Tax 2" column={column} visibility />
+        ),
+        cell: ({ row }) => <span>{getDisplayValue(row.original.Tax2)}</span>,
+        size: 100,
+        enableSorting: true,
+        enableHiding: true,
+        meta: { headerTitle: "Tax 2", skeleton: <Skeleton className="h-7 w-16" /> },
+      },
+      {
+        accessorKey: "Description",
+        id: "Description",
+        header: ({ column }) => (
+          <DataGridColumnHeader title="Description" column={column} visibility />
+        ),
+        cell: ({ row }) => (
+          <span className="block max-w-[350px] truncate" title={row.original.Description || ""}>
+            {row.original.Description || "-"}
+          </span>
+        ),
+        size: 280,
+        enableSorting: true,
+        enableHiding: true,
+        meta: {
+          headerTitle: "Description",
+          skeleton: <Skeleton className="h-7 w-48" />,
+        },
+      },
+      {
         accessorKey: "isDefault",
         id: "isDefault",
         header: ({ column }) => (
           <DataGridColumnHeader title="Is Default" column={column} visibility />
         ),
-        cell: ({ row }) => <span>{row.original.isDefault ? "Yes" : "No"}</span>,
+        cell: ({ row }) => <span>{getYesNo(row.original.isDefault)}</span>,
         size: 100,
         enableSorting: true,
         enableHiding: true,
@@ -1544,6 +1687,23 @@ export default function ItemMasterList() {
         },
       },
       {
+        accessorKey: "createby",
+        id: "createby",
+        header: ({ column }) => (
+          <DataGridColumnHeader title="Created By ID" column={column} visibility />
+        ),
+        cell: ({ row }) => (
+          <span>{getDisplayValue(row.original.createdByName || row.original.createby)}</span>
+        ),
+        size: 170,
+        enableSorting: true,
+        enableHiding: true,
+        meta: {
+          headerTitle: "Created By",
+          skeleton: <Skeleton className="h-7 w-24" />,
+        },
+      },
+      {
         accessorKey: "createdAt",
         id: "createdAt",
         header: ({ column }) => (
@@ -1559,19 +1719,19 @@ export default function ItemMasterList() {
         },
       },
       {
-        accessorKey: "createdBy",
-        id: "createdBy",
+        accessorKey: "updateby",
+        id: "updateby",
         header: ({ column }) => (
-          <DataGridColumnHeader title="Created By" column={column} visibility />
+          <DataGridColumnHeader title="Updated By ID" column={column} visibility />
         ),
         cell: ({ row }) => (
-          <span>{row.original.createdByName || row.original.createdBy?.username || row.original.createdBy || "-"}</span>
+          <span>{getDisplayValue(row.original.updatedByName || row.original.updateby)}</span>
         ),
-        size: 160,
+        size: 170,
         enableSorting: true,
         enableHiding: true,
         meta: {
-          headerTitle: "Created By",
+          headerTitle: "Updated By",
           skeleton: <Skeleton className="h-7 w-24" />,
         },
       },
@@ -1587,24 +1747,6 @@ export default function ItemMasterList() {
         enableHiding: true,
         meta: {
           headerTitle: "Updated Date",
-          skeleton: <Skeleton className="h-7 w-24" />,
-        },
-      },
-
-      {
-        accessorKey: "updatedBy",
-        id: "updatedBy",
-        header: ({ column }) => (
-          <DataGridColumnHeader title="Updated By" column={column} visibility />
-        ),
-        cell: ({ row }) => (
-          <span>{row.original.updatedByName || row.original.updatedBy?.username || row.original.updatedBy || "-"}</span>
-        ),
-        size: 160,
-        enableSorting: true,
-        enableHiding: true,
-        meta: {
-          headerTitle: "Updated By",
           skeleton: <Skeleton className="h-7 w-24" />,
         },
       },
@@ -1644,13 +1786,6 @@ export default function ItemMasterList() {
                 {canEdit && (
                   <DropdownMenuItem
                     onClick={() => {
-                      console.log("EDIT ITEM MASTER:", item);
-                      console.log("ITEM MASTER BRANDS:", item?.brands);
-                      console.log(
-                        "SELECTED BRAND IDS:",
-                        item?.brands?.map((brand) => brand.ItemBrandid)
-                      );
-
                       setSelectedItemMaster(item);
                       setEditDialogOpen(true);
                     }}
@@ -1668,9 +1803,7 @@ export default function ItemMasterList() {
                 )}
 
                 {(canManage || canEdit) && (
-                  <DropdownMenuItem
-                    onClick={() => handleToggleItemMasterStatus(item)}
-                  >
+                  <DropdownMenuItem onClick={() => handleToggleItemMasterStatus(item)}>
                     {item.status ? (
                       <XCircle className="mr-2 size-4" />
                     ) : (
@@ -1721,6 +1854,7 @@ export default function ItemMasterList() {
       handleToggleItemMasterStatus,
     ],
   );
+
   const table = useReactTable({
     columns,
     data: itemMasters,
@@ -1928,17 +2062,19 @@ export default function ItemMasterList() {
             setClosingBalanceFrom={setClosingBalanceFrom}
             closingBalanceTo={closingBalanceTo}
             setClosingBalanceTo={setClosingBalanceTo}
-
+            searchInput={searchInput}
+            setSearchInput={setSearchInput}
+            handleSearch={handleSearch}
             setPagination={setPagination}
           />
           <DataGridColumnVisibility
-          table={table}
-          trigger={
-          <Button variant="outline">
-              <Settings2 />
-              Columns
-            </Button>
-          } />
+            table={table}
+            trigger={
+              <Button variant="outline">
+                <Settings2 />
+                Columns
+              </Button>
+            } />
         </div>
       </CardHeader >
     );
@@ -2019,7 +2155,6 @@ export default function ItemMasterList() {
         }}
       />
 
-      {/* EDIT ITEM */}
       {/* EDIT ITEM */}
       {selectedItemMaster && editDialogOpen && (
         <ItemMasterEditDialog

@@ -195,8 +195,26 @@ const REPORT_COLUMNS = [
   { label: "Item Group", width: 22, get: (r) => r.ItemGroupName },
   { label: "Item", width: 28, get: (r) => r.ItemMasterName },
   { label: "Item Type", width: 18, get: (r) => r.ItemTypeName },
+  { label: "Item Brand", width: 20, get: (r) => r.ItemBrandName || r.ItemBrandid },
   { label: "Transaction Type", width: 20, get: (r) => r.TransactionTypeName },
-  { label: "Issue Date", width: 14, get: (r) => formatDate(r.IssueDate) },
+
+  {
+    label: "Issue Date",
+    width: 14,
+    get: (r) =>
+      r?.TransactionTypeName?.toLowerCase() === "issue"
+        ? formatDate(r.IssueDate)
+        : "-",
+  },
+  {
+    label: "Receipt Date",
+    width: 14,
+    get: (r) =>
+      r?.TransactionTypeName?.toLowerCase() === "receipt"
+        ? formatDate(r.IssueDate)
+        : "-",
+  },
+
   { label: "Previous Balance", width: 16, get: (r) => r.PreviousBalance },
   { label: "Qty", width: 10, get: (r) => r.Qty },
   { label: "Price", width: 12, get: (r) => r.Price },
@@ -209,12 +227,27 @@ const REPORT_COLUMNS = [
     get: (r) => formatDate(r.DateOfRecive),
   },
   { label: "Received By", width: 18, get: (r) => r.ReceivedByName },
+  { label: "Requisition Supply No", width: 22, get: (r) => r.RequisitionSupplyNo },
+  {
+    label: "Requisition Supply Date",
+    width: 22,
+    get: (r) => formatDate(r.RequisitionSupplyDate),
+  },
+  { label: "Purchase No", width: 18, get: (r) => r.PurchaseNo },
+  {
+    label: "Purchase Date",
+    width: 16,
+    get: (r) => formatDate(r.PurchaseDate),
+  },
+  { label: "Destination Type", width: 18, get: (r) => r.DestinationType },
+  { label: "From Type", width: 16, get: (r) => r.FromType },
+  { label: "To Type", width: 16, get: (r) => r.ToType },
   { label: "Particulars", width: 30, get: (r) => r.Particuler },
   { label: "Comment", width: 30, get: (r) => r.Comment },
   { label: "Created Date", width: 14, get: (r) => formatDate(r.createdAt) },
-  { label: "Created By", width: 14, get: (r) => (r.createdByName) },
+  { label: "Created By", width: 18, get: (r) => r.CreatedByName || "-" },
   { label: "Updated Date", width: 14, get: (r) => formatDate(r.updatedAt) },
-  { label: "Updated By", width: 14, get: (r) => (r.updatedByName) },
+  { label: "Updated By", width: 18, get: (r) => r.UpdatedByName || "-" },
 ];
 
 // Builds a sortable, hideable column from a small definition.
@@ -1260,7 +1293,67 @@ const IssueReceiptList = () => {
         id: "IssueDate",
         title: "Issue Date",
         size: 175,
-        render: (r) => <span>{formatDate(r?.IssueDate)}</span>,
+        render: (r) => (
+          <span>
+            {r?.TransactionTypeName?.toLowerCase() === "issue"
+              ? formatDate(r?.IssueDate)
+              : "-"}
+          </span>
+        ),
+      }),
+      makeColumn({
+        id: "ReceiptDate",
+        title: "Receipt Date",
+        size: 175,
+        render: (r) => (
+          <span>
+            {r?.TransactionTypeName?.toLowerCase() === "receipt"
+              ? formatDate(r?.IssueDate)
+              : "-"}
+          </span>
+        ),
+      }),
+      makeColumn({
+        id: "RequisitionSupplyNo",
+        title: "Requisition Supply No",
+        size: 180,
+        render: (r) => <span>{getDisplayValue(r?.RequisitionSupplyNo)}</span>,
+      }),
+      makeColumn({
+        id: "RequisitionSupplyDate",
+        title: "Requisition Supply Date",
+        size: 175,
+        render: (r) => <span>{formatDate(r?.RequisitionSupplyDate)}</span>,
+      }),
+      makeColumn({
+        id: "PurchaseNo",
+        title: "Purchase No",
+        size: 160,
+        render: (r) => <span>{getDisplayValue(r?.PurchaseNo)}</span>,
+      }),
+      makeColumn({
+        id: "PurchaseDate",
+        title: "Purchase Date",
+        size: 175,
+        render: (r) => <span>{formatDate(r?.PurchaseDate)}</span>,
+      }),
+      makeColumn({
+        id: "DestinationType",
+        title: "Destination Type",
+        size: 160,
+        render: (r) => <span>{getDisplayValue(r?.DestinationType)}</span>,
+      }),
+      makeColumn({
+        id: "FromType",
+        title: "From Type",
+        size: 140,
+        render: (r) => <span>{getDisplayValue(r?.FromType)}</span>,
+      }),
+      makeColumn({
+        id: "ToType",
+        title: "To Type",
+        size: 140,
+        render: (r) => <span>{getDisplayValue(r?.ToType)}</span>,
       }),
       makeColumn({
         id: "PreviousBalance",
@@ -1686,6 +1779,9 @@ const IssueReceiptList = () => {
             setCreatedBy={setCreatedByFilter}
             updatedBy={updatedByFilter}
             setUpdatedBy={setUpdatedByFilter}
+            searchInput={searchInput}
+            setSearchInput={setSearchInput}
+            handleSearch={handleSearch}
             setPagination={setPagination}
           />
           <DataGridColumnVisibility

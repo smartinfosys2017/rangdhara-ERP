@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import {
@@ -29,23 +29,20 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { MultiSelect } from "@/components/ui/multi-select";
+import { SelectSearch } from "@/components/ui/select-search";
 
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { apiFetch } from "@/lib/api";
-
+import ItemRateCustomFields, {
+  validateRequiredCustomFields,
+} from "../../custom-fields/import-custom-fields";
 // ======================================================
 // INITIAL FORM
 // ======================================================
 
 const initialForm = {
-  ItemGroupid: "",
+  ItemGroupids: [],
   ItemMasterid: "",
   BrandManufacturerid: "",
   ItemConditionid: "",
@@ -58,6 +55,7 @@ const initialForm = {
 
 const createInitialForm = () => ({
   ...initialForm,
+  ItemGroupids: [],
 });
 
 // ======================================================
@@ -70,20 +68,19 @@ const getRecords = (result) => {
 
 const getBrandLabel = (brand) => {
   const brandName =
-    brand.brandName ||
-    brand.BrandName ||
+    brand?.brandName ||
+    brand?.BrandName ||
     "";
 
   const manufacturerName =
-    brand.manufacturerName ||
-    brand.ManufacturerName ||
+    brand?.manufacturerName ||
+    brand?.ManufacturerName ||
     "";
 
   if (
     brandName &&
     manufacturerName &&
-    brandName.toLowerCase() !==
-      manufacturerName.toLowerCase()
+    brandName.toLowerCase() !== manufacturerName.toLowerCase()
   ) {
     return `${brandName} - ${manufacturerName}`;
   }
@@ -91,12 +88,14 @@ const getBrandLabel = (brand) => {
   return (
     brandName ||
     manufacturerName ||
-    brand.name ||
-    `Brand #${brand.id}`
+    brand?.name ||
+    `Brand #${brand?.id}`
   );
 };
 
 const getUnitLabel = (unit) => {
+  if (!unit) return "";
+
   const name = unit.unitName || unit.name || "";
   const abbreviation = unit.abbreviation || "";
 
@@ -104,38 +103,56 @@ const getUnitLabel = (unit) => {
     ? `${name} (${abbreviation})`
     : name;
 };
-const handleItemChange = (itemId) => {
-  const selectedItem = items.find(
-    (item) => String(item.id) === String(itemId),
+
+const getItemGroupId = (item) => {
+  return String(
+    item?.ItemGroupid ??
+    item?.ItemGroupId ??
+    item?.itemGroupId ??
+    "",
+  );
+};
+const getItemConditionId = (item) => {
+  return String(
+    item?.ItemConditionid ??
+    item?.ItemConditionId ??
+    item?.itemConditionId ??
+    item?.itemCondition?.id ??
+    item?.ItemCondition?.id ??
+    "",
+  );
+};
+const getItemUnitId = (item) => {
+  return String(
+    item?.Unitid ??
+    item?.UnitId ??
+    item?.unitId ??
+    item?.unit?.id ??
+    item?.Unit?.id ??
+    "",
+  );
+};
+
+// Get brand relationships from the selected Item.
+const getItemBrandRelations = (item) => {
+  return Array.isArray(item?.brands) ? item.brands : [];
+};
+
+const getItemConditionLabel = (item, itemConditions) => {
+  const conditionId = getItemConditionId(item);
+
+  const condition = itemConditions.find(
+    (condition) => String(condition.id) === conditionId,
   );
 
-  const relatedBrands = (selectedItem?.brands || [])
-    .map((itemBrand) => itemBrand.brand)
-    .filter((brand) => brand && brand.id)
-    .filter(
-      (brand, index, self) =>
-        index === self.findIndex(
-          (item) => String(item.id) === String(brand.id),
-        ),
-    );
-
-  setFilteredBrands(relatedBrands);
-
-  setForm((prev) => ({
-    ...prev,
-    ItemMasterid: itemId,
-    BrandManufacturerid:
-      relatedBrands.length === 1
-        ? String(relatedBrands[0].id)
-        : "",
-  }));
-
-  setErrors((prev) => ({
-    ...prev,
-    ItemMasterid: "",
-    BrandManufacturerid: "",
-  }));
-}; 
+  return (
+    condition?.ProductType ||
+    condition?.name ||
+    item?.itemCondition?.ProductType ||
+    item?.ItemCondition?.ProductType ||
+    ""
+  );
+};
 // ======================================================
 // MAIN COMPONENT
 // ======================================================
@@ -152,11 +169,12 @@ export default function ItemRateAddDialog({
   const [errors, setErrors] = useState({});
 
   const [itemGroups, setItemGroups] = useState([]);
+  const [itemConditions, setItemConditions] = useState([]);
   const [items, setItems] = useState([]);
   const [brands, setBrands] = useState([]);
-  const [itemConditions, setItemConditions] = useState([]);
   const [units, setUnits] = useState([]);
-
+  const [customFieldDefinitions, setCustomFieldDefinitions] = useState([]);
+  const [customFields, setCustomFields] = useState({});
   // ====================================================
   // TOAST HELPERS
   // ====================================================
@@ -233,8 +251,8 @@ export default function ItemRateAddDialog({
         "/api/inventory/item-groups?limit=100&status=active",
         "/api/inventory/item-master?limit=100&status=active",
         "/api/inventory/brand_manufacturer?limit=100&status=active",
-        "/api/inventory/product-type?limit=100&status=active",
         "/api/inventory/unit?limit=100",
+        "/api/inventory/product-type?limit=100&status=active",
       ];
 
       const responses = await Promise.all(
@@ -258,15 +276,13 @@ export default function ItemRateAddDialog({
       setItemGroups(getRecords(results[0]));
       setItems(getRecords(results[1]));
       setBrands(getRecords(results[2]));
+      setUnits(getRecords(results[3]));
 
       setItemConditions(
-        getRecords(results[3]).filter(
+        getRecords(results[4]).filter(
           (item) => !item.deletedAt && item.status === true,
         ),
       );
-
-      setUnits(getRecords(results[4]));
-
     } catch (error) {
       console.error("LOAD ITEM RATE DROPDOWNS ERROR:", error);
 
@@ -289,14 +305,210 @@ export default function ItemRateAddDialog({
   }, [open, loadDropdowns]);
 
   // ====================================================
+  // ITEM GROUP OPTIONS
+  // ====================================================
+
+  const itemGroupOptions = useMemo(() => {
+    return itemGroups.map((item) => ({
+      label: item.groupName || item.name || `Group #${item.id}`,
+      value: String(item.id),
+    }));
+  }, [itemGroups]);
+
+  // ====================================================
+  // FILTER ITEMS BY SELECTED GROUPS
+  // ====================================================
+
+  const filteredItems = useMemo(() => {
+    if (!form.ItemGroupids.length) return [];
+
+    return items.filter((item) =>
+      form.ItemGroupids.includes(getItemGroupId(item)),
+    );
+  }, [items, form.ItemGroupids]);
+
+  // ====================================================
+  // ITEM OPTIONS
+  // ====================================================
+
+  const itemOptions = useMemo(() => {
+    return filteredItems.map((item) => ({
+      label: item.ItemName || `Item #${item.id}`,
+      value: String(item.id),
+    }));
+  }, [filteredItems]);
+
+  // ====================================================
+  // SELECTED ITEM
+  // ====================================================
+
+  const selectedItem = useMemo(() => {
+    return items.find(
+      (item) => String(item.id) === String(form.ItemMasterid),
+    ) || null;
+  }, [items, form.ItemMasterid]);
+
+  // ====================================================
+  // FILTER BRANDS BY SELECTED ITEM
+  // ====================================================
+
+  const filteredBrands = useMemo(() => {
+    if (!selectedItem) return [];
+
+    const relations = getItemBrandRelations(selectedItem);
+
+    const relatedBrands = relations
+      .map((relation) => relation?.brand)
+      .filter((brand) => brand?.id);
+
+    // Remove duplicate brands.
+    return relatedBrands.filter(
+      (brand, index, self) =>
+        index === self.findIndex(
+          (item) => String(item.id) === String(brand.id),
+        ),
+    );
+  }, [selectedItem]);
+
+  // ====================================================
+  // BRAND OPTIONS
+  // ====================================================
+
+  const brandOptions = useMemo(() => {
+    return filteredBrands.map((brand) => ({
+      label: getBrandLabel(brand),
+      value: String(brand.id),
+    }));
+  }, [filteredBrands]);
+
+
+  // ====================================================
+  // AUTOMATIC UNIT
+  // ====================================================
+
+  const automaticUnitId = useMemo(() => {
+    return getItemUnitId(selectedItem);
+  }, [selectedItem]);
+
+  const selectedUnit = useMemo(() => {
+    return units.find(
+      (unit) => String(unit.id) === String(form.Unitid),
+    ) || selectedItem?.unit || selectedItem?.Unit || null;
+  }, [units, form.Unitid, selectedItem]);
+
+  const unitLabel = useMemo(() => {
+    return getUnitLabel(selectedUnit);
+  }, [selectedUnit]);
+
+  // ====================================================
+  // ITEM GROUP CHANGE
+  // ====================================================
+
+  const handleItemGroupsChange = (values) => {
+    const selectedGroups = Array.isArray(values)
+      ? values.map(String)
+      : [];
+
+    setForm((prev) => ({
+      ...prev,
+      ItemGroupids: selectedGroups,
+      ItemMasterid: "",
+      BrandManufacturerid: "",
+      ItemConditionid: "",
+      Unitid: "",
+    }));
+
+    setErrors((prev) => ({
+      ...prev,
+      ItemGroupids: "",
+      ItemMasterid: "",
+      BrandManufacturerid: "",
+      ItemConditionid: "",
+      Unitid: "",
+    }));
+  };
+  // ====================================================
+  // ITEM CHANGE
+  // ====================================================
+
+  const handleItemChange = (itemId) => {
+    const selected = items.find(
+      (item) => String(item.id) === String(itemId),
+    );
+
+    if (!selected) return;
+
+    const relatedBrands = getItemBrandRelations(selected)
+      .map((relation) => relation?.brand)
+      .filter((brand) => brand?.id)
+      .filter(
+        (brand, index, self) =>
+          index ===
+          self.findIndex(
+            (item) => String(item.id) === String(brand.id),
+          ),
+      );
+
+    // Get automatic values from the selected Item.
+    const selectedUnitId = getItemUnitId(selected);
+    const itemConditionId = getItemConditionId(selected);
+
+    const defaultBrandId =
+      relatedBrands.length === 1
+        ? String(relatedBrands[0].id)
+        : "";
+
+    setForm((prev) => ({
+      ...prev,
+      ItemMasterid: String(itemId),
+      BrandManufacturerid: defaultBrandId,
+      ItemConditionid: itemConditionId,
+      Unitid: selectedUnitId,
+    }));
+
+    setErrors((prev) => ({
+      ...prev,
+      ItemMasterid: "",
+      BrandManufacturerid: "",
+      ItemConditionid: "",
+      Unitid: "",
+    }));
+  };
+
+  // ====================================================
+  // BRAND CHANGE
+  // ====================================================
+
+  const handleBrandChange = (brandId) => {
+    setForm((prev) => ({
+      ...prev,
+      BrandManufacturerid: String(brandId),
+    }));
+
+    setErrors((prev) => ({
+      ...prev,
+      BrandManufacturerid: "",
+    }));
+  };
+
+  useEffect(() => {
+    if (form.Unitid !== automaticUnitId) {
+      setForm((prev) => ({
+        ...prev,
+        Unitid: automaticUnitId,
+      }));
+    }
+  }, [automaticUnitId, form.Unitid]);
+
+  // ====================================================
   // VALIDATION
   // ====================================================
 
   const validate = () => {
     const newErrors = {};
 
-    if (!form.ItemGroupid) {
-      newErrors.ItemGroupid = "Item Group is required.";
+    if (!form.ItemGroupids.length) {
+      newErrors.ItemGroupids = "At least one Item Group is required.";
     }
 
     if (!form.ItemMasterid) {
@@ -310,16 +522,14 @@ export default function ItemRateAddDialog({
 
     if (!form.ItemConditionid) {
       newErrors.ItemConditionid =
-        "Item Condition is required.";
+        "Item Condition could not be determined from the selected Item.";
     }
 
     if (!form.ApplicableFromDate) {
       newErrors.ApplicableFromDate =
         "Applicable From Date is required.";
     } else if (
-      Number.isNaN(
-        new Date(form.ApplicableFromDate).getTime(),
-      )
+      Number.isNaN(new Date(form.ApplicableFromDate).getTime())
     ) {
       newErrors.ApplicableFromDate =
         "Please enter a valid Applicable From Date.";
@@ -327,9 +537,7 @@ export default function ItemRateAddDialog({
 
     if (
       form.ApplicableToDate &&
-      Number.isNaN(
-        new Date(form.ApplicableToDate).getTime(),
-      )
+      Number.isNaN(new Date(form.ApplicableToDate).getTime())
     ) {
       newErrors.ApplicableToDate =
         "Please enter a valid Applicable To Date.";
@@ -344,14 +552,18 @@ export default function ItemRateAddDialog({
         "Applicable To Date cannot be before Applicable From Date.";
     }
 
-    if (form.Rate === "" || !Number.isFinite(Number(form.Rate))) {
+    if (
+      form.Rate === "" ||
+      !Number.isFinite(Number(form.Rate))
+    ) {
       newErrors.Rate = "Rate is required.";
     } else if (Number(form.Rate) <= 0) {
       newErrors.Rate = "Rate must be greater than zero.";
     }
 
     if (!form.Unitid) {
-      newErrors.Unitid = "Unit is required.";
+      newErrors.Unitid =
+        "Unit could not be determined from the selected Item.";
     }
 
     if (form.Comments.length > 255) {
@@ -378,12 +590,27 @@ export default function ItemRateAddDialog({
 
   const handleSubmit = async () => {
     if (!validate()) return;
+    const missingCustomFields = validateRequiredCustomFields(
+      customFieldDefinitions,
+      customFields,
+    );
 
+    if (missingCustomFields.length > 0) {
+      showErrorToast(
+        `Please fill in required custom fields: ${missingCustomFields.join(", ")}`,
+      );
+      return;
+    }
     try {
       setLoading(true);
 
+      const selectedItemGroupId = getItemGroupId(selectedItem);
+
       const payload = {
-        ItemGroupid: form.ItemGroupid,
+        // Existing API expects one ItemGroupid.
+        // Use the selected Item's actual group.
+        ItemGroupid: selectedItemGroupId,
+
         ItemMasterid: form.ItemMasterid,
         BrandManufacturerid: form.BrandManufacturerid,
         ItemConditionid: form.ItemConditionid,
@@ -393,8 +620,9 @@ export default function ItemRateAddDialog({
 
         Rate: Number(form.Rate),
 
+        // Automatically populated from selected Item.
         Unitid: form.Unitid,
-
+        customFields: customFields ?? {},
         Comments: form.Comments.trim() || null,
       };
 
@@ -409,9 +637,7 @@ export default function ItemRateAddDialog({
         },
       );
 
-      const result = await response
-        .json()
-        .catch(() => ({}));
+      const result = await response.json().catch(() => ({}));
 
       if (!response.ok || !result.success) {
         throw new Error(
@@ -425,13 +651,12 @@ export default function ItemRateAddDialog({
 
       resetForm();
       closeDialog?.();
-
     } catch (error) {
       console.error("CREATE ITEM RATE ERROR:", error);
 
       showErrorToast(
         error.message ||
-          "Something went wrong while creating Item Rate.",
+        "Something went wrong while creating Item Rate.",
       );
     } finally {
       setLoading(false);
@@ -466,46 +691,29 @@ export default function ItemRateAddDialog({
 
           {/* FORM */}
 
-           <ScrollArea className="grow min-h-0 flex flex-col h-full max-h-[90vh] overflow-hidden">
+          <ScrollArea className="grow min-h-0 flex flex-col h-full max-h-[90vh] overflow-hidden">
             <DialogBody className="space-y-6 pt-0 px-0 min-h-0">
 
-              {/* ITEM GROUP */}
+              {/* ITEM GROUP MULTISELECT */}
 
               <div className="space-y-2">
                 <Label>
                   Item Group <span className="text-destructive">*</span>
                 </Label>
 
-                <Select
-                  value={form.ItemGroupid}
-                  onValueChange={(value) =>
-                    updateField("ItemGroupid", value)
-                  }
+                <MultiSelect
+                  options={itemGroupOptions}
+                  value={form.ItemGroupids}
+                  onValueChange={handleItemGroupsChange}
+                  placeholder="Select Item Groups"
+                  searchPlaceholder="Search Item Groups..."
+                  className="w-full"
                   disabled={loading || dropdownLoading}
-                >
-                  <SelectTrigger
-                    className={
-                      errors.ItemGroupid ? "border-destructive" : ""
-                    }
-                  >
-                    <SelectValue placeholder="Select Item Group" />
-                  </SelectTrigger>
+                />
 
-                  <SelectContent>
-                    {itemGroups.map((item) => (
-                      <SelectItem
-                        key={item.id}
-                        value={String(item.id)}
-                      >
-                        {item.groupName || item.name || item.id}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                {errors.ItemGroupid && (
+                {errors.ItemGroupids && (
                   <p className="text-sm text-destructive">
-                    {errors.ItemGroupid}
+                    {errors.ItemGroupids}
                   </p>
                 )}
               </div>
@@ -517,32 +725,23 @@ export default function ItemRateAddDialog({
                   Item <span className="text-destructive">*</span>
                 </Label>
 
-                <Select
+                <SelectSearch
+                  options={itemOptions}
                   value={form.ItemMasterid}
-                  onValueChange={(value) =>
-                    updateField("ItemMasterid", value)
+                  onValueChange={handleItemChange}
+                  placeholder={
+                    form.ItemGroupids.length
+                      ? "Select Item"
+                      : "Select Item Group first"
                   }
-                  disabled={loading || dropdownLoading}
-                >
-                  <SelectTrigger
-                    className={
-                      errors.ItemMasterid ? "border-destructive" : ""
-                    }
-                  >
-                    <SelectValue placeholder="Select Item" />
-                  </SelectTrigger>
-
-                  <SelectContent>
-                    {items.map((item) => (
-                      <SelectItem
-                        key={item.id}
-                        value={String(item.id)}
-                      >
-                        {item.ItemName || item.id}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  searchPlaceholder="Search Items..."
+                  emptyMessage="No items found for selected groups."
+                  disabled={
+                    loading ||
+                    dropdownLoading ||
+                    !form.ItemGroupids.length
+                  }
+                />
 
                 {errors.ItemMasterid && (
                   <p className="text-sm text-destructive">
@@ -559,34 +758,24 @@ export default function ItemRateAddDialog({
                   <span className="text-destructive">*</span>
                 </Label>
 
-                <Select
+                <SelectSearch
+                  options={brandOptions}
                   value={form.BrandManufacturerid}
-                  onValueChange={(value) =>
-                    updateField("BrandManufacturerid", value)
+                  onValueChange={handleBrandChange}
+                  placeholder={
+                    form.ItemMasterid
+                      ? "Select Brand / Manufacturer"
+                      : "Select Item first"
                   }
-                  disabled={loading || dropdownLoading}
-                >
-                  <SelectTrigger
-                    className={
-                      errors.BrandManufacturerid
-                        ? "border-destructive"
-                        : ""
-                    }
-                  >
-                    <SelectValue placeholder="Select Brand / Manufacturer" />
-                  </SelectTrigger>
-
-                  <SelectContent>
-                    {brands.map((brand) => (
-                      <SelectItem
-                        key={brand.id}
-                        value={String(brand.id)}
-                      >
-                        {getBrandLabel(brand)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  searchPlaceholder="Search Brand / Manufacturer..."
+                  emptyMessage="No brands are assigned to this item."
+                  disabled={
+                    loading ||
+                    dropdownLoading ||
+                    !form.ItemMasterid ||
+                    !brandOptions.length
+                  }
+                />
 
                 {errors.BrandManufacturerid && (
                   <p className="text-sm text-destructive">
@@ -595,42 +784,17 @@ export default function ItemRateAddDialog({
                 )}
               </div>
 
-              {/* ITEM CONDITION */}
+              {/* ITEM CONDITION - AUTOMATIC */}
 
               <div className="space-y-2">
-                <Label>
-                  Item Condition{" "}
-                  <span className="text-destructive">*</span>
-                </Label>
+                <Label>Item Condition</Label>
 
-                <Select
-                  value={form.ItemConditionid}
-                  onValueChange={(value) =>
-                    updateField("ItemConditionid", value)
-                  }
-                  disabled={loading || dropdownLoading}
-                >
-                  <SelectTrigger
-                    className={
-                      errors.ItemConditionid
-                        ? "border-destructive"
-                        : ""
-                    }
-                  >
-                    <SelectValue placeholder="Select Item Condition" />
-                  </SelectTrigger>
-
-                  <SelectContent>
-                    {itemConditions.map((item) => (
-                      <SelectItem
-                        key={item.id}
-                        value={String(item.id)}
-                      >
-                        {item.ProductType || item.name || item.id}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Input
+                  value={getItemConditionLabel(selectedItem, itemConditions)}
+                  readOnly
+                  disabled
+                  placeholder="Automatically set from selected Item"
+                />
 
                 {errors.ItemConditionid && (
                   <p className="text-sm text-destructive">
@@ -651,10 +815,7 @@ export default function ItemRateAddDialog({
                   type="date"
                   value={form.ApplicableFromDate}
                   onChange={(e) =>
-                    updateField(
-                      "ApplicableFromDate",
-                      e.target.value,
-                    )
+                    updateField("ApplicableFromDate", e.target.value)
                   }
                   disabled={loading}
                   aria-invalid={!!errors.ApplicableFromDate}
@@ -682,10 +843,7 @@ export default function ItemRateAddDialog({
                   value={form.ApplicableToDate}
                   min={form.ApplicableFromDate || undefined}
                   onChange={(e) =>
-                    updateField(
-                      "ApplicableToDate",
-                      e.target.value,
-                    )
+                    updateField("ApplicableToDate", e.target.value)
                   }
                   disabled={loading}
                   aria-invalid={!!errors.ApplicableToDate}
@@ -707,69 +865,41 @@ export default function ItemRateAddDialog({
                 </p>
               </div>
 
-              {/* RATE */}
+              {/* RATE WITH AUTOMATIC UNIT LABEL */}
 
               <div className="space-y-2">
                 <Label>
                   Rate (₹) <span className="text-destructive">*</span>
                 </Label>
 
-                <Input
-                  type="number"
-                  min="0.01"
-                  step="any"
-                  value={form.Rate}
-                  onChange={(e) =>
-                    updateField("Rate", e.target.value)
-                  }
-                  placeholder="Enter rate"
-                  disabled={loading}
-                  aria-invalid={!!errors.Rate}
-                  className={
-                    errors.Rate ? "border-destructive" : ""
-                  }
-                />
+                <div className="relative">
+                  <Input
+                    type="number"
+                    min="0.01"
+                    step="any"
+                    value={form.Rate}
+                    onChange={(e) =>
+                      updateField("Rate", e.target.value)
+                    }
+                    placeholder="Enter rate"
+                    disabled={loading}
+                    aria-invalid={!!errors.Rate}
+                    className={`${errors.Rate ? "border-destructive" : ""
+                      } ${unitLabel ? "pr-36" : ""}`}
+                  />
+
+                  {unitLabel && (
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground pointer-events-none max-w-[45%] truncate">
+                      {unitLabel}
+                    </span>
+                  )}
+                </div>
 
                 {errors.Rate && (
                   <p className="text-sm text-destructive">
                     {errors.Rate}
                   </p>
                 )}
-              </div>
-
-              {/* UNIT */}
-
-              <div className="space-y-2">
-                <Label>
-                  Unit <span className="text-destructive">*</span>
-                </Label>
-
-                <Select
-                  value={form.Unitid}
-                  onValueChange={(value) =>
-                    updateField("Unitid", value)
-                  }
-                  disabled={loading || dropdownLoading}
-                >
-                  <SelectTrigger
-                    className={
-                      errors.Unitid ? "border-destructive" : ""
-                    }
-                  >
-                    <SelectValue placeholder="Select Unit" />
-                  </SelectTrigger>
-
-                  <SelectContent>
-                    {units.map((unit) => (
-                      <SelectItem
-                        key={unit.id}
-                        value={String(unit.id)}
-                      >
-                        {getUnitLabel(unit)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
 
                 {errors.Unitid && (
                   <p className="text-sm text-destructive">
@@ -808,7 +938,27 @@ export default function ItemRateAddDialog({
                   {form.Comments.length}/255 characters
                 </p>
               </div>
+              {/* CUSTOM FIELDS */}
 
+              <div className="space-y-4 border-t pt-5">
+                <div>
+                  <h3 className="text-base font-semibold">
+                    Custom Fields
+                  </h3>
+
+                  <p className="text-sm text-muted-foreground">
+                    Additional Item information.
+                  </p>
+                </div>
+
+                <ItemRateCustomFields
+                  values={customFields}
+                  onChange={setCustomFields}
+                  onFieldsLoaded={(loadedFields) => {
+                    setCustomFieldDefinitions(loadedFields);
+                  }}
+                />
+              </div>
               {dropdownLoading && (
                 <p className="text-center text-sm text-muted-foreground">
                   Loading dropdown options...

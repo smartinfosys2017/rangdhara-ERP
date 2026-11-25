@@ -166,7 +166,7 @@ export default function LocationAddDialog({
       newErrors.locationCode = "Warehouse code is required.";
     } else if (locationCode.length > 25) {
       newErrors.locationCode = "Warehouse code must not exceed 25 characters.";
-    }Warehouse
+    }
 
     setErrors(newErrors);
 

@@ -440,7 +440,7 @@ export const MENU_SIDEBAR = [
     icon: Users,
     path: "/production",
     permission: "production.list",
-  },
+  }, 
   { heading: "diveder" },
   {
     title: "inventory",

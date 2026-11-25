@@ -18,6 +18,7 @@ import {
   Search,
   Settings2,
   Trash2,
+  Info,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -146,24 +147,6 @@ const getGroupName = (item) => {
   return (
     item?.ItemGroup?.groupName ||
     item?.GroupName ||
-    "-"
-  );
-};
-
-const getBrandName = (item) => {
-  return (
-    item?.BrandManufacturer?.BrandManufacturerName ||
-    item?.BrandManufacturer?.name ||
-    item?.BrandName ||
-    "-"
-  );
-};
-
-const getConditionName = (item) => {
-  return (
-    item?.ItemCondition?.conditionName ||
-    item?.ItemCondition?.ItemConditionName ||
-    item?.ConditionName ||
     "-"
   );
 };
@@ -650,8 +633,8 @@ export default function ItemRateList() {
       ID: item.id || "",
       "Item Group": getGroupName(item),
       "Item Name": getItemRateName(item),
-      "Brand / Manufacturer": getBrandName(item),
-      "Item Condition": getConditionName(item),
+      "Brand / Manufacturer": item.BrandManufacturerName,
+      "Item Condition": item.ItemConditionName,
       "Applicable From": formatDate(
         item.ApplicableFromDate
       ),
@@ -786,8 +769,8 @@ export default function ItemRateList() {
               <td>${escapeHtml(item.id)}</td>
               <td>${escapeHtml(getGroupName(item))}</td>
               <td>${escapeHtml(getItemRateName(item))}</td>
-              <td>${escapeHtml(getBrandName(item))}</td>
-              <td>${escapeHtml(getConditionName(item))}</td>
+              <td>${escapeHtml(item.BrandManufacturerName)}</td>
+              <td>${escapeHtml(item.ItemConditionName)}</td>
               <td>${escapeHtml(formatDate(item.ApplicableFromDate))}</td>
               <td>${escapeHtml(formatDate(item.ApplicableToDate))}</td>
               <td>${escapeHtml(formatRate(item.Rate))}</td>
@@ -1521,7 +1504,7 @@ export default function ItemRateList() {
 
         cell: ({ row }) => (
           <span className="font-medium">
-            {getItemRateName(row.original)}
+            {row.original.ItemMasterName}
           </span>
         ),
 
@@ -1541,7 +1524,7 @@ export default function ItemRateList() {
         ),
 
         cell: ({ row }) => (
-          <span>{getBrandName(row.original)}</span>
+          <span>{row.original.BrandManufacturerName}</span>
         ),
 
         size: 200,
@@ -1560,7 +1543,7 @@ export default function ItemRateList() {
         ),
 
         cell: ({ row }) => (
-          <span>{getConditionName(row.original)}</span>
+          <span>{row.original.ItemConditionName}</span>
         ),
 
         size: 170,
@@ -1911,24 +1894,18 @@ export default function ItemRateList() {
                 )}
               </form>
             </div>
-
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
                   type="button"
                   className="flex size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
                 >
-                  <span className="text-sm font-semibold">
-                    i
-                  </span>
+                  <Info className="size-4" />
                 </button>
               </TooltipTrigger>
 
               <TooltipContent>
-                <p>
-                  Search by item name, item group, brand,
-                  manufacturer, condition, unit, or comments.
-                </p>
+                <p>Search by item name, item group, brand,manufacturer, condition, unit, or comments.</p>
               </TooltipContent>
             </Tooltip>
           </div>
@@ -1954,10 +1931,10 @@ export default function ItemRateList() {
           >
             <span
               className={`size-2.5 shrink-0 rounded-full ${dbStatus.loading
-                  ? "animate-pulse bg-yellow-500"
-                  : dbStatus.online && isOnline
-                    ? "bg-green-500"
-                    : "bg-red-500"
+                ? "animate-pulse bg-yellow-500"
+                : dbStatus.online && isOnline
+                  ? "bg-green-500"
+                  : "bg-red-500"
                 }`}
             />
 
@@ -2021,26 +1998,19 @@ export default function ItemRateList() {
             setCreatedBy={setCreatedBy}
             updatedBy={updatedBy}
             setUpdatedBy={setUpdatedBy}
+            searchInput={searchInput}
+            setSearchInput={setSearchInput}
+            handleSearch={handleSearch}
             setPagination={setPagination}
           />
           <DataGridColumnVisibility
-          table={table}
-          trigger={
-          <Button variant="outline">
-              <Settings2 />
-              Columns
-            </Button>
-          } />
-          {hasActiveFilters && (
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={clearFilters}
-            >
-              <X className="mr-2 size-4" />
-              Clear Filters
-            </Button>
-          )}
+            table={table}
+            trigger={
+              <Button variant="outline">
+                <Settings2 />
+                Columns
+              </Button>
+            } />
         </div>
       </CardHeader>
     );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -19,39 +19,36 @@ import {
   DialogTitle,
   DialogBody,
 } from "@/components/ui/dialog";
-
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Calendar } from "@/components/ui/calendar";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Alert, AlertIcon, AlertTitle } from "@/components/ui/alert";
-
+import { SelectSearch } from "@/components/ui/select-search";
+import IssueReceiptCustomFields, {
+  validateRequiredCustomFields,
+} from "../../custom-fields/import-custom-fields";
 // --------------------------------------------------
-// HELPERS
+// CONSTANTS & HELPERS 
 // --------------------------------------------------
 
-const getToday = () => format(new Date(), "yyyy-MM-dd");
+const TIME_SLOTS = Array.from({ length: 30 }, (_, i) => {
+  const hour = 9 + Math.floor(i / 2);
+  return `${String(hour).padStart(2, "0")}:${i % 2 === 0 ? "00" : "30"}`;
+});
+
+const ITEM_RESET = {
+  ItemMasterid: "",
+  ItemGroupid: "",
+  ItemTypeid: "",
+  Price: "",
+};
 
 const getInitialForm = () => ({
   ItemGroupid: "",
@@ -60,11 +57,9 @@ const getInitialForm = () => ({
   BrandManufacturerid: "",
   ItemTypeid: "",
   TransactionTypeid: "",
-  IssueDate: `${getToday()}T10:00`,
+  IssueDate: `${format(new Date(), "yyyy-MM-dd")}T10:00`,
 
   Qty: "",
-  PreviousBalance: 0,
-  Balance: 0,
   Issue_by: "",
   RecivedBy: "",
 
@@ -88,27 +83,28 @@ const getInitialForm = () => ({
   Price: "",
   Particuler: "",
 
-  // Existing inward destination fields
+  // Inward destination
   DestinationType: "",
   DestinationId: "",
 });
 
 const getArray = (data) => (Array.isArray(data) ? data : []);
 
+const getGroupName = (group) => group.groupName || group.GroupName;
+
 const getItemGroupId = (item) =>
-  String(
-    item?.ItemGroupid ??
-    item?.itemGroupId ??
-    item?.ItemGroupId ??
-    item?.groupId ??
-    "",
-  );
+  String(item?.ItemGroupid ?? item?.itemGroupId ?? item?.ItemGroupId ?? item?.groupId ?? "");
 
 const getItemConditionId = (item) =>
   String(item?.ItemConditionid ?? item?.itemConditionId ?? "");
 
 const getItemUnitId = (item) =>
   String(item?.Unitid ?? item?.unitId ?? item?.UnitId ?? item?.unitid ?? "");
+
+const getTransactionName = (t) =>
+  String(t?.TransactionType || t?.transactionType || t?.name || "")
+    .trim()
+    .toLowerCase();
 
 const getStaffName = (staff) =>
   staff?.name ||
@@ -117,44 +113,232 @@ const getStaffName = (staff) =>
   staff?.email ||
   `User #${staff?.id}`;
 
-const getDestinationName = (item, type) => {
-  if (type === "location") {
-    return (
-      item.locationName ||
-      item.LocationName ||
-      item.name ||
-      `Warehouse #${item.id}`
-    );
-  }
-
-  return (
-    item.machineName ||
+const getDestinationName = (item, type) =>
+  type === "location"
+    ? item.locationName || item.LocationName || item.name || `Warehouse #${item.id}`
+    : item.machineName ||
     item.MachineName ||
     item.machineNumber ||
     item.MachineNumber ||
-    `Machine #${item.id}`
-  );
-};
+    `Machine #${item.id}`;
 
-const getBalanceFromResponse = (data) => {
+const normalizeLocationType = (type) =>
+  String(type).toUpperCase() === "MACHINERY" ? "MACHINE" : String(type).toUpperCase();
+
+const destinationEndpoint = (type) =>
+  type === "location"
+    ? "/api/inventory/location?limit=100&status=active"
+    : "/api/inventory/machine-master?limit=100&status=active";
+
+/** GET helper: throws a readable error when the API reports failure. */
+async function fetchJson(url, fallbackMessage) {
+  const response = await apiFetch(url);
+  const result = await response.json();
+
+  if (!response.ok || !result.success) {
+    throw new Error(result.message || fallbackMessage);
+  }
+
+  return result;
+}
+
+export function calculateFifoIssue(receiptLayers, issueQty) {
+  const requestedQty = Number(issueQty);
+
+  if (!Number.isFinite(requestedQty) || requestedQty < 0) {
+    throw new Error("Issue quantity must be zero or greater.");
+  }
+
+  const layers = (receiptLayers || [])
+    .map((layer) => ({
+      qty: Number(layer.qty) || 0,
+      rate: Number(layer.rate) || 0,
+      date: layer.date,
+      id: layer.id,
+    }))
+    .filter((layer) => layer.qty > 0)
+    .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+  if (!layers.length) {
+    throw new Error("No available Receipt stock found.");
+  }
+
+  // Quantity 0: preview the next FIFO layer's rate.
+  if (requestedQty === 0) {
+    return {
+      totalQty: 0,
+      totalCost: 0,
+      issueRate: Number(layers[0].rate.toFixed(2)),
+      remainingLayers: layers,
+    };
+  }
+
+  let remainingQty = requestedQty;
+  let totalCost = 0;
+
+  for (const layer of layers) {
+    if (remainingQty <= 0) break;
+
+    const consumedQty = Math.min(layer.qty, remainingQty);
+    totalCost += consumedQty * layer.rate;
+    layer.qty -= consumedQty;
+    remainingQty -= consumedQty;
+  }
+
+  if (remainingQty > 0) {
+    throw new Error(
+      `Insufficient stock. Available: ${(requestedQty - remainingQty).toFixed(2)}, Required: ${requestedQty.toFixed(2)}, Shortage: ${remainingQty.toFixed(2)}`,
+    );
+  }
+
   return {
-    PreviousBalance: Number(
-      data?.PreviousBalance ??
-      data?.previousBalance ??
-      data?.Balance ??
-      data?.balance ??
-      0,
-    ),
-    Rate: Number(data?.Rate ?? data?.rate ?? 0),
-    Balance: Number(data?.Balance ?? data?.balance ?? 0),
+    totalQty: requestedQty,
+    totalCost: Number(totalCost.toFixed(2)),
+    issueRate: Number((totalCost / requestedQty).toFixed(2)),
+    remainingLayers: layers.filter((layer) => layer.qty > 0),
   };
-};
+}
+
+// --------------------------------------------------
+// API HELPERS
+// --------------------------------------------------
+
+async function fetchPreviousBalance(itemMasterId, itemTypeId, locationType, locationId) {
+  if (!itemMasterId || !itemTypeId || !locationType || !locationId) return 0;
+
+  const params = new URLSearchParams({
+    itemTypeId: String(itemTypeId),
+    locationType: normalizeLocationType(locationType),
+    locationId: String(locationId),
+  });
+
+  const result = await fetchJson(
+    `/api/inventory/issue-receipt/previous-balance/${itemMasterId}?${params}`,
+    "Failed to fetch stock balance for the selected destination.",
+  );
+
+  const data = result.data;
+
+  return Number(
+    data?.PreviousBalance ?? data?.previousBalance ?? data?.Balance ?? data?.balance ?? 0,
+  );
+}
+
+async function fetchRate({
+  item,
+  transactionType,
+  brandManufacturerId,
+  issueDate,
+  issueQty,
+  issueFromType,
+  issueFromId,
+}) {
+  const itemMasterId = String(item.id);
+  const itemConditionId = getItemConditionId(item);
+  const itemGroupId = getItemGroupId(item);
+
+  // ISSUE: FIFO rate
+  if (transactionType === "issue") {
+    const qty = Number(issueQty);
+
+    if (!issueDate) throw new Error("Please select the transaction date.");
+
+    if (
+      issueQty === "" ||
+      issueQty === null ||
+      issueQty === undefined ||
+      !Number.isFinite(qty) ||
+      qty < 0
+    ) {
+      throw new Error("Please enter a valid Issue quantity.");
+    }
+
+    if (!itemConditionId || !itemGroupId) {
+      throw new Error("Item condition or item group is missing.");
+    }
+
+    if (!issueFromType || !issueFromId) {
+      throw new Error("Please select Issue From location.");
+    }
+
+    const params = new URLSearchParams({
+      itemMasterId,
+      itemTypeId: itemConditionId,
+      itemGroupId,
+      issueDate,
+      locationType: normalizeLocationType(issueFromType),
+      locationId: String(issueFromId),
+    });
+
+    if (brandManufacturerId) {
+      params.set("brandManufacturerId", String(brandManufacturerId));
+    }
+
+    const result = await fetchJson(
+      `/api/inventory/item-rate/fifo-layers?${params}`,
+      "Unable to fetch FIFO stock.",
+    );
+
+    if (!result.data) {
+      throw new Error("Unable to fetch FIFO stock.");
+    }
+
+    const receiptLayers = result.data.receiptLayers || [];
+
+    if (!receiptLayers.length) {
+      throw new Error("No available Receipt stock found.");
+    }
+
+    const { issueRate } = calculateFifoIssue(receiptLayers, qty);
+
+    if (!Number.isFinite(issueRate) || issueRate < 0) {
+      throw new Error("Unable to calculate FIFO issue rate.");
+    }
+
+    return issueRate;
+  }
+
+  // RECEIPT without brand: Item Master rate
+  if (!brandManufacturerId) {
+    const itemRate = Number(item.rather);
+
+    if (!Number.isFinite(itemRate) || itemRate < 0) {
+      throw new Error("Valid item rate not found in Item Master.");
+    }
+
+    return itemRate;
+  }
+
+  // RECEIPT with brand: brand-wise rate
+  if (!issueDate) throw new Error("Please select the transaction date.");
+  if (!itemConditionId || !itemGroupId) throw new Error("Item condition or item group is missing.");
+
+  const params = new URLSearchParams({
+    itemMasterId,
+    brandManufacturerId: String(brandManufacturerId),
+    itemConditionId,
+    itemGroupId,
+    date: issueDate.slice(0, 10),
+  });
+
+  const result = await fetchJson(
+    `/api/inventory/item-rate/brand-rate?${params}`,
+    "Brand-wise rate not found.",
+  );
+
+  if (!result.data) throw new Error("Brand-wise rate not found.");
+
+  const rate = Number(result.data.Rate);
+  if (!Number.isFinite(rate) || rate < 0) throw new Error("Invalid brand-wise rate.");
+
+  return rate;
+}
 
 // --------------------------------------------------
 // TOAST
 // --------------------------------------------------
 
-const showSuccessToast = (message) => {
+const showSuccessToast = (message) =>
   toast.custom(
     () => (
       <Alert variant="mono" icon="success">
@@ -166,17 +350,11 @@ const showSuccessToast = (message) => {
     ),
     { position: "top-center" },
   );
-};
 
-const showErrorToast = (message) => {
+const showErrorToast = (message) =>
   toast.custom(
     (t) => (
-      <Alert
-        variant="mono"
-        icon="destructive"
-        close
-        onClose={() => toast.dismiss(t)}
-      >
+      <Alert variant="mono" icon="destructive" close onClose={() => toast.dismiss(t)}>
         <AlertIcon>
           <RiErrorWarningFill />
         </AlertIcon>
@@ -185,7 +363,92 @@ const showErrorToast = (message) => {
     ),
     { position: "top-center" },
   );
-};
+
+// --------------------------------------------------
+// SMALL HOOKS
+// --------------------------------------------------
+
+function useDebouncedValue(value, delay) {
+  const [debounced, setDebounced] = useState(value);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(timer);
+  }, [value, delay]);
+
+  return debounced;
+}
+
+/** Loads warehouses or machines for the given type ("location" | "machinery"). */
+function useDestinationOptions(open, type, errorMessage) {
+  const [list, setList] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!open || !type) {
+      setList([]);
+      return;
+    }
+
+    let ignore = false;
+
+    (async () => {
+      try {
+        setLoading(true);
+        const result = await fetchJson(destinationEndpoint(type), errorMessage);
+        if (!ignore) setList(getArray(result.data));
+      } catch (error) {
+        console.error("DESTINATION FETCH ERROR:", error);
+        if (!ignore) {
+          setList([]);
+          showErrorToast(error.message || errorMessage);
+        }
+      } finally {
+        if (!ignore) setLoading(false);
+      }
+    })();
+
+    return () => {
+      ignore = true;
+    };
+  }, [open, type, errorMessage]);
+
+  return { list, loading };
+}
+
+/** Previous stock quantity for an item at a warehouse / machine. */
+function usePreviousQty(open, itemId, itemTypeId, locationType, locationId, errorMessage) {
+  const [qty, setQty] = useState(0);
+
+  useEffect(() => {
+    if (!open || !itemId || !itemTypeId || !locationType || !locationId) {
+      setQty(0);
+      return;
+    }
+
+    let ignore = false;
+    setQty(0);
+
+    (async () => {
+      try {
+        const balance = await fetchPreviousBalance(itemId, itemTypeId, locationType, locationId);
+        if (!ignore) setQty(balance);
+      } catch (error) {
+        console.error("PREVIOUS BALANCE ERROR:", error);
+        if (!ignore) {
+          setQty(0);
+          showErrorToast(error.message || errorMessage);
+        }
+      }
+    })();
+
+    return () => {
+      ignore = true;
+    };
+  }, [open, itemId, itemTypeId, locationType, locationId, errorMessage]);
+
+  return qty;
+}
 
 // --------------------------------------------------
 // DATE TIME PICKER
@@ -200,29 +463,20 @@ function DateTimePicker({
 }) {
   const today = new Date();
 
-  const selectedDate = value
-    ? new Date(`${value.slice(0, 10)}T00:00:00`)
-    : undefined;
-
+  const selectedDate = value ? new Date(`${value.slice(0, 10)}T00:00:00`) : undefined;
   const selectedTime = value?.includes("T") ? value.slice(11, 16) : undefined;
 
-  const timeSlots = Array.from({ length: 30 }, (_, index) => {
-    const hour = 9 + Math.floor(index / 2);
-    const minute = index % 2 === 0 ? "00" : "30";
-
-    return `${String(hour).padStart(2, "0")}:${minute}`;
-  });
+  const todayKey = format(today, "yyyy-MM-dd");
+  const nowTime = format(today, "HH:mm");
+  const isToday = selectedDate && format(selectedDate, "yyyy-MM-dd") === todayKey;
 
   const handleDateChange = (newDate) => {
     if (!newDate) return;
-
-    const dateString = format(newDate, "yyyy-MM-dd");
-    onChange(`${dateString}T${selectedTime || "10:00"}`);
+    onChange(`${format(newDate, "yyyy-MM-dd")}T${selectedTime || "10:00"}`);
   };
 
   const handleTimeChange = (newTime) => {
     if (!selectedDate) return;
-
     onChange(`${format(selectedDate, "yyyy-MM-dd")}T${newTime}`);
   };
 
@@ -236,12 +490,8 @@ function DateTimePicker({
           disabled={disabled}
         >
           <CalendarIcon className="mr-2 size-4" />
-
-          {value ? (
-            `${format(
-              new Date(`${value.slice(0, 10)}T00:00:00`),
-              "PPP",
-            )} - ${selectedTime || "Select time"}`
+          {selectedDate ? (
+            `${format(selectedDate, "PPP")} - ${selectedTime || "Select time"}`
           ) : (
             <span>{placeholder}</span>
           )}
@@ -264,41 +514,24 @@ function DateTimePicker({
                 <div className="space-y-3">
                   <div className="flex h-5 shrink-0 items-center px-5">
                     <p className="text-sm font-medium">
-                      {selectedDate
-                        ? format(selectedDate, "EEEE, d")
-                        : "Pick a date"}
+                      {selectedDate ? format(selectedDate, "EEEE, d") : "Pick a date"}
                     </p>
                   </div>
 
                   <div className="grid gap-1.5 px-5 max-sm:grid-cols-2">
-                    {timeSlots.map((timeSlot) => {
-                      const isSelected = selectedTime === timeSlot;
-
-                      const isPast =
-                        disableFuture &&
-                        selectedDate &&
-                        format(selectedDate, "yyyy-MM-dd") ===
-                        format(today, "yyyy-MM-dd") &&
-                        timeSlot >
-                        `${String(today.getHours()).padStart(
-                          2,
-                          "0",
-                        )}:${String(today.getMinutes()).padStart(2, "0")}`;
-
-                      return (
-                        <Button
-                          key={timeSlot}
-                          type="button"
-                          variant={isSelected ? "primary" : "outline"}
-                          size="sm"
-                          className="w-full"
-                          disabled={!selectedDate || isPast}
-                          onClick={() => handleTimeChange(timeSlot)}
-                        >
-                          {timeSlot}
-                        </Button>
-                      );
-                    })}
+                    {TIME_SLOTS.map((slot) => (
+                      <Button
+                        key={slot}
+                        type="button"
+                        variant={selectedTime === slot ? "primary" : "outline"}
+                        size="sm"
+                        className="w-full"
+                        disabled={!selectedDate || (disableFuture && isToday && slot > nowTime)}
+                        onClick={() => handleTimeChange(slot)}
+                      >
+                        {slot}
+                      </Button>
+                    ))}
                   </div>
                 </div>
               </ScrollArea>
@@ -310,62 +543,64 @@ function DateTimePicker({
   );
 }
 
+// --------------------------------------------------
+// PAGINATED SEARCH SELECT
+// --------------------------------------------------
+
 function PaginatedSearchSelect({
   endpoint,
   value,
   onChange,
+  onSelect,
   placeholder = "Select an option",
   searchPlaceholder = "Search...",
   getLabel,
   disabled = false,
-  onOptionsChange,
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [options, setOptions] = useState([]);
+  const [chosen, setChosen] = useState(null);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
 
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedQuery(query.trim()), 300);
-    return () => clearTimeout(timer);
-  }, [query]);
+  const debouncedQuery = useDebouncedValue(query.trim(), 300);
+
+  const buildUrl = useCallback(
+    (pageNumber) => {
+      const params = new URLSearchParams({
+        page: String(pageNumber),
+        limit: "100",
+        query: debouncedQuery,
+        status: "all",
+      });
+
+      const separator = endpoint.includes("?") ? "&" : "?";
+
+      return `${endpoint}${separator}${params.toString()}`;
+    },
+    [endpoint, debouncedQuery],
+  );
 
   useEffect(() => {
     if (!open) return;
 
     let cancelled = false;
 
-    const fetchOptions = async () => {
+    (async () => {
       try {
         setLoading(true);
         setPage(1);
         setOptions([]);
 
-        const params = new URLSearchParams({
-          page: "1",
-          limit: "100",
-          query: debouncedQuery,
-          status: "all",
-        });
-
-        const response = await apiFetch(`${endpoint}?${params.toString()}`);
-        const result = await response.json();
-
-        if (!response.ok || !result.success) {
-          throw new Error(result.message || "Failed to load options.");
-        }
-
+        const result = await fetchJson(buildUrl(1), "Failed to load options.");
         if (cancelled) return;
 
-        const records = getArray(result.data);
-        setOptions(records);
+        setOptions(getArray(result.data));
         setPage(Number(result.pagination?.page) || 1);
         setTotalPages(Number(result.pagination?.totalPages) || 1);
-        onOptionsChange?.(records);
       } catch (error) {
         if (!cancelled) {
           setOptions([]);
@@ -376,14 +611,12 @@ function PaginatedSearchSelect({
       } finally {
         if (!cancelled) setLoading(false);
       }
-    };
-
-    fetchOptions();
+    })();
 
     return () => {
       cancelled = true;
     };
-  }, [open, debouncedQuery, endpoint]);
+  }, [open, buildUrl]);
 
   const loadMore = async () => {
     if (loading || loadingMore || page >= totalPages) return;
@@ -393,31 +626,12 @@ function PaginatedSearchSelect({
     try {
       setLoadingMore(true);
 
-      const params = new URLSearchParams({
-        page: String(nextPage),
-        limit: "100",
-        query: debouncedQuery,
-        status: "all",
-      });
-
-      const response = await apiFetch(`${endpoint}?${params.toString()}`);
-      const result = await response.json();
-
-      if (!response.ok || !result.success) {
-        throw new Error(result.message || "Failed to load more options.");
-      }
-
+      const result = await fetchJson(buildUrl(nextPage), "Failed to load more options.");
       const records = getArray(result.data);
 
       setOptions((previous) => {
         const existingIds = new Set(previous.map((item) => String(item.id)));
-        const merged = [
-          ...previous,
-          ...records.filter((item) => !existingIds.has(String(item.id))),
-        ];
-
-        onOptionsChange?.(merged);
-        return merged;
+        return [...previous, ...records.filter((item) => !existingIds.has(String(item.id)))];
       });
 
       setPage(Number(result.pagination?.page) || nextPage);
@@ -430,9 +644,10 @@ function PaginatedSearchSelect({
     }
   };
 
-  const selectedOption = options.find(
-    (item) => String(item.id) === String(value),
-  );
+  // Keep the chosen option so the label survives searching / closing.
+  const selectedOption =
+    options.find((item) => String(item.id) === String(value)) ||
+    (chosen && String(chosen.id) === String(value) ? chosen : undefined);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -443,17 +658,12 @@ function PaginatedSearchSelect({
           disabled={disabled}
           className="w-full justify-between font-normal"
         >
-          <span className="truncate">
-            {selectedOption ? getLabel(selectedOption) : placeholder}
-          </span>
+          <span className="truncate">{selectedOption ? getLabel(selectedOption) : placeholder}</span>
           <span className="ml-2">⌄</span>
         </Button>
       </PopoverTrigger>
 
-      <PopoverContent
-        align="start"
-        className="w-[var(--radix-popover-trigger-width)] p-2"
-      >
+      <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] p-2">
         <Input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
@@ -464,18 +674,12 @@ function PaginatedSearchSelect({
         <div
           className="max-h-56 overflow-y-auto"
           onScroll={(event) => {
-            const element = event.currentTarget;
-            const nearBottom =
-              element.scrollTop + element.clientHeight >=
-              element.scrollHeight - 30;
-
-            if (nearBottom) loadMore();
+            const el = event.currentTarget;
+            if (el.scrollTop + el.clientHeight >= el.scrollHeight - 30) loadMore();
           }}
         >
           {loading ? (
-            <p className="py-4 text-center text-sm text-muted-foreground">
-              Loading...
-            </p>
+            <p className="py-4 text-center text-sm text-muted-foreground">Loading...</p>
           ) : options.length ? (
             <>
               {options.map((option) => (
@@ -485,7 +689,9 @@ function PaginatedSearchSelect({
                   className={`w-full rounded px-3 py-2 text-left text-sm hover:bg-muted ${String(value) === String(option.id) ? "bg-muted" : ""
                     }`}
                   onClick={() => {
-                    onChange(String(option.id));
+                    setChosen(option);
+                    onChange?.(String(option.id));
+                    onSelect?.(option);
                     setOpen(false);
                   }}
                 >
@@ -494,21 +700,15 @@ function PaginatedSearchSelect({
               ))}
 
               {loadingMore && (
-                <p className="py-2 text-center text-xs text-muted-foreground">
-                  Loading more...
-                </p>
+                <p className="py-2 text-center text-xs text-muted-foreground">Loading more...</p>
               )}
 
               {!loadingMore && page >= totalPages && (
-                <p className="py-2 text-center text-xs text-muted-foreground">
-                  No more records
-                </p>
+                <p className="py-2 text-center text-xs text-muted-foreground">No more records</p>
               )}
             </>
           ) : (
-            <p className="py-4 text-center text-sm text-muted-foreground">
-              No records found.
-            </p>
+            <p className="py-4 text-center text-sm text-muted-foreground">No records found.</p>
           )}
         </div>
       </PopoverContent>
@@ -517,14 +717,165 @@ function PaginatedSearchSelect({
 }
 
 // --------------------------------------------------
+// PRESENTATIONAL PIECES
+// --------------------------------------------------
+
+function FieldError({ message }) {
+  return message ? <p className="text-sm text-destructive">{message}</p> : null;
+}
+
+function UnitSuffix({ label }) {
+  return label ? (
+    <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+      {label}
+    </span>
+  ) : null;
+}
+
+function ReadOnlyNumber({ label, value, unitLabel, strong = false }) {
+  return (
+    <div className="space-y-2">
+      <Label>{label}</Label>
+      <div className="relative">
+        <Input
+          type="number"
+          value={Number(value) || 0}
+          readOnly
+          className={`bg-muted ${strong ? "font-medium" : ""} ${unitLabel ? "pr-36" : ""}`}
+        />
+        <UnitSuffix label={unitLabel} />
+      </div>
+    </div>
+  );
+}
+
+function DestinationSelector({
+  title,
+  typeValue,
+  idValue,
+  onTypeChange,
+  onIdChange,
+  list,
+  isLoading,
+  typeError,
+  idError,
+  radioPrefix,
+  disabled,
+}) {
+  const noun = typeValue === "location" ? "Warehouse" : "Machine";
+
+  return (
+    <div className="space-y-4 rounded-lg border p-4">
+      <div className="space-y-3">
+        <Label className="font-semibold">{title}</Label>
+
+        <RadioGroup
+          value={typeValue}
+          onValueChange={onTypeChange}
+          disabled={disabled}
+          className="flex flex-wrap gap-6"
+        >
+          {[
+            ["location", "Warehouse"],
+            ["machinery", "Machine"],
+          ].map(([value, label]) => (
+            <div key={value} className="flex items-center gap-2">
+              <RadioGroupItem value={value} id={`${radioPrefix}-${value}`} />
+              <Label htmlFor={`${radioPrefix}-${value}`} className="cursor-pointer font-normal">
+                {label}
+              </Label>
+            </div>
+          ))}
+        </RadioGroup>
+
+        <FieldError message={typeError} />
+      </div>
+
+      {typeValue && (
+        <div className="space-y-2">
+          <Label>
+            Select {noun}
+            <span className="text-destructive"> *</span>
+          </Label>
+
+          <SelectSearch
+            options={list.map((item) => ({
+              label: getDestinationName(item, typeValue),
+              value: String(item.id),
+            }))}
+            value={String(idValue || "")}
+            onValueChange={onIdChange}
+            placeholder={
+              isLoading
+                ? "Loading..."
+                : list.length
+                  ? `Select ${noun}`
+                  : "No records found"
+            }
+            searchPlaceholder={`Search ${noun.toLowerCase()}...`}
+            disabled={isLoading || disabled || list.length === 0}
+          />
+
+          <FieldError message={idError} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CommentField({ value, error, disabled, onChange }) {
+  return (
+    <div className="space-y-2">
+      <Label>Comment</Label>
+
+      <Textarea
+        placeholder="Enter additional comments..."
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        maxLength={1000}
+        rows={4}
+        disabled={disabled}
+        className="resize-none"
+      />
+
+      <div className="flex justify-between">
+        {error ? <p className="text-sm text-destructive">{error}</p> : <span />}
+        <p className="text-xs text-muted-foreground">{value.length}/1000</p>
+      </div>
+    </div>
+  );
+}
+
+function TextField({ label, value, onChange, placeholder, disabled, error }) {
+  return (
+    <div className="space-y-2">
+      <Label>{label}</Label>
+      <Input
+        placeholder={placeholder}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        disabled={disabled}
+        maxLength={100}
+      />
+      <FieldError message={error} />
+    </div>
+  );
+}
+
+function DateField({ label, value, onChange, placeholder, disabled }) {
+  return (
+    <div className="space-y-2">
+      <Label>{label}</Label>
+      <DateTimePicker value={value} onChange={onChange} disabled={disabled} placeholder={placeholder} />
+    </div>
+  );
+}
+
+// --------------------------------------------------
 // COMPONENT
 // --------------------------------------------------
 
-export default function IssueReceiptAddDialog({
-  open,
-  closeDialog,
-  onSuccess,
-}) {
+export default function IssueReceiptAddDialog({ open, closeDialog, onSuccess }) {
   const { data: session, status } = useSession();
 
   const userName = session?.user?.name || "admin";
@@ -535,15 +886,15 @@ export default function IssueReceiptAddDialog({
   const [loading, setLoading] = useState(false);
   const [dropdownLoading, setDropdownLoading] = useState(false);
   const [staffLoading, setStaffLoading] = useState(false);
+  const [rateLoading, setRateLoading] = useState(false);
 
   const [groups, setGroups] = useState([]);
-  const [items, setItems] = useState([]);
-  const [brands, setBrands] = useState([]);
-  const [productTypes, setProductTypes] = useState([]);
   const [transactions, setTransactions] = useState([]);
-  const [staffUsers, setStaffUsers] = useState([]);
+  const [productTypes, setProductTypes] = useState([]);
   const [units, setUnits] = useState([]);
+  const [staffUsers, setStaffUsers] = useState([]);
 
+  const [selectedItem, setSelectedItem] = useState(null);
   const [selectedGroups, setSelectedGroups] = useState([]);
   const [selectedRole, setSelectedRole] = useState("all");
 
@@ -551,193 +902,177 @@ export default function IssueReceiptAddDialog({
   const [groupDropdownOpen, setGroupDropdownOpen] = useState(false);
 
   const [errors, setErrors] = useState({});
-  const [form, setForm] = useState(getInitialForm());
+  const [form, setForm] = useState(getInitialForm);
 
-  // Inward Receive To
-  const [destinationList, setDestinationList] = useState([]);
-  const [destinationLoading, setDestinationLoading] = useState(false);
-  const [receivePreviousQty, setReceivePreviousQty] = useState(0);
-
-  // Internal Transfer Issue From
-  const [issueFromList, setIssueFromList] = useState([]);
-  const [issueFromLoading, setIssueFromLoading] = useState(false);
-  const [issueFromPreviousQty, setIssueFromPreviousQty] = useState(0);
-
-  // Internal Transfer Receive To
-  const [transferReceiveList, setTransferReceiveList] = useState([]);
-  const [transferReceiveLoading, setTransferReceiveLoading] = useState(false);
-  const [transferReceivePreviousQty, setTransferReceivePreviousQty] =
-    useState(0);
-
+  const isInward = activeTab === "inward";
+  const [customFieldDefinitions, setCustomFieldDefinitions] = useState([]);
+  const [customFields, setCustomFields] = useState({});
   // --------------------------------------------------
-  // FIELD UPDATE
+  // DERIVED DATA
   // --------------------------------------------------
 
-  const updateField = (key, value) => {
+  const requiredTransaction = isInward ? "receipt" : "issue";
+
+  const transactionTypeId = useMemo(() => {
+    const match = transactions.find((t) => getTransactionName(t) === requiredTransaction);
+    return match ? String(match.id) : "";
+  }, [transactions, requiredTransaction]);
+
+  const debouncedQty = useDebouncedValue(form.Qty, 400);
+
+  // Destination lists
+  const inwardDest = useDestinationOptions(open, form.DestinationType, "Failed to load Receive To options.");
+  const issueFrom = useDestinationOptions(open, form.IssueFromType, "Failed to load Issue From options.");
+  const transferTo = useDestinationOptions(open, form.ReceiveToType, "Failed to load Receive To options.");
+
+  // Previous quantities
+  const receivePreviousQty = usePreviousQty(
+    open,
+    form.ItemMasterid,
+    form.ItemTypeid,
+    form.DestinationType,
+    form.DestinationId,
+    "Failed to fetch Receive To previous quantity.",
+  );
+  const issueFromPreviousQty = usePreviousQty(
+    open,
+    form.ItemMasterid,
+    form.ItemTypeid,
+    form.IssueFromType,
+    form.IssueFromId,
+    "Failed to fetch Issue From previous quantity.",
+  );
+  const transferReceivePreviousQty = usePreviousQty(
+    open,
+    form.ItemMasterid,
+    form.ItemTypeid,
+    form.ReceiveToType,
+    form.ReceiveToId,
+    "Failed to fetch Receive To previous quantity.",
+  );
+
+  const qtyNumber = Number(form.Qty) || 0;
+
+  // Inward: balance at Receive To. Transfer: remaining stock at Issue From.
+  const previousBalance = Number(isInward ? receivePreviousQty : issueFromPreviousQty) || 0;
+  const balance = isInward ? previousBalance + qtyNumber : previousBalance - qtyNumber;
+  const transferReceiveFinalBalance = (Number(transferReceivePreviousQty) || 0) + qtyNumber;
+
+  const selectedUnit = useMemo(() => {
+    const unitId = getItemUnitId(selectedItem);
+    return units.find((unit) => String(unit.id) === unitId);
+  }, [units, selectedItem]);
+
+  const unitName = selectedUnit?.unitName || selectedUnit?.UnitName || "";
+  const unitAbbreviation = selectedUnit?.abbreviation || selectedUnit?.Abbreviation || "";
+  const unitLabel = unitAbbreviation ? `${unitName} (${unitAbbreviation})` : unitName;
+
+  const total = (Number(form.Price || 0) * Number(form.Qty || 0)).toFixed(2);
+
+  // --------------------------------------------------
+  // FIELD UPDATES
+  // --------------------------------------------------
+
+  const updateField = useCallback((key, value) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+    setErrors((prev) => ({ ...prev, [key]: "" }));
+  }, []);
+
+  const applyGroupSelection = (ids) => {
+    setSelectedGroups(ids);
+    setSelectedItem(null);
+
     setForm((prev) => ({
       ...prev,
-      [key]: value,
+      ...ITEM_RESET,
+      GroupName: groups.filter((g) => ids.includes(String(g.id))).map(getGroupName).filter(Boolean),
     }));
 
     setErrors((prev) => ({
       ...prev,
-      [key]: "",
+      ItemGroupid: ids.length ? "" : "Item Group is required.",
+      ItemMasterid: "",
+      ItemTypeid: "",
     }));
   };
 
-  // --------------------------------------------------
-  // BALANCE CALCULATION
-  // --------------------------------------------------
-
-  // const calculateBalance = (
-  //   previousBalance,
-  //   qty,
-  //   transactionTypeId,
-  //   transactionList = transactions,
-  // ) => {
-  //   const previous = Number(previousBalance) || 0;
-  //   const quantity = Number(qty) || 0;
-
-  //   const transaction = transactionList.find(
-  //     (item) => String(item.id) === String(transactionTypeId),
-  //   );
-
-  //   if (!transaction) return previous;
-
-  //   const effect = String(
-  //     transaction.EffectOnTransaction ?? transaction.effectOnTransaction ?? "",
-  //   )
-  //     .trim()
-  //     .toLowerCase();
-
-  //   if (["addition", "add", "additions"].includes(effect)) {
-  //     return previous + quantity;
-  //   }
-
-  //   if (
-  //     ["deduction", "deductions", "deduct", "subtract", "subtraction"].includes(
-  //       effect,
-  //     )
-  //   ) {
-  //     return previous - quantity;
-  //   }
-
-  //   return previous;
-  // };
-  // --------------------------------------------------
-  // BALANCE CALCULATION
-  // --------------------------------------------------
-
-  const calculateInwardBalance = (previousBalance, qty) => {
-    return (Number(previousBalance) || 0) + (Number(qty) || 0);
-  };
-
-  const calculateIssueFromBalance = (previousBalance, qty) => {
-    return (Number(previousBalance) || 0) - (Number(qty) || 0);
-  };
-
-  const calculateReceiveToBalance = (previousBalance, qty) => {
-    return (Number(previousBalance) || 0) + (Number(qty) || 0);
-  };
-  // --------------------------------------------------
-  // FILTER ITEMS BY SELECTED GROUPS
-  // --------------------------------------------------
-
-  const filteredItems = useMemo(() => {
-    if (!selectedGroups.length) return [];
-
-    return items.filter((item) =>
-      selectedGroups.includes(getItemGroupId(item)),
+  const handleGroupToggle = (groupId) =>
+    applyGroupSelection(
+      selectedGroups.includes(groupId)
+        ? selectedGroups.filter((id) => id !== groupId)
+        : [...selectedGroups, groupId],
     );
-  }, [items, selectedGroups]);
+
+  const handleSelectAllGroups = () => applyGroupSelection(groups.map((g) => String(g.id)));
+
+  const handleClearAllGroups = () => applyGroupSelection([]);
+
+  const handleItemChange = (item) => {
+    const conditionId = getItemConditionId(item);
+    const matchedCondition = productTypes.find(
+      (type) => String(type.id) === conditionId
+    );
+
+    setSelectedItem(item);
+
+    setForm((prev) => ({
+      ...prev,
+      ItemMasterid: String(item.id),
+      ItemGroupid: getItemGroupId(item),
+      ItemTypeid: matchedCondition ? String(matchedCondition.id) : "",
+      BrandManufacturerid: "",
+      Price: "",
+    }));
+
+    setErrors((prev) => ({
+      ...prev,
+      ItemMasterid: "",
+      ItemTypeid: matchedCondition
+        ? ""
+        : "Item condition is missing in Item Master.",
+      BrandManufacturerid: "",
+      Price: "",
+    }));
+  };
+
+  const handleRoleChange = (value) => {
+    setSelectedRole(value);
+    setForm((prev) => ({ ...prev, Issue_by: "", RecivedBy: "" }));
+    setErrors((prev) => ({ ...prev, Issue_by: "", RecivedBy: "" }));
+  };
+
+  // Creates a handler that switches a Warehouse/Machine type and clears its id.
+  const makeTypeChangeHandler = (typeKey, idKey) => (value) => {
+    setForm((prev) => ({ ...prev, [typeKey]: value, [idKey]: "" }));
+    setErrors((prev) => ({ ...prev, [typeKey]: "", [idKey]: "" }));
+  };
+
+  const handleDestinationTypeChange = makeTypeChangeHandler("DestinationType", "DestinationId");
+  const handleIssueFromTypeChange = makeTypeChangeHandler("IssueFromType", "IssueFromId");
+  const handleTransferReceiveTypeChange = makeTypeChangeHandler("ReceiveToType", "ReceiveToId");
+
   // --------------------------------------------------
-  // LOAD DROPDOWNS
+  // LOAD DATA
   // --------------------------------------------------
 
   const loadDropdowns = async () => {
     try {
       setDropdownLoading(true);
 
-      const [
-        groupResponse,
-        itemResponse,
-        transactionResponse,
-        productTypeResponse,
-        unitResponse,
-      ] = await Promise.all([
-        apiFetch("/api/inventory/item-groups?limit=100&status=active"),
-        apiFetch("/api/inventory/item-master?limit=100&status=active"),
-        apiFetch("/api/inventory/transaction-type?limit=100&status=active"),
-        apiFetch("/api/inventory/product-type?limit=100&status=active"),
-        apiFetch("/api/inventory/unit?limit=100&status=active"),
+      const [groupResult, transactionResult, productTypeResult, unitResult] = await Promise.all([
+        fetchJson("/api/inventory/item-groups?limit=100&status=active", "Failed to load item groups."),
+        fetchJson("/api/inventory/transaction-type?limit=100&status=active", "Failed to load transaction types."),
+        fetchJson("/api/inventory/product-type?limit=100&status=active", "Failed to load product types."),
+        fetchJson("/api/inventory/unit?limit=100&status=active", "Failed to load units."),
       ]);
-
-      const [
-        groupResult,
-        itemResult,
-        transactionResult,
-        productTypeResult,
-        unitResult,
-      ] = await Promise.all([
-        groupResponse.json(),
-        itemResponse.json(),
-        transactionResponse.json(),
-        productTypeResponse.json(),
-        unitResponse.json(),
-      ]);
-
-      if (!groupResponse.ok || !groupResult.success) {
-        throw new Error(groupResult.message || "Failed to load item groups.");
-      }
-
-      if (!itemResponse.ok || !itemResult.success) {
-        throw new Error(itemResult.message || "Failed to load items.");
-      }
-
-      if (!transactionResponse.ok || !transactionResult.success) {
-        throw new Error(
-          transactionResult.message || "Failed to load transaction types.",
-        );
-      }
-
-      if (!productTypeResponse.ok || !productTypeResult.success) {
-        throw new Error(
-          productTypeResult.message || "Failed to load product types.",
-        );
-      }
-
-      if (!unitResponse.ok || !unitResult.success) {
-        throw new Error(unitResult.message || "Failed to load units.");
-      }
 
       const groupList = getArray(groupResult.data);
-      const itemList = getArray(itemResult.data);
-      const transactionList = getArray(transactionResult.data);
-      const productTypeList = getArray(productTypeResult.data);
-      const unitList = getArray(unitResult.data);
 
       setGroups(groupList);
-      setItems(itemList);
-      setTransactions(transactionList);
-      setProductTypes(productTypeList);
-      setUnits(unitList);
+      setTransactions(getArray(transactionResult.data));
+      setProductTypes(getArray(productTypeResult.data));
+      setUnits(getArray(unitResult.data));
 
-      const allGroupIds = groupList.map((group) => String(group.id));
-      setSelectedGroups(allGroupIds);
-
-      const defaultTransaction =
-        transactionList.find((item) => item.isDefault === true) ||
-        transactionList[0];
-
-      setForm((prev) => ({
-        ...prev,
-        GroupName: groupList
-          .map((group) => group.groupName || group.GroupName)
-          .filter(Boolean),
-        TransactionTypeid: defaultTransaction
-          ? String(defaultTransaction.id)
-          : "",
-      }));
     } catch (error) {
       console.error("STOCK MOVEMENT DROPDOWN ERROR:", error);
       showErrorToast(error.message || "Failed to load dropdown data.");
@@ -746,392 +1081,50 @@ export default function IssueReceiptAddDialog({
     }
   };
 
-  // --------------------------------------------------
-  // FETCH ITEM BALANCE
-  // --------------------------------------------------
-
-  const fetchPreviousBalance = async (
-    itemMasterId,
-    itemTypeId,
-    locationType,
-    locationId,
-  ) => {
-    if (!itemMasterId || !itemTypeId || !locationType || !locationId) {
-      return {
-        PreviousBalance: 0,
-        Rate: 0,
-        Balance: 0,
-      };
-    }
-
-    const params = new URLSearchParams({
-      itemTypeId: String(itemTypeId),
-      locationType: String(locationType).toUpperCase(),
-      locationId: String(locationId),
-    });
-
-    const response = await apiFetch(
-      `/api/inventory/issue-receipt/previous-balance/${itemMasterId}?${params.toString()}`,
-    );
-
-    const result = await response.json();
-
-    if (!response.ok || !result.success) {
-      throw new Error(
-        result.message || "Failed to fetch previous balance and rate.",
-      );
-    }
-
-    return getBalanceFromResponse(result.data);
-  };
-
-  // Fetch balance for a particular location or machine.
-  const fetchDestinationBalance = async (
-    itemMasterId,
-    itemTypeId,
-    destinationType,
-    destinationId,
-  ) => {
-    if (
-      !itemMasterId ||
-      !itemTypeId ||
-      !destinationType ||
-      !destinationId
-    ) {
-      return {
-        PreviousBalance: 0,
-        Rate: 0,
-        Balance: 0,
-      };
-    }
-
-    const locationType =
-      String(destinationType).toUpperCase() === "MACHINERY"
-        ? "MACHINE"
-        : String(destinationType).toUpperCase();
-
-    const params = new URLSearchParams({
-      itemTypeId: String(itemTypeId),
-      locationType,
-      locationId: String(destinationId),
-    });
-
-    const response = await apiFetch(
-      `/api/inventory/issue-receipt/previous-balance/${itemMasterId}?${params.toString()}`,
-    );
-
-    const result = await response.json();
-
-    if (!response.ok || !result.success) {
-      throw new Error(
-        result.message ||
-        "Failed to fetch stock balance for the selected destination.",
-      );
-    }
-
-    return getBalanceFromResponse(result.data);
-  };
-
-  // --------------------------------------------------
-  // GROUP SELECTION
-  // --------------------------------------------------
-
-  const resetItemSelection = () => {
-    setForm((prev) => ({
-      ...prev,
-      ItemMasterid: "",
-      ItemGroupid: "",
-      ItemTypeid: "",
-      PreviousBalance: 0,
-      Balance: 0,
-      Price: "",
-    }));
-
-    setReceivePreviousQty(0);
-    setIssueFromPreviousQty(0);
-    setTransferReceivePreviousQty(0);
-  };
-
-  const handleGroupToggle = (groupId) => {
-    const updated = selectedGroups.includes(groupId)
-      ? selectedGroups.filter((id) => id !== groupId)
-      : [...selectedGroups, groupId];
-
-    setSelectedGroups(updated);
-
-    const selectedNames = groups
-      .filter((group) => updated.includes(String(group.id)))
-      .map((group) => group.groupName || group.GroupName)
-      .filter(Boolean);
-
-    setForm((prev) => ({
-      ...prev,
-      GroupName: selectedNames,
-      ItemMasterid: "",
-      ItemGroupid: "",
-      ItemTypeid: "",
-      PreviousBalance: 0,
-      Balance: 0,
-      Price: "",
-    }));
-
-    setReceivePreviousQty(0);
-    setIssueFromPreviousQty(0);
-    setTransferReceivePreviousQty(0);
-
-    setErrors((prev) => ({
-      ...prev,
-      ItemGroupid: updated.length ? "" : "Item Group is required.",
-      ItemMasterid: "",
-      ItemTypeid: "",
-    }));
-  };
-
-  const handleSelectAllGroups = () => {
-    const allGroupIds = groups.map((group) => String(group.id));
-
-    setSelectedGroups(allGroupIds);
-
-    setForm((prev) => ({
-      ...prev,
-      GroupName: groups
-        .map((group) => group.groupName || group.GroupName)
-        .filter(Boolean),
-      ItemMasterid: "",
-      ItemGroupid: "",
-      ItemTypeid: "",
-      PreviousBalance: 0,
-      Balance: 0,
-      Price: "",
-    }));
-
-    setReceivePreviousQty(0);
-    setIssueFromPreviousQty(0);
-    setTransferReceivePreviousQty(0);
-
-    setErrors((prev) => ({
-      ...prev,
-      ItemGroupid: "",
-      ItemMasterid: "",
-      ItemTypeid: "",
-    }));
-  };
-
-  const handleClearAllGroups = () => {
+  const resetState = () => {
+    setForm(getInitialForm());
+    setErrors({});
+    setGroups([]);
+    setTransactions([]);
+    setProductTypes([]);
+    setUnits([]);
+    setStaffUsers([]);
+    setSelectedItem(null);
     setSelectedGroups([]);
-
-    setForm((prev) => ({
-      ...prev,
-      GroupName: [],
-      ItemGroupid: "",
-      ItemMasterid: "",
-      ItemTypeid: "",
-      PreviousBalance: 0,
-      Balance: 0,
-      Price: "",
-    }));
-
-    setReceivePreviousQty(0);
-    setIssueFromPreviousQty(0);
-    setTransferReceivePreviousQty(0);
-
-    setErrors((prev) => ({
-      ...prev,
-      ItemGroupid: "Item Group is required.",
-      ItemMasterid: "",
-      ItemTypeid: "",
-    }));
+    setSelectedRole("all");
+    setActiveTab("inward");
+    setGroupDropdownOpen(false);
   };
 
-  // --------------------------------------------------
-  // ITEM SELECTION
-  // --------------------------------------------------
+  // Reset and load when the dialog opens
+  useEffect(() => {
+    if (!open) return;
+    resetState();
+    loadDropdowns();
+  }, [open]);
 
-  const handleItemChange = (value) => {
-    const selectedItem = items.find(
-      (item) => String(item.id) === String(value),
-    );
-
-    if (!selectedItem) return;
-
-    const groupId = getItemGroupId(selectedItem);
-    const conditionId = getItemConditionId(selectedItem);
-
-    const matchedCondition = productTypes.find(
-      (type) => String(type.id) === String(conditionId),
-    );
-
-    const itemTypeId = matchedCondition
-      ? String(matchedCondition.id)
-      : "";
-
-    setForm((prev) => ({
-      ...prev,
-      ItemMasterid: value,
-      ItemGroupid: groupId,
-      ItemTypeid: itemTypeId,
-      PreviousBalance: 0,
-      Balance: 0,
-      Price: "",
-    }));
-
-    setReceivePreviousQty(0);
-    setIssueFromPreviousQty(0);
-    setTransferReceivePreviousQty(0);
-
-    setErrors((prev) => ({
-      ...prev,
-      ItemMasterid: "",
-      ItemTypeid: matchedCondition
-        ? ""
-        : "Item condition is missing in Item Master.",
-      Price: "",
-    }));
-  };
-
-  // --------------------------------------------------
-  // TRANSACTION TYPE CHANGE
-  // --------------------------------------------------
-
-  const handleTransactionChange = (value) => {
-    setForm((prev) => ({
-      ...prev,
-      TransactionTypeid: value,
-    }));
-
-    setErrors((prev) => ({
-      ...prev,
-      TransactionTypeid: "",
-    }));
-  };
-
-  // --------------------------------------------------
-  // QUANTITY CHANGE
-  // --------------------------------------------------
-
-  const handleQtyChange = (value) => {
-    setForm((prev) => ({
-      ...prev,
-      Qty: value,
-    }));
-
-    setErrors((prev) => ({
-      ...prev,
-      Qty: "",
-    }));
-  };
-
-  // --------------------------------------------------
-  // ROLE CHANGE
-  // --------------------------------------------------
-
-  const handleRoleChange = (value) => {
-    setSelectedRole(value);
-
-    setForm((prev) => ({
-      ...prev,
-      Issue_by: "",
-      RecivedBy: "",
-    }));
-
-    setErrors((prev) => ({
-      ...prev,
-      Issue_by: "",
-      RecivedBy: "",
-    }));
-  };
-
-  // --------------------------------------------------
-  // DESTINATION TYPE CHANGE
-  // --------------------------------------------------
-
-  const handleDestinationTypeChange = (value) => {
-    setForm((prev) => ({
-      ...prev,
-      DestinationType: value,
-      DestinationId: "",
-    }));
-
-    setDestinationList([]);
-    setReceivePreviousQty(0);
-
-    setErrors((prev) => ({
-      ...prev,
-      DestinationType: "",
-      DestinationId: "",
-    }));
-  };
-
-  const handleIssueFromTypeChange = (value) => {
-    setForm((prev) => ({
-      ...prev,
-      IssueFromType: value,
-      IssueFromId: "",
-    }));
-
-    setIssueFromList([]);
-    setIssueFromPreviousQty(0);
-
-    setErrors((prev) => ({
-      ...prev,
-      IssueFromType: "",
-      IssueFromId: "",
-    }));
-  };
-
-  const handleTransferReceiveTypeChange = (value) => {
-    setForm((prev) => ({
-      ...prev,
-      ReceiveToType: value,
-      ReceiveToId: "",
-    }));
-
-    setTransferReceiveList([]);
-    setTransferReceivePreviousQty(0);
-
-    setErrors((prev) => ({
-      ...prev,
-      ReceiveToType: "",
-      ReceiveToId: "",
-    }));
-  };
-
-  // --------------------------------------------------
-  // FETCH USERS BY ROLE
-  // --------------------------------------------------
-
+  // Users by role
   useEffect(() => {
     if (!open) return;
 
     let ignore = false;
 
-    const fetchStaffUsers = async () => {
+    (async () => {
       try {
         setStaffLoading(true);
         setStaffUsers([]);
 
         const params = new URLSearchParams({ limit: "100" });
+        if (selectedRole !== "all") params.set("roleId", selectedRole);
 
-        if (selectedRole !== "all") {
-          params.set("roleId", selectedRole);
-        }
-
-        const response = await apiFetch(
-          `/api/user-management/users?${params.toString()}`,
-        );
-
+        const response = await apiFetch(`/api/user-management/users?${params}`);
         const result = await response.json();
 
-        if (!response.ok) {
-          throw new Error(result.message || "Failed to load users.");
-        }
+        if (!response.ok) throw new Error(result.message || "Failed to load users.");
 
-        if (!ignore) {
-          setStaffUsers(getArray(result.data));
-        }
+        if (!ignore) setStaffUsers(getArray(result.data));
       } catch (error) {
         console.error("STAFF FETCH ERROR:", error);
-
         if (!ignore) {
           setStaffUsers([]);
           showErrorToast(error.message || "Failed to load users.");
@@ -1139,447 +1132,110 @@ export default function IssueReceiptAddDialog({
       } finally {
         if (!ignore) setStaffLoading(false);
       }
-    };
-
-    fetchStaffUsers();
+    })();
 
     return () => {
       ignore = true;
     };
   }, [open, selectedRole]);
 
+  // Keep TransactionTypeid in sync with the active tab
+  useEffect(() => {
+    setForm((prev) =>
+      prev.TransactionTypeid === transactionTypeId
+        ? prev
+        : { ...prev, TransactionTypeid: transactionTypeId },
+    );
+  }, [transactionTypeId]);
+
   // --------------------------------------------------
-  // RESET AND LOAD WHEN DIALOG OPENS
+  // AUTO RATE
   // --------------------------------------------------
 
   useEffect(() => {
-    if (!open) return;
+    const clearPrice = () =>
+      setForm((prev) => (prev.Price === "" ? prev : { ...prev, Price: "" }));
 
-    setForm(getInitialForm());
-    setErrors({});
-    setGroups([]);
-    setItems([]);
-    setTransactions([]);
-    setProductTypes([]);
-    setUnits([]);
-    setStaffUsers([]);
-    setSelectedGroups([]);
-    setSelectedRole("all");
-    setActiveTab("inward");
-    setGroupDropdownOpen(false);
-
-    setDestinationList([]);
-    setIssueFromList([]);
-    setTransferReceiveList([]);
-
-    setReceivePreviousQty(0);
-    setIssueFromPreviousQty(0);
-    setTransferReceivePreviousQty(0);
-
-    loadDropdowns();
-  }, [open]);
-
-  // --------------------------------------------------
-  // FETCH INWARD RECEIVE TO OPTIONS
-  // --------------------------------------------------
-
-  useEffect(() => {
-    if (!open || !form.DestinationType) {
-      setDestinationList([]);
+    if (!open || !form.ItemMasterid || !transactionTypeId) {
+      clearPrice();
       return;
     }
 
-    let ignore = false;
+    if (!selectedItem || String(selectedItem.id) !== String(form.ItemMasterid)) return;
 
-    const fetchDestinations = async () => {
-      try {
-        setDestinationLoading(true);
-
-        const endpoint =
-          form.DestinationType === "location"
-            ? "/api/inventory/location?limit=100&status=active"
-            : "/api/inventory/machine-master?limit=100&status=active";
-
-        const response = await apiFetch(endpoint);
-        const result = await response.json();
-
-        if (!response.ok || !result.success) {
-          throw new Error(
-            result.message || "Failed to load Receive To options.",
-          );
-        }
-
-        if (!ignore) setDestinationList(getArray(result.data));
-      } catch (error) {
-        console.error("INWARD DESTINATION ERROR:", error);
-
-        if (!ignore) {
-          setDestinationList([]);
-          showErrorToast(error.message || "Failed to load destinations.");
-        }
-      } finally {
-        if (!ignore) setDestinationLoading(false);
-      }
-    };
-
-    fetchDestinations();
-
-    return () => {
-      ignore = true;
-    };
-  }, [open, form.DestinationType]);
-
-  // --------------------------------------------------
-  // FETCH INTERNAL TRANSFER ISSUE FROM OPTIONS
-  // --------------------------------------------------
-
-  useEffect(() => {
-    if (!open || !form.IssueFromType) {
-      setIssueFromList([]);
+    // Receipt with brand needs a date
+    if (requiredTransaction === "receipt" && form.BrandManufacturerid && !form.IssueDate) {
+      clearPrice();
       return;
     }
 
-    let ignore = false;
-
-    const fetchIssueFromOptions = async () => {
-      try {
-        setIssueFromLoading(true);
-
-        const endpoint =
-          form.IssueFromType === "location"
-            ? "/api/inventory/location?limit=100&status=active"
-            : "/api/inventory/machine-master?limit=100&status=active";
-
-        const response = await apiFetch(endpoint);
-        const result = await response.json();
-
-        if (!response.ok || !result.success) {
-          throw new Error(
-            result.message || "Failed to load Issue From options.",
-          );
-        }
-
-        if (!ignore) setIssueFromList(getArray(result.data));
-      } catch (error) {
-        console.error("ISSUE FROM FETCH ERROR:", error);
-
-        if (!ignore) {
-          setIssueFromList([]);
-          showErrorToast(error.message || "Failed to load Issue From options.");
-        }
-      } finally {
-        if (!ignore) setIssueFromLoading(false);
-      }
-    };
-
-    fetchIssueFromOptions();
-
-    return () => {
-      ignore = true;
-    };
-  }, [open, form.IssueFromType]);
-
-  // --------------------------------------------------
-  // FETCH INTERNAL TRANSFER RECEIVE TO OPTIONS
-  // --------------------------------------------------
-
-  useEffect(() => {
-    if (!open || !form.ReceiveToType) {
-      setTransferReceiveList([]);
-      return;
-    }
-
-    let ignore = false;
-
-    const fetchReceiveToOptions = async () => {
-      try {
-        setTransferReceiveLoading(true);
-
-        const endpoint =
-          form.ReceiveToType === "location"
-            ? "/api/inventory/location?limit=100&status=active"
-            : "/api/inventory/machine-master?limit=100&status=active";
-
-        const response = await apiFetch(endpoint);
-        const result = await response.json();
-
-        if (!response.ok || !result.success) {
-          throw new Error(
-            result.message || "Failed to load Receive To options.",
-          );
-        }
-
-        if (!ignore) setTransferReceiveList(getArray(result.data));
-      } catch (error) {
-        console.error("TRANSFER RECEIVE TO FETCH ERROR:", error);
-
-        if (!ignore) {
-          setTransferReceiveList([]);
-          showErrorToast(error.message || "Failed to load Receive To options.");
-        }
-      } finally {
-        if (!ignore) setTransferReceiveLoading(false);
-      }
-    };
-
-    fetchReceiveToOptions();
-
-    return () => {
-      ignore = true;
-    };
-  }, [open, form.ReceiveToType]);
-
-  // --------------------------------------------------
-  // FETCH INWARD RECEIVE TO PREVIOUS QUANTITY
-  // --------------------------------------------------
-
-  useEffect(() => {
+    // Issue (FIFO) needs source, quantity and date
     if (
-      !open ||
-      !form.ItemMasterid ||
-      !form.ItemTypeid ||
-      !form.DestinationType ||
-      !form.DestinationId
+      requiredTransaction === "issue" &&
+      (!form.IssueFromType ||
+        !form.IssueFromId ||
+        !form.IssueDate ||
+        String(debouncedQty).trim() === "" ||
+        !Number.isFinite(Number(debouncedQty)) ||
+        Number(debouncedQty) < 0)
     ) {
-      setReceivePreviousQty(0);
+      clearPrice();
       return;
     }
 
     let ignore = false;
 
-    const fetchBalance = async () => {
+    (async () => {
       try {
-        setReceivePreviousQty(0);
+        setRateLoading(true);
 
-        const result = await fetchDestinationBalance(
-          form.ItemMasterid,
-          form.ItemTypeid,
-          form.DestinationType,
-          form.DestinationId,
-        );
+        const rate = await fetchRate({
+          item: selectedItem,
+          transactionType: requiredTransaction,
+          brandManufacturerId: form.BrandManufacturerid,
+          issueDate: form.IssueDate,
+          issueQty: debouncedQty,
+          issueFromType: form.IssueFromType,
+          issueFromId: form.IssueFromId,
+        });
 
-        if (!ignore) {
-          setReceivePreviousQty(result.PreviousBalance);
-        }
+        if (ignore) return;
+
+        setForm((prev) => ({ ...prev, Price: String(rate) }));
+        setErrors((prev) => ({ ...prev, Price: "" }));
       } catch (error) {
-        console.error("INWARD DESTINATION BALANCE ERROR:", error);
+        console.error(`${requiredTransaction.toUpperCase()} RATE ERROR:`, error);
 
         if (!ignore) {
-          setReceivePreviousQty(0);
-
-          showErrorToast(
-            error.message || "Failed to fetch Receive To previous quantity.",
-          );
+          setForm((prev) => ({ ...prev, Price: "" }));
+          setErrors((prev) => ({ ...prev, Price: error.message || "Rate not found." }));
         }
+      } finally {
+        if (!ignore) setRateLoading(false);
       }
-    };
-
-    fetchBalance();
+    })();
 
     return () => {
       ignore = true;
     };
   }, [
     open,
+    selectedItem,
+    transactionTypeId,
+    requiredTransaction,
     form.ItemMasterid,
-    form.ItemTypeid,
-    form.DestinationType,
-    form.DestinationId,
-  ]);
-  // --------------------------------------------------
-  // FETCH INTERNAL TRANSFER ISSUE FROM PREVIOUS QUANTITY
-  // --------------------------------------------------
-
-  useEffect(() => {
-    if (
-      !open ||
-      !form.ItemMasterid ||
-      !form.ItemTypeid ||
-      !form.IssueFromType ||
-      !form.IssueFromId
-    ) {
-      setIssueFromPreviousQty(0);
-      return;
-    }
-
-    let ignore = false;
-
-    const fetchBalance = async () => {
-      try {
-        setIssueFromPreviousQty(0);
-
-        const result = await fetchDestinationBalance(
-          form.ItemMasterid,
-          form.ItemTypeid,
-          form.IssueFromType,
-          form.IssueFromId,
-        );
-
-        if (!ignore) {
-          setIssueFromPreviousQty(result.PreviousBalance);
-        }
-      } catch (error) {
-        console.error("ISSUE FROM BALANCE ERROR:", error);
-
-        if (!ignore) {
-          setIssueFromPreviousQty(0);
-
-          showErrorToast(
-            error.message || "Failed to fetch Issue From previous quantity.",
-          );
-        }
-      }
-    };
-
-    fetchBalance();
-
-    return () => {
-      ignore = true;
-    };
-  }, [
-    open,
-    form.ItemMasterid,
-    form.ItemTypeid,
+    form.BrandManufacturerid,
+    form.IssueDate,
     form.IssueFromType,
     form.IssueFromId,
+    debouncedQty,
   ]);
-  // --------------------------------------------------
-  // FETCH INTERNAL TRANSFER RECEIVE TO PREVIOUS QUANTITY
-  // --------------------------------------------------
 
-  useEffect(() => {
-    if (
-      !open ||
-      !form.ItemMasterid ||
-      !form.ItemTypeid ||
-      !form.ReceiveToType ||
-      !form.ReceiveToId
-    ) {
-      setTransferReceivePreviousQty(0);
-      return;
-    }
-
-    let ignore = false;
-
-    const fetchBalance = async () => {
-      try {
-        setTransferReceivePreviousQty(0);
-
-        const result = await fetchDestinationBalance(
-          form.ItemMasterid,
-          form.ItemTypeid,
-          form.ReceiveToType,
-          form.ReceiveToId,
-        );
-
-        if (!ignore) {
-          setTransferReceivePreviousQty(result.PreviousBalance);
-        }
-      } catch (error) {
-        console.error("TRANSFER RECEIVE BALANCE ERROR:", error);
-
-        if (!ignore) {
-          setTransferReceivePreviousQty(0);
-
-          showErrorToast(
-            error.message || "Failed to fetch Receive To previous quantity.",
-          );
-        }
-      }
-    };
-
-    fetchBalance();
-
-    return () => {
-      ignore = true;
-    };
-  }, [
-    open,
-    form.ItemMasterid,
-    form.ItemTypeid,
-    form.ReceiveToType,
-    form.ReceiveToId,
-  ]);
-  // --------------------------------------------------
-  // AUTO UPDATE PREVIOUS BALANCE AND FINAL BALANCE
-  // --------------------------------------------------
-
-  useEffect(() => {
-    if (!open) return;
-
-    const qty = Number(form.Qty) || 0;
-
-    if (activeTab === "inward") {
-      const previousBalance = Number(receivePreviousQty) || 0;
-
-      setForm((prev) => ({
-        ...prev,
-        PreviousBalance: previousBalance,
-        Balance: calculateInwardBalance(previousBalance, qty),
-      }));
-
-      return;
-    }
-
-    // Internal Transfer: Balance represents remaining stock
-    // at the Issue From location/machine.
-    const previousBalance = Number(issueFromPreviousQty) || 0;
-
-    setForm((prev) => ({
-      ...prev,
-      PreviousBalance: previousBalance,
-      Balance: calculateIssueFromBalance(previousBalance, qty),
-    }));
-  }, [
-    open,
-    activeTab,
-    form.Qty,
-    receivePreviousQty,
-    issueFromPreviousQty,
-  ]);
   // --------------------------------------------------
   // VALIDATION
   // --------------------------------------------------
 
-  const validateCommonFields = (newErrors) => {
-    if (!selectedGroups.length) {
-      newErrors.ItemGroupid = "Item Group is required.";
-    }
-
-    if (!form.ItemMasterid) {
-      newErrors.ItemMasterid = "Item is required.";
-    }
-
-    if (!form.ItemTypeid) {
-      newErrors.ItemTypeid = "Item Condition is required in Item Master.";
-    }
-
-    if (!form.TransactionTypeid) {
-      newErrors.TransactionTypeid = "Transaction Type is required.";
-    }
-
-    if (!form.IssueDate) {
-      newErrors.IssueDate = "Date and time is required.";
-    }
-
-    if (form.IssueDate && new Date(form.IssueDate) > new Date()) {
-      newErrors.IssueDate = "Date and time cannot be in the future.";
-    }
-  };
-
-  const validateInwardForm = () => {
-    const newErrors = {};
-
-    validateCommonFields(newErrors);
-
-    if (!selectedRole) {
-      newErrors.UserRole = "User Role is required.";
-    }
-
-    if (!form.Issue_by) {
-      newErrors.Issue_by = "User is required.";
-    }
-
+  const validateQty = (newErrors) => {
     if (!String(form.Qty).trim()) {
       newErrors.Qty = "Quantity is required.";
     } else if (!Number.isFinite(Number(form.Qty)) || Number(form.Qty) <= 0) {
@@ -1587,100 +1243,84 @@ export default function IssueReceiptAddDialog({
     } else if (!Number.isInteger(Number(form.Qty))) {
       newErrors.Qty = "Quantity must be a whole number.";
     }
+  };
 
-    if (
-      form.Price !== "" &&
-      (!Number.isFinite(Number(form.Price)) || Number(form.Price) < 0)
-    ) {
+  const validateCommonFields = (newErrors) => {
+    if (!selectedGroups.length) newErrors.ItemGroupid = "Item Group is required.";
+    if (!form.ItemMasterid) newErrors.ItemMasterid = "Item is required.";
+    if (!form.ItemTypeid) newErrors.ItemTypeid = "Item Condition is required in Item Master.";
+    if (!form.TransactionTypeid) newErrors.TransactionTypeid = "Transaction Type is required.";
+
+    if (!form.IssueDate) {
+      newErrors.IssueDate = "Date and time is required.";
+    } else if (new Date(form.IssueDate) > new Date()) {
+      newErrors.IssueDate = "Date and time cannot be in the future.";
+    }
+
+    validateQty(newErrors);
+  };
+
+  const validateInwardForm = (newErrors) => {
+    if (!selectedRole) newErrors.UserRole = "User Role is required.";
+    if (!form.Issue_by) newErrors.Issue_by = "User is required.";
+
+    if (form.Price !== "" && (!Number.isFinite(Number(form.Price)) || Number(form.Price) < 0)) {
       newErrors.Price = "Rate must be a valid non-negative number.";
     }
 
-    if (form.Comment.length > 1000) {
-      newErrors.Comment = "Comment cannot exceed 1000 characters.";
-    }
+    if (form.Comment.length > 1000) newErrors.Comment = "Comment cannot exceed 1000 characters.";
 
     if (form.ReciptChallanNo.length > 100) {
-      newErrors.ReciptChallanNo =
-        "Challan/Bill Number cannot exceed 100 characters.";
+      newErrors.ReciptChallanNo = "Challan/Bill Number cannot exceed 100 characters.";
     }
 
     if (!form.DestinationType) {
-      newErrors.DestinationType =
-        "Please select Receive To Warehouse or Machine.";
-    }
-
-    if (form.DestinationType && !form.DestinationId) {
+      newErrors.DestinationType = "Please select Receive To Warehouse or Machine.";
+    } else if (!form.DestinationId) {
       newErrors.DestinationId = "Please select a Receive To destination.";
     }
-
-    setErrors(newErrors);
-
-    if (Object.keys(newErrors).length) {
-      showErrorToast("Please correct the highlighted fields.");
-      return false;
-    }
-
-    return true;
   };
 
-  const validateInternalTransferForm = () => {
-    const newErrors = {};
-
-    validateCommonFields(newErrors);
-
+  const validateTransferForm = (newErrors) => {
     if (!form.IssueFromType) {
       newErrors.IssueFromType = "Please select Issue From Warehouse or Machine.";
-    }
-
-    if (form.IssueFromType && !form.IssueFromId) {
+    } else if (!form.IssueFromId) {
       newErrors.IssueFromId = "Please select an Issue From destination.";
     }
 
     if (!form.ReceiveToType) {
       newErrors.ReceiveToType = "Please select Receive To Warehouse or Machine.";
-    }
-
-    if (form.ReceiveToType && !form.ReceiveToId) {
+    } else if (!form.ReceiveToId) {
       newErrors.ReceiveToId = "Please select a Receive To destination.";
     }
 
     if (
-      form.IssueFromType &&
       form.IssueFromId &&
-      form.ReceiveToType &&
       form.ReceiveToId &&
       form.IssueFromType === form.ReceiveToType &&
       String(form.IssueFromId) === String(form.ReceiveToId)
     ) {
-      newErrors.ReceiveToId =
-        "Issue From and Receive To cannot be the same destination.";
+      newErrors.ReceiveToId = "Issue From and Receive To cannot be the same destination.";
     }
 
-    if (!String(form.Qty).trim()) {
-      newErrors.Qty = "Quantity is required.";
-    } else if (!Number.isFinite(Number(form.Qty)) || Number(form.Qty) <= 0) {
-      newErrors.Qty = "Quantity must be greater than 0.";
-    } else if (!Number.isInteger(Number(form.Qty))) {
-      newErrors.Qty = "Quantity must be a whole number.";
-    }
-
-    if (
-      form.Price === "" ||
-      !Number.isFinite(Number(form.Price)) ||
-      Number(form.Price) < 0
-    ) {
+    if (form.Price === "" || !Number.isFinite(Number(form.Price)) || Number(form.Price) < 0) {
       newErrors.Price = "Please enter a valid non-negative rate.";
     }
 
     if (Number(form.Qty) > Number(issueFromPreviousQty)) {
-      newErrors.Qty =
-        "Transfer quantity cannot exceed the Issue From available quantity.";
+      newErrors.Qty = "Transfer quantity cannot exceed the Issue From available quantity.";
     }
 
     if (form.GetPassNo.length > 100) {
-      newErrors.GetPassNo =
-        "Issue Slip/Gate Pass cannot exceed 100 characters.";
+      newErrors.GetPassNo = "Issue Slip/Gate Pass cannot exceed 100 characters.";
     }
+  };
+
+  const validateForm = () => {
+    const newErrors = {};
+
+    validateCommonFields(newErrors);
+    (isInward ? validateInwardForm : validateTransferForm)(newErrors);
 
     setErrors(newErrors);
 
@@ -1692,65 +1332,42 @@ export default function IssueReceiptAddDialog({
     return true;
   };
 
-  const validateForm = () => {
-    return activeTab === "inward"
-      ? validateInwardForm()
-      : validateInternalTransferForm();
-  };
-
   // --------------------------------------------------
-  // RESET
+  // CLOSE / SAVE
   // --------------------------------------------------
-
-  const resetForm = () => {
-    setForm(getInitialForm());
-    setErrors({});
-    setSelectedGroups([]);
-    setSelectedRole("all");
-    setActiveTab("inward");
-    setGroupDropdownOpen(false);
-
-    setDestinationList([]);
-    setIssueFromList([]);
-    setTransferReceiveList([]);
-
-    setReceivePreviousQty(0);
-    setIssueFromPreviousQty(0);
-    setTransferReceivePreviousQty(0);
-  };
 
   const handleClose = () => {
     if (loading) return;
-
-    resetForm();
+    resetState();
     closeDialog?.();
   };
 
-  // --------------------------------------------------
-  // SAVE
-  // --------------------------------------------------
-
-
   const handleSubmit = async () => {
     if (!validateForm()) return;
+    const missingCustomFields = validateRequiredCustomFields(
+      customFieldDefinitions,
+      customFields,
+    );
 
+    if (missingCustomFields.length > 0) {
+      showErrorToast(
+        `Please fill in required custom fields: ${missingCustomFields.join(", ")}`,
+      );
+      return;
+    } 
     if (status === "loading") {
       showErrorToast("Please wait while your session loads.");
       return;
     }
 
-    const isInward = activeTab === "inward";
-
-    // Internal transfer uses the logged-in user's ID.
-    const issueBy = isInward
-      ? form.Issue_by
-      : userId;
+    // Internal transfer uses the logged-in user.
+    const issueBy = isInward ? form.Issue_by : userId;
 
     if (!issueBy) {
       showErrorToast(
         isInward
           ? "Please select Issue By."
-          : "Unable to identify the logged-in user. Please log in again."
+          : "Unable to identify the logged-in user. Please log in again.",
       );
       return;
     }
@@ -1760,41 +1377,20 @@ export default function IssueReceiptAddDialog({
 
       const payload = {
         ...form,
-
-        // Movement type
         MovementType: isInward ? "INWARD" : "INTERNAL_TRANSFER",
-
-        // Automatically assign current user for internal transfer
         Issue_by: String(issueBy),
 
-        // Quantity and balance
-        Qty: Number(form.Qty) || 0,
-        PreviousBalance: Number(form.PreviousBalance) || 0,
-        Balance: Number(form.Balance) || 0,
-        Price:
-          form.Price === "" || form.Price === null
-            ? null
-            : Number(form.Price),
+        Qty: qtyNumber,
+        PreviousBalance: previousBalance,
+        Balance: balance,
+        Price: form.Price === "" || form.Price === null ? null : Number(form.Price),
 
-        // Inward / Internal Transfer fields
         ...(isInward
           ? {
-            DestinationType: form.DestinationType,
-            DestinationId: form.DestinationId,
-
             ToType: form.DestinationType,
             ToId: form.DestinationId,
           }
           : {
-            // Source
-            IssueFromType: form.IssueFromType,
-            IssueFromId: form.IssueFromId,
-
-            // Destination
-            ReceiveToType: form.ReceiveToType,
-            ReceiveToId: form.ReceiveToId,
-
-            // Backend-compatible field names
             FromType: form.IssueFromType,
             FromId: form.IssueFromId,
 
@@ -1803,94 +1399,51 @@ export default function IssueReceiptAddDialog({
 
             DestinationType: form.ReceiveToType,
             DestinationId: form.ReceiveToId,
-
-            // Previous balances
-            IssueFromPreviousQty:
-              Number(issueFromPreviousQty) || 0,
-
-            ReceiveToPreviousQty:
-              Number(transferReceivePreviousQty) || 0,
+            customFields: customFields ?? {},
+            IssueFromPreviousQty: Number(issueFromPreviousQty) || 0,
+            ReceiveToPreviousQty: Number(transferReceivePreviousQty) || 0,
           }),
 
         UserName: userName,
         UserId: userId,
       };
 
-      console.log("CREATE STOCK MOVEMENT PAYLOAD:", payload);
-
-      const response = await apiFetch(
-        "/api/inventory/issue-receipt",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(payload),
-        }
-      );
+      const response = await apiFetch("/api/inventory/issue-receipt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
       const result = await response.json();
 
       if (!response.ok || !result.success) {
-        throw new Error(
-          result.message || "Failed to create Stock Movement."
-        );
+        throw new Error(result.message || "Failed to create Stock Movement.");
       }
 
       showSuccessToast(
-        isInward
-          ? "Inward entry created successfully."
-          : "Internal Transfer created successfully."
+        isInward ? "Inward entry created successfully." : "Internal Transfer created successfully.",
       );
 
       onSuccess?.(result.data);
-      resetForm();
+      resetState();
       closeDialog?.();
-
     } catch (error) {
       console.error("CREATE STOCK MOVEMENT ERROR:", error);
-      showErrorToast(
-        error.message || "Failed to create stock movement."
-      );
+      showErrorToast(error.message || "Failed to create stock movement.");
     } finally {
       setLoading(false);
     }
   };
 
-
-
   // --------------------------------------------------
-  // SELECTED ITEM AND UNIT
+  // SHARED FIELD RENDERERS
   // --------------------------------------------------
-
-  const selectedItem = items.find(
-    (item) => String(item.id) === String(form.ItemMasterid),
+  const [groupSearch, setGroupSearch] = useState("");
+  const filteredGroups = groups.filter((group) =>
+    getGroupName(group)
+      .toLowerCase()
+      .includes(groupSearch.trim().toLowerCase())
   );
-
-  const selectedUnitId = getItemUnitId(selectedItem);
-
-  const selectedUnit = units.find(
-    (unit) => String(unit.id) === String(selectedUnitId),
-  );
-
-  const unitName = selectedUnit?.unitName || selectedUnit?.UnitName || "";
-
-  const unitAbbreviation =
-    selectedUnit?.abbreviation || selectedUnit?.Abbreviation || "";
-
-  const unitLabel = unitAbbreviation
-    ? `${unitName} (${unitAbbreviation})`
-    : unitName;
-
-  const total = (Number(form.Price || 0) * Number(form.Qty || 0)).toFixed(2);
-  const transferReceiveFinalBalance = calculateReceiveToBalance(
-    transferReceivePreviousQty,
-    form.Qty,
-  );
-  // --------------------------------------------------
-  // REUSABLE ITEM GROUP FIELD
-  // --------------------------------------------------
-
   const renderItemGroupField = () => (
     <div className="space-y-2">
       <Label>
@@ -1903,7 +1456,10 @@ export default function IssueReceiptAddDialog({
           variant="outline"
           className="w-full justify-between"
           disabled={dropdownLoading || loading}
-          onClick={() => setGroupDropdownOpen((prev) => !prev)}
+          onClick={() => {
+            setGroupDropdownOpen((prev) => !prev);
+            setGroupSearch("");
+          }}
         >
           <span className="truncate">
             {dropdownLoading
@@ -1925,6 +1481,7 @@ export default function IssueReceiptAddDialog({
                   type="button"
                   className="text-xs text-primary"
                   onClick={handleSelectAllGroups}
+                  disabled={loading || !filteredGroups.length}
                 >
                   Select All
                 </button>
@@ -1933,19 +1490,43 @@ export default function IssueReceiptAddDialog({
                   type="button"
                   className="text-xs text-destructive"
                   onClick={handleClearAllGroups}
+                  disabled={loading || !selectedGroups.length}
                 >
                   Clear All
                 </button>
               </div>
             </div>
 
+            {/* Search Input */}
+            <div className="relative py-2">
+              <input
+                type="text"
+                value={groupSearch}
+                onChange={(event) => setGroupSearch(event.target.value)}
+                placeholder="Search item groups..."
+                className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary"
+                disabled={loading}
+              />
+
+              {groupSearch && (
+                <button
+                  type="button"
+                  onClick={() => setGroupSearch("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground hover:text-foreground"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+
+            {/* Group List */}
             <div
               className="max-h-[200px] overflow-y-auto overscroll-contain py-2"
               onWheel={(event) => event.stopPropagation()}
             >
               <div className="space-y-2">
-                {groups.length ? (
-                  groups.map((group) => {
+                {filteredGroups.length ? (
+                  filteredGroups.map((group) => {
                     const id = String(group.id);
 
                     return (
@@ -1959,13 +1540,15 @@ export default function IssueReceiptAddDialog({
                           onChange={() => handleGroupToggle(id)}
                           disabled={loading}
                         />
-                        {group.groupName || group.GroupName}
+                        {getGroupName(group)}
                       </label>
                     );
                   })
                 ) : (
                   <p className="py-3 text-center text-sm text-muted-foreground">
-                    No groups found.
+                    {groups.length
+                      ? "No matching groups found."
+                      : "No groups found."}
                   </p>
                 )}
               </div>
@@ -1975,7 +1558,10 @@ export default function IssueReceiptAddDialog({
               <Button
                 type="button"
                 size="sm"
-                onClick={() => setGroupDropdownOpen(false)}
+                onClick={() => {
+                  setGroupDropdownOpen(false);
+                  setGroupSearch("");
+                }}
               >
                 Done
               </Button>
@@ -1984,6 +1570,7 @@ export default function IssueReceiptAddDialog({
         )}
       </div>
 
+      {/* Selected Groups */}
       {selectedGroups.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {groups
@@ -1993,54 +1580,46 @@ export default function IssueReceiptAddDialog({
                 key={group.id}
                 className="rounded bg-primary/10 px-2 py-1 text-xs text-primary"
               >
-                {group.groupName || group.GroupName}
+                {getGroupName(group)}
               </span>
             ))}
         </div>
       )}
 
-      {errors.ItemGroupid && (
-        <p className="text-sm text-destructive">{errors.ItemGroupid}</p>
-      )}
+      <FieldError message={errors.ItemGroupid} />
     </div>
   );
 
-  // --------------------------------------------------
-  // REUSABLE ITEM FIELD
-  // --------------------------------------------------
+  const renderItemField = () => {
+    const itemGroupIds = selectedGroups.join(",");
 
-  const renderItemField = () => (
-    <div className="space-y-2">
-      <Label>
-        Item Name <span className="text-destructive">*</span>
-      </Label>
+    return (
+      <div className="space-y-2">
+        <Label>
+          Item Name <span className="text-destructive">*</span>
+        </Label>
 
-      <PaginatedSearchSelect
-        endpoint="/api/inventory/item-master"
-        value={form.ItemMasterid}
-        onChange={handleItemChange}
-        placeholder={
-          !selectedGroups.length
-            ? "Select Item Group first"
-            : "Select Item"
-        }
-        searchPlaceholder="Search items..."
-        disabled={loading || !selectedGroups.length}
-        onOptionsChange={setItems}
-        getLabel={(item) =>
-          item.ItemName || item.itemName || item.name || `Item #${item.id}`
-        }
-      />
+        <PaginatedSearchSelect
+          key={itemGroupIds}
+          endpoint={
+            itemGroupIds
+              ? `/api/inventory/item-master?itemGroupIds=${encodeURIComponent(itemGroupIds)}`
+              : "/api/inventory/item-master"
+          }
+          value={form.ItemMasterid}
+          onSelect={handleItemChange}
+          placeholder={!selectedGroups.length ? "Select Item Group first" : "Select Item"}
+          searchPlaceholder="Search items..."
+          disabled={loading || !selectedGroups.length}
+          getLabel={(item) =>
+            item.ItemName || item.itemName || item.name || `Item #${item.id}`
+          }
+        />
 
-      {errors.ItemMasterid && (
-        <p className="text-sm text-destructive">{errors.ItemMasterid}</p>
-      )}
-    </div>
-  );
-
-  // ------ --------------------------------------------
-  // REUSABLE ITEM CONDITION FIELD
-  // --------------------------------------------------
+        <FieldError message={errors.ItemMasterid} />
+      </div>
+    );
+  };
 
   const renderItemConditionField = () => (
     <div className="space-y-2">
@@ -2062,23 +1641,28 @@ export default function IssueReceiptAddDialog({
         </SelectContent>
       </Select>
 
-      {errors.ItemTypeid && (
-        <p className="text-sm text-destructive">{errors.ItemTypeid}</p>
-      )}
+      <FieldError message={errors.ItemTypeid} />
     </div>
   );
+
   const renderBrandField = () => (
     <div className="space-y-2">
       <Label>Brand / Manufacturer</Label>
 
       <PaginatedSearchSelect
-        endpoint="/api/inventory/brand_manufacturer"
+        key={form.ItemMasterid}
+        endpoint={
+          form.ItemMasterid
+            ? `/api/inventory/brand_manufacturer?itemMasterId=${encodeURIComponent(
+              form.ItemMasterid
+            )}`
+            : "/api/inventory/brand_manufacturer"
+        }
         value={form.BrandManufacturerid}
         onChange={(value) => updateField("BrandManufacturerid", value)}
         placeholder="Select Brand / Manufacturer"
         searchPlaceholder="Search brand or manufacturer..."
-        disabled={loading}
-        onOptionsChange={setBrands}
+        disabled={loading || !form.ItemMasterid}
         getLabel={(brand) => {
           const brandName = brand.brandName || "";
           const manufacturerName = brand.manufacturerName || "";
@@ -2095,16 +1679,9 @@ export default function IssueReceiptAddDialog({
         }}
       />
 
-      {errors.BrandManufacturerid && (
-        <p className="text-sm text-destructive">
-          {errors.BrandManufacturerid}
-        </p>
-      )}
+      <FieldError message={errors.BrandManufacturerid} />
     </div>
   );
-  // --------------------------------------------------
-  // REUSABLE TRANSACTION TYPE FIELD
-  // --------------------------------------------------
 
   const renderTransactionField = () => (
     <div className="space-y-2">
@@ -2112,36 +1689,21 @@ export default function IssueReceiptAddDialog({
         Transaction Type <span className="text-destructive">*</span>
       </Label>
 
-      <Select
-        value={String(form.TransactionTypeid || "")}
-        onValueChange={handleTransactionChange}
-        disabled={dropdownLoading || loading}
-      >
+      <Select value={transactionTypeId} disabled>
         <SelectTrigger className="w-full">
           <SelectValue placeholder="Select Transaction Type" />
         </SelectTrigger>
 
         <SelectContent>
-          {transactions.map((item) => (
-            <SelectItem key={item.id} value={String(item.id)}>
-              {item.TransactionType ||
-                item.transactionType ||
-                item.name ||
-                `Transaction #${item.id}`}
-            </SelectItem>
-          ))}
+          {transactionTypeId && (
+            <SelectItem value={transactionTypeId}>{isInward ? "Receipt" : "Issue"}</SelectItem>
+          )}
         </SelectContent>
       </Select>
 
-      {errors.TransactionTypeid && (
-        <p className="text-sm text-destructive">{errors.TransactionTypeid}</p>
-      )}
+      <FieldError message={errors.TransactionTypeid} />
     </div>
   );
-
-  // --------------------------------------------------
-  // REUSABLE DATE FIELD
-  // --------------------------------------------------
 
   const renderIssueDateField = () => (
     <div className="space-y-2">
@@ -2157,131 +1719,9 @@ export default function IssueReceiptAddDialog({
         disableFuture
       />
 
-      {errors.IssueDate && (
-        <p className="text-sm text-destructive">{errors.IssueDate}</p>
-      )}
+      <FieldError message={errors.IssueDate} />
     </div>
   );
-
-  // --------------------------------------------------
-  // REUSABLE DESTINATION RADIO + DROPDOWN
-  // --------------------------------------------------
-
-  const renderDestinationSelector = ({
-    title,
-    typeValue,
-    idValue,
-    onTypeChange,
-    onIdChange,
-    list,
-    isLoading,
-    typeError,
-    idError,
-    radioPrefix,
-  }) => (
-    <div className="rounded-lg border p-4 space-y-4">
-      <div className="space-y-3">
-        <Label className="font-semibold">{title}</Label>
-
-        <RadioGroup
-          value={typeValue}
-          onValueChange={onTypeChange}
-          disabled={loading}
-          className="flex flex-wrap gap-6"
-        >
-          <div className="flex items-center gap-2">
-            <RadioGroupItem value="location" id={`${radioPrefix}-location`} />
-            <Label
-              htmlFor={`${radioPrefix}-location`}
-              className="cursor-pointer font-normal"
-            >
-              Warehouse
-            </Label>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <RadioGroupItem value="machinery" id={`${radioPrefix}-machinery`} />
-            <Label
-              htmlFor={`${radioPrefix}-machinery`}
-              className="cursor-pointer font-normal"
-            >
-              Machine
-            </Label>
-          </div>
-        </RadioGroup>
-
-        {typeError && <p className="text-sm text-destructive">{typeError}</p>}
-      </div>
-
-      {typeValue && (
-        <div className="space-y-2">
-          <Label>
-            {typeValue === "location" ? "Select Warehouse" : "Select Machine"}
-            <span className="text-destructive"> *</span>
-          </Label>
-
-          <Select
-            value={String(idValue || "")}
-            onValueChange={onIdChange}
-            disabled={isLoading || loading || list.length === 0}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue
-                placeholder={
-                  isLoading
-                    ? "Loading..."
-                    : list.length
-                      ? typeValue === "location"
-                        ? "Select Warehouse"
-                        : "Select Machine"
-                      : "No records found"
-                }
-              />
-            </SelectTrigger>
-
-            <SelectContent>
-              {list.map((item) => (
-                <SelectItem key={item.id} value={String(item.id)}>
-                  {getDestinationName(item, typeValue)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          {idError && <p className="text-sm text-destructive">{idError}</p>}
-        </div>
-      )}
-    </div>
-  );
-
-  // --------------------------------------------------
-  // PREVIOUS QUANTITY DISPLAY
-  // --------------------------------------------------
-
-  const renderPreviousQty = (label, quantity) => (
-    <div className="space-y-2">
-      <Label>{label}</Label>
-
-      <div className="relative">
-        <Input
-          type="number"
-          value={Number(quantity) || 0}
-          readOnly
-          className={unitLabel ? "bg-muted pr-36" : "bg-muted"}
-        />
-
-        {unitLabel && (
-          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground pointer-events-none">
-            {unitLabel}
-          </span>
-        )}
-      </div>
-    </div>
-  );
-
-  // --------------------------------------------------
-  // QUANTITY / RATE / TOTAL FIELDS
-  // --------------------------------------------------
 
   const renderQuantityRateFields = () => (
     <>
@@ -2297,19 +1737,14 @@ export default function IssueReceiptAddDialog({
             step="1"
             placeholder="Enter quantity"
             value={form.Qty}
-            onChange={(event) => handleQtyChange(event.target.value)}
+            onChange={(event) => updateField("Qty", event.target.value)}
             disabled={loading}
             className={unitLabel ? "pr-36" : ""}
           />
-
-          {unitLabel && (
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground pointer-events-none">
-              {unitLabel}
-            </span>
-          )}
+          <UnitSuffix label={unitLabel} />
         </div>
 
-        {errors.Qty && <p className="text-sm text-destructive">{errors.Qty}</p>}
+        <FieldError message={errors.Qty} />
       </div>
 
       <div className="space-y-2">
@@ -2321,27 +1756,44 @@ export default function IssueReceiptAddDialog({
           type="number"
           min="0"
           step="0.01"
-          placeholder="Enter rate"
+          placeholder={rateLoading ? "Fetching rate..." : "Enter rate"}
           value={form.Price}
           onChange={(event) => updateField("Price", event.target.value)}
-          disabled={loading}
+          disabled={loading || rateLoading}
         />
 
-        {errors.Price && (
-          <p className="text-sm text-destructive">{errors.Price}</p>
+        <FieldError message={errors.Price} />
+
+        {rateLoading && (
+          <p className="text-xs text-muted-foreground">Fetching applicable rate...</p>
         )}
       </div>
 
       <div className="space-y-2">
         <Label>Total Amount (Rate × Quantity)</Label>
-
-        <Input
-          type="number"
-          value={total}
-          readOnly
-          className="bg-muted font-medium"
-        />
+        <Input type="number" value={total} readOnly className="bg-muted font-medium" />
       </div>
+    </>
+  );
+
+  const renderCommentField = () => (
+    <CommentField
+      value={form.Comment}
+      error={errors.Comment}
+      disabled={loading}
+      onChange={(value) => updateField("Comment", value)}
+    />
+  );
+
+  // Fields shared by both tabs, in the same order as before.
+  const renderCommonTop = () => (
+    <>
+      {renderItemGroupField()}
+      {renderItemField()}
+      {renderItemConditionField()}
+      {renderBrandField()}
+      {renderTransactionField()}
+      {renderIssueDateField()}
     </>
   );
 
@@ -2356,12 +1808,14 @@ export default function IssueReceiptAddDialog({
         if (!value) handleClose();
       }}
     >
-      <DialogContent className="max-w-4xl max-h-[95vh]">
+      <DialogContent
+        className="mx-auto flex max-h-[90vh] w-[calc(100%-2rem)] max-w-[886px] flex-col overflow-hidden"
+        variant="fullscreen"
+      >
         <DialogHeader>
           <DialogTitle>Add New Entry</DialogTitle>
           <DialogDescription>
-            Select Inward or Internal Transfer and enter the stock movement
-            details.
+            Select Inward or Internal Transfer and enter the stock movement details.
           </DialogDescription>
         </DialogHeader>
 
@@ -2372,7 +1826,7 @@ export default function IssueReceiptAddDialog({
             setErrors({});
             setGroupDropdownOpen(false);
           }}
-          className="w-full space-y-5"
+          className="flex min-h-0 w-full flex-1 flex-col space-y-5 overflow-hidden"
         >
           <TabsList variant="line">
             <TabsTrigger value="inward" className="justify-start">
@@ -2380,99 +1834,59 @@ export default function IssueReceiptAddDialog({
               Inward
             </TabsTrigger>
 
-            <TabsTrigger
-              value="internal-transfer"
-              className="justify-start"
-            >
+            <TabsTrigger value="internal-transfer" className="justify-start">
               <ArrowLeftRight className="h-4 w-4" />
               Internal Transfer
             </TabsTrigger>
           </TabsList>
 
-          <ScrollArea className="grow min-h-0 flex flex-col h-full max-h-[70vh] overflow-hidden">
-            <DialogBody className="space-y-6 pt-4 px-0 min-h-0">
-              {/* ==========================================
-                  INWARD
-              ========================================== */}
-
+          <ScrollArea className="min-h-0 flex-1 overflow-y-auto py-0 ps-0 pe-3">
+            <DialogBody className="space-y-6">
+              {/* INWARD */}
               <TabsContent value="inward" className="mt-0 space-y-6">
-                {renderItemGroupField()}
-                {renderItemField()}
-                {renderItemConditionField()}
-                {renderBrandField()}
-                {renderTransactionField()}
-                {renderIssueDateField()}
-
-                {/* USER ROLE */}
+                {renderCommonTop()}
 
                 <div className="space-y-2">
                   <Label>
-                    User Role <span className="text-destructive">*</span>
+                    Receipt Form User Role <span className="text-destructive">*</span>
                   </Label>
 
-                  <Select
+                  <SelectSearch
+                    options={[
+                      { label: "All Roles", value: "all" },
+                      ...roleList.map((role) => ({
+                        label: role.name,
+                        value: String(role.id),
+                      })),
+                    ]}
                     value={selectedRole}
                     onValueChange={handleRoleChange}
+                    placeholder="Select User Role"
+                    searchPlaceholder="Search user role..."
                     disabled={rolesLoading || loading}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select User Role" />
-                    </SelectTrigger>
+                  />
 
-                    <SelectContent>
-                      <SelectItem value="all">All Roles</SelectItem>
-
-                      {roleList.map((role) => (
-                        <SelectItem key={role.id} value={String(role.id)}>
-                          {role.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-
-                  {errors.UserRole && (
-                    <p className="text-sm text-destructive">
-                      {errors.UserRole}
-                    </p>
-                  )}
+                  <FieldError message={errors.UserRole} />
                 </div>
-
-                {/* USER */}
 
                 <div className="space-y-2">
                   <Label>
-                    User <span className="text-destructive">*</span>
+                    Receipt Form User <span className="text-destructive">*</span>
                   </Label>
 
-                  <Select
+                  <SelectSearch
+                    options={staffUsers.map((staff) => ({
+                      label: getStaffName(staff),
+                      value: String(staff.id),
+                    }))}
                     value={String(form.Issue_by || "")}
                     onValueChange={(value) => updateField("Issue_by", value)}
-                    disabled={
-                      staffLoading || loading || staffUsers.length === 0
-                    }
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue
-                        placeholder={
-                          staffLoading ? "Loading users..." : "Select User"
-                        }
-                      />
-                    </SelectTrigger>
+                    placeholder={staffLoading ? "Loading users..." : "Select User"}
+                    searchPlaceholder="Search user..."
+                    disabled={staffLoading || loading || staffUsers.length === 0}
+                  />
 
-                    <SelectContent>
-                      {staffUsers.map((staff) => (
-                        <SelectItem key={staff.id} value={String(staff.id)}>
-                          {getStaffName(staff)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-
-                  {errors.Issue_by && (
-                    <p className="text-sm text-destructive">
-                      {errors.Issue_by}
-                    </p>
-                  )}
+                  <FieldError message={errors.Issue_by} />
 
                   {!staffLoading && staffUsers.length === 0 && (
                     <p className="text-xs text-muted-foreground">
@@ -2481,320 +1895,174 @@ export default function IssueReceiptAddDialog({
                   )}
                 </div>
 
-                {/* CHALLAN / BILL */}
+                <TextField
+                  label="Challan/Bill Number"
+                  placeholder="Enter Challan/Bill Number"
+                  value={form.ReciptChallanNo}
+                  onChange={(value) => updateField("ReciptChallanNo", value)}
+                  disabled={loading}
+                  error={errors.ReciptChallanNo}
+                />
 
-                <div className="space-y-2">
-                  <Label>Challan/Bill Number</Label>
+                <DateField
+                  label="Challan/Bill Date & Time"
+                  placeholder="Select Challan/Bill Date & Time"
+                  value={form.ReceiptDate}
+                  onChange={(value) => updateField("ReceiptDate", value)}
+                  disabled={loading}
+                />
 
-                  <Input
-                    placeholder="Enter Challan/Bill Number"
-                    value={form.ReciptChallanNo}
-                    onChange={(event) =>
-                      updateField("ReciptChallanNo", event.target.value)
-                    }
-                    disabled={loading}
-                    maxLength={100}
-                  />
+                <TextField
+                  label="Requisition Slip Number"
+                  placeholder="Enter Requisition Slip Number"
+                  value={form.RequisitionSupplyNo}
+                  onChange={(value) => updateField("RequisitionSupplyNo", value)}
+                  disabled={loading}
+                />
 
-                  {errors.ReciptChallanNo && (
-                    <p className="text-sm text-destructive">
-                      {errors.ReciptChallanNo}
-                    </p>
-                  )}
-                </div>
+                <DateField
+                  label="Requisition Slip Date & Time"
+                  placeholder="Select Requisition Date & Time"
+                  value={form.RequisitionSupplyDate}
+                  onChange={(value) => updateField("RequisitionSupplyDate", value)}
+                  disabled={loading}
+                />
 
-                <div className="space-y-2">
-                  <Label>Challan/Bill Date & Time</Label>
+                <TextField
+                  label="Purchase Order Number"
+                  placeholder="Enter Purchase Order Number"
+                  value={form.PurchaseNo}
+                  onChange={(value) => updateField("PurchaseNo", value)}
+                  disabled={loading}
+                />
 
-                  <DateTimePicker
-                    value={form.ReceiptDate}
-                    onChange={(value) => updateField("ReceiptDate", value)}
-                    disabled={loading}
-                    placeholder="Select Challan/Bill Date & Time"
-                  />
-                </div>
-
-                {/* REQUISITION */}
-
-                <div className="space-y-2">
-                  <Label>Requisition Slip Number</Label>
-
-                  <Input
-                    placeholder="Enter Requisition Slip Number"
-                    value={form.RequisitionSupplyNo}
-                    onChange={(event) =>
-                      updateField("RequisitionSupplyNo", event.target.value)
-                    }
-                    disabled={loading}
-                    maxLength={100}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Requisition Slip Date & Time</Label>
-
-                  <DateTimePicker
-                    value={form.RequisitionSupplyDate}
-                    onChange={(value) =>
-                      updateField("RequisitionSupplyDate", value)
-                    }
-                    disabled={loading}
-                    placeholder="Select Requisition Date & Time"
-                  />
-                </div>
-
-                {/* PURCHASE ORDER */}
-
-                <div className="space-y-2">
-                  <Label>Purchase Order Number</Label>
-
-                  <Input
-                    placeholder="Enter Purchase Order Number"
-                    value={form.PurchaseNo}
-                    onChange={(event) =>
-                      updateField("PurchaseNo", event.target.value)
-                    }
-                    disabled={loading}
-                    maxLength={100}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Purchase Order Date & Time</Label>
-
-                  <DateTimePicker
-                    value={form.PurchaseDate}
-                    onChange={(value) => updateField("PurchaseDate", value)}
-                    disabled={loading}
-                    placeholder="Select Purchase Order Date & Time"
-                  />
-                </div>
-
-                {/* QUANTITY */}
+                <DateField
+                  label="Purchase Order Date & Time"
+                  placeholder="Select Purchase Order Date & Time"
+                  value={form.PurchaseDate}
+                  onChange={(value) => updateField("PurchaseDate", value)}
+                  disabled={loading}
+                />
 
                 {renderQuantityRateFields()}
 
+                <DestinationSelector
+                  title="Receipt To"
+                  typeValue={form.DestinationType}
+                  idValue={form.DestinationId}
+                  onTypeChange={handleDestinationTypeChange}
+                  onIdChange={(value) => updateField("DestinationId", value)}
+                  list={inwardDest.list}
+                  isLoading={inwardDest.loading}
+                  typeError={errors.DestinationType}
+                  idError={errors.DestinationId}
+                  radioPrefix="inward-receive"
+                  disabled={loading}
+                />
 
-                {/* RECEIVE TO */}
+                <ReadOnlyNumber
+                  label="Receipt To Previous Quantity"
+                  value={receivePreviousQty}
+                  unitLabel={unitLabel}
+                />
 
-                {renderDestinationSelector({
-                  title: "Receipt To",
-                  typeValue: form.DestinationType,
-                  idValue: form.DestinationId,
-                  onTypeChange: handleDestinationTypeChange,
-                  onIdChange: (value) => updateField("DestinationId", value),
-                  list: destinationList,
-                  isLoading: destinationLoading,
-                  typeError: errors.DestinationType,
-                  idError: errors.DestinationId,
-                  radioPrefix: "inward-receive",
-                })}
+                <ReadOnlyNumber label="Final Balance (Receive To)" value={balance} strong />
 
-                {renderPreviousQty(
-                  "Receipt To Previous Quantity",
-                  receivePreviousQty,
-                )}
-                {/* PREVIOUS BALANCE / BALANCE */}
-
-                {/* <div className="space-y-2">
-                  <Label>Previous Balance</Label>
-
-                  <Input
-                    type="number"
-                    value={form.PreviousBalance}
-                    readOnly
-                    className="bg-muted"
-                  />
-                </div> */}
-
-                <div className="space-y-2">
-                  <Label>Final Balance (Receive To)</Label>
-
-                  <Input
-                    type="number"
-                    value={form.Balance}
-                    readOnly
-                    className="bg-muted font-medium"
-                  />
-                </div>
-                {/* COMMENT */}
-
-                <div className="space-y-2">
-                  <Label>Comment</Label>
-
-                  <Textarea
-                    placeholder="Enter additional comments..."
-                    value={form.Comment}
-                    onChange={(event) =>
-                      updateField("Comment", event.target.value)
-                    }
-                    maxLength={1000}
-                    rows={4}
-                    disabled={loading}
-                    className="resize-none"
-                  />
-
-                  <div className="flex justify-between">
-                    {errors.Comment ? (
-                      <p className="text-sm text-destructive">
-                        {errors.Comment}
-                      </p>
-                    ) : (
-                      <span />
-                    )}
-
-                    <p className="text-xs text-muted-foreground">
-                      {form.Comment.length}/1000
-                    </p>
-                  </div>
-                </div>
+                {renderCommentField()}
               </TabsContent>
 
-              {/* ==========================================
-                  INTERNAL TRANSFER
-              ========================================== */}
-
+              {/* INTERNAL TRANSFER */}
               <TabsContent value="internal-transfer" className="mt-0 space-y-6">
-                {renderItemGroupField()}
-                {renderItemField()}
-                {renderItemConditionField()}
-                {renderBrandField()}
-                {renderTransactionField()}
-                {renderIssueDateField()}
+                {renderCommonTop()}
 
-                {/* ISSUE FROM */}
+                <DestinationSelector
+                  title="Issue From"
+                  typeValue={form.IssueFromType}
+                  idValue={form.IssueFromId}
+                  onTypeChange={handleIssueFromTypeChange}
+                  onIdChange={(value) => updateField("IssueFromId", value)}
+                  list={issueFrom.list}
+                  isLoading={issueFrom.loading}
+                  typeError={errors.IssueFromType}
+                  idError={errors.IssueFromId}
+                  radioPrefix="transfer-issue-from"
+                  disabled={loading}
+                />
 
-                {renderDestinationSelector({
-                  title: "Issue From",
-                  typeValue: form.IssueFromType,
-                  idValue: form.IssueFromId,
-                  onTypeChange: handleIssueFromTypeChange,
-                  onIdChange: (value) => updateField("IssueFromId", value),
-                  list: issueFromList,
-                  isLoading: issueFromLoading,
-                  typeError: errors.IssueFromType,
-                  idError: errors.IssueFromId,
-                  radioPrefix: "transfer-issue-from",
-                })}
+                <ReadOnlyNumber
+                  label="Issue From Previous Quantity"
+                  value={issueFromPreviousQty}
+                  unitLabel={unitLabel}
+                />
 
-                {renderPreviousQty(
-                  "Issue From Previous Quantity",
-                  issueFromPreviousQty,
-                )}
-
-                {/* ISSUE SLIP / GATE PASS */}
-
-                <div className="space-y-2">
-                  <Label>Issue Slip/Gate Pass</Label>
-
-                  <Input
-                    placeholder="Enter Issue Slip/Gate Pass"
-                    value={form.GetPassNo}
-                    onChange={(event) =>
-                      updateField("GetPassNo", event.target.value)
-                    }
-                    disabled={loading}
-                    maxLength={100}
-                  />
-
-                  {errors.GetPassNo && (
-                    <p className="text-sm text-destructive">
-                      {errors.GetPassNo}
-                    </p>
-                  )}
-                </div>
-
-                {/* TRANSFER QUANTITY / RATE / TOTAL */}
+                <TextField
+                  label="Issue Slip/Gate Pass"
+                  placeholder="Enter Issue Slip/Gate Pass"
+                  value={form.GetPassNo}
+                  onChange={(value) => updateField("GetPassNo", value)}
+                  disabled={loading}
+                  error={errors.GetPassNo}
+                />
 
                 {renderQuantityRateFields()}
 
-                {/* RECEIPT TO */}
+                <DestinationSelector
+                  title="Receipt To"
+                  typeValue={form.ReceiveToType}
+                  idValue={form.ReceiveToId}
+                  onTypeChange={handleTransferReceiveTypeChange}
+                  onIdChange={(value) => updateField("ReceiveToId", value)}
+                  list={transferTo.list}
+                  isLoading={transferTo.loading}
+                  typeError={errors.ReceiveToType}
+                  idError={errors.ReceiveToId}
+                  radioPrefix="transfer-receive-to"
+                  disabled={loading}
+                />
 
-                {renderDestinationSelector({
-                  title: "Receipt To",
-                  typeValue: form.ReceiveToType,
-                  idValue: form.ReceiveToId,
-                  onTypeChange: handleTransferReceiveTypeChange,
-                  onIdChange: (value) => updateField("ReceiveToId", value),
-                  list: transferReceiveList,
-                  isLoading: transferReceiveLoading,
-                  typeError: errors.ReceiveToType,
-                  idError: errors.ReceiveToId,
-                  radioPrefix: "transfer-receive-to",
-                })}
+                <ReadOnlyNumber
+                  label="Receipt To Previous Quantity"
+                  value={transferReceivePreviousQty}
+                  unitLabel={unitLabel}
+                />
 
-                {renderPreviousQty(
-                  "Receipt To Previous Quantity",
-                  transferReceivePreviousQty,
-                )}
-                {/* ISSUE FROM FINAL BALANCE */}
+                <ReadOnlyNumber label="Issue From Final Balance" value={balance} strong />
 
-                <div className="space-y-2">
-                  <Label>Issue From Final Balance</Label>
+                <ReadOnlyNumber
+                  label="Receipt To Final Balance"
+                  value={transferReceiveFinalBalance}
+                  strong
+                />
 
-                  <Input
-                    type="number"
-                    value={form.Balance}
-                    readOnly
-                    className="bg-muted font-medium"
-                  />
-                </div>
-
-                {/* RECEIVE TO FINAL BALANCE */}
-
-                <div className="space-y-2">
-                  <Label>Receipt To Final Balance</Label>
-
-                  <Input
-                    type="number"
-                    value={transferReceiveFinalBalance}
-                    readOnly
-                    className="bg-muted font-medium"
-                  />
-                </div>
-                {/* COMMENT */}
-
-                <div className="space-y-2">
-                  <Label>Comment</Label>
-
-                  <Textarea
-                    placeholder="Enter additional comments..."
-                    value={form.Comment}
-                    onChange={(event) =>
-                      updateField("Comment", event.target.value)
-                    }
-                    maxLength={1000}
-                    rows={4}
-                    disabled={loading}
-                    className="resize-none"
-                  />
-
-                  <div className="flex justify-between">
-                    {errors.Comment ? (
-                      <p className="text-sm text-destructive">
-                        {errors.Comment}
-                      </p>
-                    ) : (
-                      <span />
-                    )}
-
-                    <p className="text-xs text-muted-foreground">
-                      {form.Comment.length}/1000
-                    </p>
-                  </div>
-                </div>
+                {renderCommentField()}
               </TabsContent>
+              {/* CUSTOM FIELDS */}
+
+              <div className="space-y-4 border-t pt-5">
+                <div>
+                  <h3 className="text-base font-semibold">
+                    Custom Fields
+                  </h3>
+
+                  <p className="text-sm text-muted-foreground">
+                    Additional Item information.
+                  </p>
+                </div>
+
+                <IssueReceiptCustomFields
+                  values={customFields}
+                  onChange={setCustomFields}
+                  onFieldsLoaded={(loadedFields) => {
+                    setCustomFieldDefinitions(loadedFields);
+                  }}
+                />
+              </div>
             </DialogBody>
           </ScrollArea>
         </Tabs>
 
         <DialogFooter className="gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={handleClose}
-            disabled={loading}
-          >
+          <Button type="button" variant="outline" onClick={handleClose} disabled={loading}>
             Cancel
           </Button>
 
